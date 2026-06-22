@@ -62,8 +62,24 @@ export default function ServicesPage() {
   return (
     <main className="servicesPage">
       <section className="hero">
+        <div className="topLinks">
+          <Link href="/" className="topLink primaryTopLink">
+            ← Home
+          </Link>
+
+          <Link href="/clients" className="topLink">
+            Client Guide
+          </Link>
+
+          <Link href="/get-quote" className="topLink">
+            Get Quote
+          </Link>
+        </div>
+
         <p className="eyebrow">SENDIO SERVICES</p>
+
         <h1>Explore services by category.</h1>
+
         <p className="intro">
           Choose a service category and open real companies or workers registered
           in that field. Active categories show a green mark and a real provider
@@ -153,6 +169,31 @@ export default function ServicesPage() {
         })}
       </section>
 
+      <section className="bottomNavigation">
+        <div>
+          <p className="bottomLabel">SERVICE DIRECTORY</p>
+          <h2>Need to go back?</h2>
+          <p>
+            You can return to the homepage, continue to the client guide, or
+            learn how to request a quote from a real provider profile.
+          </p>
+        </div>
+
+        <div className="bottomActions">
+          <Link href="/" className="bottomButton darkButton">
+            Home
+          </Link>
+
+          <Link href="/clients" className="bottomButton">
+            Client Guide
+          </Link>
+
+          <Link href="/get-quote" className="bottomButton lightButton">
+            Get Quote
+          </Link>
+        </div>
+      </section>
+
       <style>{`
         .servicesPage {
           min-height: 100vh;
@@ -166,7 +207,8 @@ export default function ServicesPage() {
         .hero,
         .statusBar,
         .serviceGrid,
-        .warning {
+        .warning,
+        .bottomNavigation {
           max-width: 1180px;
           margin-left: auto;
           margin-right: auto;
@@ -178,6 +220,44 @@ export default function ServicesPage() {
           border-radius: 34px;
           padding: 52px;
           box-shadow: 0 24px 70px rgba(16, 43, 36, 0.22);
+        }
+
+        .topLinks {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 10px;
+          margin-bottom: 28px;
+        }
+
+        .topLink {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          min-height: 38px;
+          padding: 9px 15px;
+          border-radius: 999px;
+          color: #e9c896;
+          background: rgba(255, 255, 255, 0.12);
+          border: 1px solid rgba(233, 200, 150, 0.4);
+          text-decoration: none;
+          font-size: 13px;
+          font-weight: 900;
+          transition: transform 0.2s ease, background 0.2s ease;
+        }
+
+        .topLink:hover {
+          transform: translateY(-2px);
+          background: rgba(255, 255, 255, 0.18);
+        }
+
+        .primaryTopLink {
+          color: #102b24;
+          background: #e9c896;
+          border-color: #e9c896;
+        }
+
+        .primaryTopLink:hover {
+          background: #f1d6a7;
         }
 
         .eyebrow {
@@ -363,6 +443,88 @@ export default function ServicesPage() {
           overflow: hidden;
         }
 
+        .bottomNavigation {
+          margin-top: 30px;
+          background: #102b24;
+          color: #ffffff;
+          border-radius: 30px;
+          padding: 30px;
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 24px;
+          box-shadow: 0 22px 58px rgba(16, 43, 36, 0.18);
+        }
+
+        .bottomLabel {
+          margin: 0 0 10px;
+          color: #e9c896;
+          font-size: 12px;
+          letter-spacing: 0.2em;
+          font-weight: 900;
+          text-transform: uppercase;
+        }
+
+        .bottomNavigation h2 {
+          margin: 0;
+          font-size: clamp(26px, 4vw, 40px);
+          letter-spacing: -0.04em;
+        }
+
+        .bottomNavigation p {
+          max-width: 680px;
+          margin: 14px 0 0;
+          color: rgba(255, 255, 255, 0.78);
+          line-height: 1.7;
+          font-weight: 650;
+        }
+
+        .bottomActions {
+          display: flex;
+          flex-wrap: wrap;
+          justify-content: flex-end;
+          gap: 10px;
+        }
+
+        .bottomButton {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          min-height: 42px;
+          padding: 11px 17px;
+          border-radius: 999px;
+          text-decoration: none;
+          background: #c49767;
+          color: #ffffff;
+          font-size: 13px;
+          font-weight: 900;
+          white-space: nowrap;
+          transition: transform 0.2s ease, background 0.2s ease;
+        }
+
+        .bottomButton:hover {
+          transform: translateY(-2px);
+          background: #a97946;
+        }
+
+        .darkButton {
+          background: #ffffff;
+          color: #102b24;
+        }
+
+        .darkButton:hover {
+          background: #f2e4d2;
+        }
+
+        .lightButton {
+          background: rgba(255, 255, 255, 0.12);
+          border: 1px solid rgba(255, 255, 255, 0.22);
+        }
+
+        .lightButton:hover {
+          background: rgba(255, 255, 255, 0.18);
+        }
+
         @media (max-width: 1120px) {
           .serviceGrid {
             grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -380,6 +542,15 @@ export default function ServicesPage() {
 
           .serviceGrid {
             grid-template-columns: repeat(2, minmax(0, 1fr));
+          }
+
+          .bottomNavigation {
+            flex-direction: column;
+            align-items: flex-start;
+          }
+
+          .bottomActions {
+            justify-content: flex-start;
           }
         }
 

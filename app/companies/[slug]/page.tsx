@@ -85,7 +85,6 @@ type CompanyArticle = {
   created_at: string | null;
 };
 
-
 type CurrentUser = {
   id: string;
   email: string | null;
@@ -328,9 +327,15 @@ export default function PublicCompanyPage() {
   useEffect(() => {
     if (!currentUserReview) return;
 
-    setReviewRating(currentUserReview.rating);
-    setReviewComment(currentUserReview.comment ?? '');
-  }, [currentUserReview?.id]);
+    const timer = window.setTimeout(() => {
+      setReviewRating(currentUserReview.rating);
+      setReviewComment(currentUserReview.comment ?? '');
+    }, 0);
+
+    return () => {
+      window.clearTimeout(timer);
+    };
+  }, [currentUserReview]);
 
   useEffect(() => {
     let isMounted = true;
@@ -474,7 +479,7 @@ export default function PublicCompanyPage() {
       return;
     }
 
-    window.location.href = url;
+    window.location.assign(url);
   }
 
   async function saveCompanyContactActivity(
@@ -1901,7 +1906,6 @@ export default function PublicCompanyPage() {
             max-width: none;
           }
         }
-
 
         @media (max-width: 620px) {
           .gallery-grid {

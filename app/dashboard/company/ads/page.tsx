@@ -267,20 +267,35 @@ export default function CompanyAdsPage() {
   }
 
   useEffect(() => {
-    loadCompanyAds();
+    const timer = window.setTimeout(() => {
+      loadCompanyAds();
+    }, 0);
+
+    return () => {
+      window.clearTimeout(timer);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
     if (!mediaFile) {
-      setMediaPreviewUrl(null);
-      return;
+      const timer = window.setTimeout(() => {
+        setMediaPreviewUrl(null);
+      }, 0);
+
+      return () => {
+        window.clearTimeout(timer);
+      };
     }
 
     const objectUrl = URL.createObjectURL(mediaFile);
-    setMediaPreviewUrl(objectUrl);
+
+    const timer = window.setTimeout(() => {
+      setMediaPreviewUrl(objectUrl);
+    }, 0);
 
     return () => {
+      window.clearTimeout(timer);
       URL.revokeObjectURL(objectUrl);
     };
   }, [mediaFile]);
@@ -305,7 +320,7 @@ export default function CompanyAdsPage() {
 
   async function uploadAdMedia(userId: string, companyId: string, file: File) {
     const safeName = getSafeFileName(file.name);
-    const filePath = `${userId}/${companyId}/${Date.now()}-${safeName}`;
+    const filePath = `${userId}/${companyId}/${file.lastModified}-${safeName}`;
 
     const { error: uploadError } = await supabase.storage
       .from('ad-media')
@@ -451,7 +466,7 @@ export default function CompanyAdsPage() {
     const endsAt = new Date(now);
     endsAt.setDate(endsAt.getDate() + selectedPlanDays);
 
-    const paymentReference = `test_${ad.id}_${Date.now()}`;
+    const paymentReference = `test_${ad.id}_${now.getTime()}`;
 
     const { error } = await supabase
       .from('company_ads')

@@ -3295,7 +3295,7 @@ export default function HomePage() {
               <a href="#companies-panel">Companies</a>
             </li>
             <li>
-              <a href="#services">Services</a>
+              <Link href="/services">Services</Link>
             </li>
             <li>
               <button
@@ -3312,10 +3312,10 @@ export default function HomePage() {
               <a href="#workers-panel">Workers</a>
             </li>
             <li>
-              <a href="#public-directory">Clients</a>
+              <Link href="/clients">Clients</Link>
             </li>
             <li>
-              <Link href="/register" className="book-btn-nav">
+              <Link href="/get-quote" className="book-btn-nav">
                 Get Quote
               </Link>
             </li>
@@ -3656,7 +3656,7 @@ export default function HomePage() {
 
               const media = activeAd ? getAdMedia(activeAd) : null;
               const videoAd = activeAd ? isVideoAd(activeAd) : false;
-              const href = activeAd ? getAdHref(activeAd) : '#public-directory';
+              const href = activeAd ? getAdHref(activeAd) : '/services';
               const adTitle =
                 activeAd?.title || activeAd?.company?.name || slot.title;
 
@@ -3802,8 +3802,8 @@ export default function HomePage() {
           </div>
 
           <div className="role-showcase" id="roles">
-            <a
-              href="#public-directory"
+            <Link
+              href="/clients"
               className={`role-card role-card-clickable ${
                 userType === 'client' ? 'role-card-active' : ''
               }`}
@@ -3811,9 +3811,9 @@ export default function HomePage() {
               <span className="role-icon">C</span>
               <div>
                 <h3>Clients</h3>
-                <div className="role-badge">Browse services</div>
+                <div className="role-badge">Client guide</div>
               </div>
-            </a>
+            </Link>
 
             <a
               href="#workers-panel"
@@ -4039,10 +4039,11 @@ export default function HomePage() {
 
         <div className="footer-clean">
           <div className="footer-links">
-            <Link href="/">About</Link>
-            <Link href="/">FAQ</Link>
-            <Link href="/">Pricing</Link>
-            <Link href="/">Terms</Link>
+            <Link href="/about">About</Link>
+            <Link href="/contact">FAQ</Link>
+            <Link href="/contact">Contact</Link>
+            <Link href="/pricing">Pricing</Link>
+            <Link href="/legal">Legal</Link>
           </div>
 
           <div className="copyright">

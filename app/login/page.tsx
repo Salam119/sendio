@@ -46,9 +46,7 @@ export default function LoginPage() {
     <div className="min-h-screen bg-[#fefcf5] flex items-center justify-center p-4">
       <div className="max-w-sm w-full bg-white rounded-3xl shadow-xl overflow-hidden border border-[#e2cfbc]">
         <div className="bg-gradient-to-br from-[#c49a6c] to-[#a57c52] p-6 text-center text-white">
-          <h1 className="text-xl font-bold">
-            Welcome Back
-          </h1>
+          <h1 className="text-xl font-bold">Welcome Back</h1>
 
           <p className="text-xs opacity-85 mt-2">
             Sign in to your account
@@ -90,7 +88,7 @@ export default function LoginPage() {
           </form>
 
           <p className="text-center text-sm text-[#5a6e4a] mt-5">
-            Don't have an account?{' '}
+            Don&apos;t have an account?{' '}
             <a href="/register" className="text-[#c49a6c] font-bold">
               Create Account
             </a>

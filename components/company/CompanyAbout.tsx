@@ -9,16 +9,40 @@ export default function CompanyAbout() {
   const [description, setDescription] = useState('');
   const [loading, setLoading] = useState(false);
 
-  async function loadAbout() {
-    const id = await getCompanyId();
+  useEffect(() => {
+    let isMounted = true;
 
-    if (!id) {
-      alert('Company not found for this user.');
-      return;
-    }
+    void getCompanyId().then(async (id) => {
+      if (!isMounted) return;
 
-    setCompanyId(id);
+      if (!id) {
+        alert('Company not found for this user.');
+        return;
+      }
 
+      const { data, error } = await supabase
+        .from('companies')
+        .select('description')
+        .eq('id', id)
+        .single();
+
+      if (!isMounted) return;
+
+      if (error) {
+        alert(error.message);
+        return;
+      }
+
+      setCompanyId(id);
+      setDescription(data?.description || '');
+    });
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  async function reloadAbout(id: string) {
     const { data, error } = await supabase
       .from('companies')
       .select('description')
@@ -32,10 +56,6 @@ export default function CompanyAbout() {
 
     setDescription(data?.description || '');
   }
-
-  useEffect(() => {
-    loadAbout();
-  }, []);
 
   async function saveDescription() {
     if (!companyId) {
@@ -58,13 +78,12 @@ export default function CompanyAbout() {
       return;
     }
 
-    await loadAbout();
+    await reloadAbout(companyId);
     setLoading(false);
   }
 
   return (
     <div className="bg-white rounded-2xl border border-[#e2cfbc] p-6">
-
       <h2 className="text-2xl font-bold text-[#2c3e2f] mb-6">
         About Company
       </h2>
@@ -83,7 +102,6 @@ export default function CompanyAbout() {
       >
         {loading ? 'Saving...' : 'Save Description'}
       </button>
-
     </div>
   );
 }

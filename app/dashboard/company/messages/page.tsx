@@ -130,58 +130,70 @@ export default function MessagesPage() {
   }, [messages]);
 
   useEffect(() => {
-    loadMessages();
+    let isMounted = true;
+
+    async function loadMessages() {
+      setLoading(true);
+      setPageStatus(null);
+
+      const {
+        data: { user },
+        error: userError,
+      } = await supabase.auth.getUser();
+
+      if (!isMounted) return;
+
+      if (userError || !user) {
+        setPageStatus('You must be signed in to view company messages.');
+        setLoading(false);
+        return;
+      }
+
+      const { data: companyData, error: companyError } = await supabase
+        .from('companies')
+        .select('id, name')
+        .eq('user_id', user.id)
+        .maybeSingle();
+
+      if (!isMounted) return;
+
+      if (companyError || !companyData) {
+        setCompany(null);
+        setMessages([]);
+        setPageStatus('Company profile was not found for this account.');
+        setLoading(false);
+        return;
+      }
+
+      const selectedCompany = companyData as CompanyRow;
+
+      setCompany(selectedCompany);
+
+      const { data: messagesData, error: messagesError } = await supabase
+        .from('company_messages')
+        .select('*')
+        .eq('company_id', selectedCompany.id)
+        .order('created_at', { ascending: false });
+
+      if (!isMounted) return;
+
+      if (messagesError) {
+        setMessages([]);
+        setPageStatus(messagesError.message);
+        setLoading(false);
+        return;
+      }
+
+      setMessages((messagesData ?? []) as CompanyMessage[]);
+      setLoading(false);
+    }
+
+    void loadMessages();
+
+    return () => {
+      isMounted = false;
+    };
   }, []);
-
-  async function loadMessages() {
-    setLoading(true);
-    setPageStatus(null);
-
-    const {
-      data: { user },
-      error: userError,
-    } = await supabase.auth.getUser();
-
-    if (userError || !user) {
-      setPageStatus('You must be signed in to view company messages.');
-      setLoading(false);
-      return;
-    }
-
-    const { data: companyData, error: companyError } = await supabase
-      .from('companies')
-      .select('id, name')
-      .eq('user_id', user.id)
-      .maybeSingle();
-
-    if (companyError || !companyData) {
-      setCompany(null);
-      setMessages([]);
-      setPageStatus('Company profile was not found for this account.');
-      setLoading(false);
-      return;
-    }
-
-    const selectedCompany = companyData as CompanyRow;
-
-    setCompany(selectedCompany);
-
-    const { data: messagesData, error: messagesError } = await supabase
-      .from('company_messages')
-      .select('*')
-      .eq('company_id', selectedCompany.id)
-      .order('created_at', { ascending: false });
-
-    if (messagesError) {
-      setMessages([]);
-      setPageStatus(messagesError.message);
-      setLoading(false);
-      return;
-    }
-
-    setMessages((messagesData ?? []) as CompanyMessage[]);
-    setLoading(false);
-  }
 
   async function markMessageAsRead(messageId: string) {
     setUpdatingId(messageId);

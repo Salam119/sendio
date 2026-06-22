@@ -141,58 +141,70 @@ export default function WorkerRequestsPage() {
   }, [requests]);
 
   useEffect(() => {
-    loadRequests();
+    let isMounted = true;
+
+    async function loadRequests() {
+      setLoading(true);
+      setPageStatus(null);
+
+      const {
+        data: { user },
+        error: userError,
+      } = await supabase.auth.getUser();
+
+      if (!isMounted) return;
+
+      if (userError || !user) {
+        setPageStatus('You must be signed in to view worker requests.');
+        setLoading(false);
+        return;
+      }
+
+      const { data: workerData, error: workerError } = await supabase
+        .from('workers')
+        .select('id, name')
+        .eq('user_id', user.id)
+        .maybeSingle();
+
+      if (!isMounted) return;
+
+      if (workerError || !workerData) {
+        setWorker(null);
+        setRequests([]);
+        setPageStatus('Worker profile was not found for this account.');
+        setLoading(false);
+        return;
+      }
+
+      const selectedWorker = workerData as WorkerRow;
+
+      setWorker(selectedWorker);
+
+      const { data: requestsData, error: requestsError } = await supabase
+        .from('worker_requests')
+        .select('*')
+        .eq('worker_id', selectedWorker.id)
+        .order('created_at', { ascending: false });
+
+      if (!isMounted) return;
+
+      if (requestsError) {
+        setRequests([]);
+        setPageStatus(requestsError.message);
+        setLoading(false);
+        return;
+      }
+
+      setRequests((requestsData ?? []) as WorkerRequest[]);
+      setLoading(false);
+    }
+
+    void loadRequests();
+
+    return () => {
+      isMounted = false;
+    };
   }, []);
-
-  async function loadRequests() {
-    setLoading(true);
-    setPageStatus(null);
-
-    const {
-      data: { user },
-      error: userError,
-    } = await supabase.auth.getUser();
-
-    if (userError || !user) {
-      setPageStatus('You must be signed in to view worker requests.');
-      setLoading(false);
-      return;
-    }
-
-    const { data: workerData, error: workerError } = await supabase
-      .from('workers')
-      .select('id, name')
-      .eq('user_id', user.id)
-      .maybeSingle();
-
-    if (workerError || !workerData) {
-      setWorker(null);
-      setRequests([]);
-      setPageStatus('Worker profile was not found for this account.');
-      setLoading(false);
-      return;
-    }
-
-    const selectedWorker = workerData as WorkerRow;
-
-    setWorker(selectedWorker);
-
-    const { data: requestsData, error: requestsError } = await supabase
-      .from('worker_requests')
-      .select('*')
-      .eq('worker_id', selectedWorker.id)
-      .order('created_at', { ascending: false });
-
-    if (requestsError) {
-      setRequests([]);
-      setPageStatus(requestsError.message);
-      setLoading(false);
-      return;
-    }
-
-    setRequests((requestsData ?? []) as WorkerRequest[]);
-    setLoading(false);
-  }
 
   async function markRequestAsRead(requestId: string) {
     setUpdatingId(requestId);

@@ -208,7 +208,13 @@ export default function AdminAdsPage() {
   }
 
   useEffect(() => {
-    loadAds();
+    const timer = window.setTimeout(() => {
+      loadAds();
+    }, 0);
+
+    return () => {
+      window.clearTimeout(timer);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

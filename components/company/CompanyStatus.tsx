@@ -10,16 +10,41 @@ export default function CompanyStatus() {
   const [workingHours, setWorkingHours] = useState('');
   const [loading, setLoading] = useState(false);
 
-  async function loadStatus() {
-    const id = await getCompanyId();
+  useEffect(() => {
+    let isMounted = true;
 
-    if (!id) {
-      alert('Company not found for this user.');
-      return;
-    }
+    void getCompanyId().then(async (id) => {
+      if (!isMounted) return;
 
-    setCompanyId(id);
+      if (!id) {
+        alert('Company not found for this user.');
+        return;
+      }
 
+      const { data, error } = await supabase
+        .from('companies')
+        .select('status, working_hours')
+        .eq('id', id)
+        .single();
+
+      if (!isMounted) return;
+
+      if (error) {
+        alert(error.message);
+        return;
+      }
+
+      setCompanyId(id);
+      setStatus(data.status || 'available');
+      setWorkingHours(data.working_hours || '');
+    });
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  async function reloadStatus(id: string) {
     const { data, error } = await supabase
       .from('companies')
       .select('status, working_hours')
@@ -34,10 +59,6 @@ export default function CompanyStatus() {
     setStatus(data.status || 'available');
     setWorkingHours(data.working_hours || '');
   }
-
-  useEffect(() => {
-    loadStatus();
-  }, []);
 
   async function saveStatus() {
     if (!companyId) {
@@ -61,7 +82,7 @@ export default function CompanyStatus() {
       return;
     }
 
-    await loadStatus();
+    await reloadStatus(companyId);
     setLoading(false);
   }
 
@@ -69,8 +90,8 @@ export default function CompanyStatus() {
     status === 'available'
       ? 'bg-green-100 text-green-700 border-green-300'
       : status === 'busy'
-      ? 'bg-yellow-100 text-yellow-700 border-yellow-300'
-      : 'bg-red-100 text-red-700 border-red-300';
+        ? 'bg-yellow-100 text-yellow-700 border-yellow-300'
+        : 'bg-red-100 text-red-700 border-red-300';
 
   return (
     <div className="bg-white rounded-2xl border border-[#e2cfbc] p-6">

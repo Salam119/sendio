@@ -63,9 +63,16 @@ export default function ServiceCategoryPage() {
         <section className="emptyState">
           <h1>Service category not found.</h1>
           <p>This service category is not available in Sendio yet.</p>
-          <Link href="/services" className="button">
-            Back to Services
-          </Link>
+
+          <div className="buttonRow">
+            <Link href="/" className="button darkButton">
+              Home
+            </Link>
+
+            <Link href="/services" className="button">
+              Services
+            </Link>
+          </div>
         </section>
 
         <style>{baseStyles}</style>
@@ -76,9 +83,15 @@ export default function ServiceCategoryPage() {
   return (
     <main className="categoryPage">
       <section className="hero">
-        <Link href="/services" className="backLink">
-          ← Services
-        </Link>
+        <div className="topLinks">
+          <Link href="/" className="backLink">
+            ← Home
+          </Link>
+
+          <Link href="/services" className="backLink secondaryBackLink">
+            Services
+          </Link>
+        </div>
 
         <div className="heroIcons">
           {category.icons.map((icon) => (
@@ -113,9 +126,16 @@ export default function ServiceCategoryPage() {
             This service category is ready, but no company or worker is currently
             registered in this field.
           </p>
-          <Link href="/services" className="button">
-            Back to Services
-          </Link>
+
+          <div className="buttonRow">
+            <Link href="/" className="button darkButton">
+              Home
+            </Link>
+
+            <Link href="/services" className="button">
+              Services
+            </Link>
+          </div>
         </section>
       ) : (
         <section className="providersGrid">
@@ -189,12 +209,40 @@ const baseStyles = `
     box-shadow: 0 24px 70px rgba(16, 43, 36, 0.22);
   }
 
+  .topLinks {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-bottom: 26px;
+  }
+
   .backLink {
     display: inline-flex;
-    margin-bottom: 26px;
-    color: #e9c896;
+    align-items: center;
+    justify-content: center;
+    min-height: 38px;
+    padding: 9px 15px;
+    border-radius: 999px;
+    color: #102b24;
+    background: #e9c896;
     text-decoration: none;
     font-weight: 900;
+    transition: transform 0.2s ease, background 0.2s ease;
+  }
+
+  .backLink:hover {
+    transform: translateY(-2px);
+    background: #f1d6a7;
+  }
+
+  .secondaryBackLink {
+    color: #e9c896;
+    background: rgba(255, 255, 255, 0.12);
+    border: 1px solid rgba(233, 200, 150, 0.4);
+  }
+
+  .secondaryBackLink:hover {
+    background: rgba(255, 255, 255, 0.18);
   }
 
   .heroIcons {
@@ -345,6 +393,12 @@ const baseStyles = `
     line-height: 1.7;
   }
 
+  .buttonRow {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+
   .button {
     display: inline-flex;
     align-items: center;
@@ -355,6 +409,10 @@ const baseStyles = `
     background: #c49767;
     color: #ffffff;
     font-weight: 900;
+  }
+
+  .darkButton {
+    background: #102b24;
   }
 
   @media (max-width: 980px) {

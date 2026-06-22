@@ -393,9 +393,15 @@ export default function PublicWorkerProfilePage() {
   useEffect(() => {
     if (!currentUserReview) return;
 
-    setReviewRating(currentUserReview.rating);
-    setReviewComment(currentUserReview.comment ?? '');
-  }, [currentUserReview?.id]);
+    const timer = window.setTimeout(() => {
+      setReviewRating(currentUserReview.rating);
+      setReviewComment(currentUserReview.comment ?? '');
+    }, 0);
+
+    return () => {
+      window.clearTimeout(timer);
+    };
+  }, [currentUserReview]);
 
   function showLockedMessage(message = 'Sign in to unlock this feature.') {
     setUnlockNotice(message);
@@ -426,7 +432,7 @@ export default function PublicWorkerProfilePage() {
       return;
     }
 
-    window.location.href = url;
+    window.location.assign(url);
   }
 
   async function handleContactClick(

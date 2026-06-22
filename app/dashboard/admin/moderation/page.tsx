@@ -153,7 +153,7 @@ function canReplyByEmail(email: string | null | undefined) {
 
 function getReplyMailUrl(item: AdminArchiveItem) {
   const email = item.email.trim();
-  const subject = `Reply from Sendio admin`;
+  const subject = 'Reply from Sendio admin';
   const body = `Hello ${item.name || 'Client'},\n\n`;
 
   return `mailto:${email}?subject=${encodeURIComponent(
@@ -194,6 +194,14 @@ function buildOwnerMap(rows: OwnerRow[]) {
   }, {});
 }
 
+function getItemKey(item: AdminArchiveItem) {
+  return `${item.kind}:${item.id}`;
+}
+
+function getTableName(kind: ArchiveKind) {
+  return kind === 'company' ? 'company_messages' : 'worker_requests';
+}
+
 export default function AdminModerationPage() {
   const [adminRole, setAdminRole] = useState<AdminRole | null>(null);
   const [items, setItems] = useState<AdminArchiveItem[]>([]);
@@ -201,6 +209,7 @@ export default function AdminModerationPage() {
   const [pageStatus, setPageStatus] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<ViewMode>('all');
   const [updatingKey, setUpdatingKey] = useState<string | null>(null);
+  const [refreshKey, setRefreshKey] = useState(0);
   const [moderationStatusDrafts, setModerationStatusDrafts] = useState<
     Record<string, string>
   >({});
@@ -249,211 +258,227 @@ export default function AdminModerationPage() {
   }, [items, viewMode]);
 
   useEffect(() => {
-    loadArchive();
-  }, []);
+    let isMounted = true;
 
-  async function loadArchive() {
-    setLoading(true);
-    setPageStatus(null);
+    async function loadArchive() {
+      setLoading(true);
+      setPageStatus(null);
 
-    const {
-      data: { user },
-      error: userError,
-    } = await supabase.auth.getUser();
+      const {
+        data: { user },
+        error: userError,
+      } = await supabase.auth.getUser();
 
-    if (userError || !user) {
-      setAdminRole(null);
-      setItems([]);
-      setPageStatus('You must be signed in as an admin.');
-      setLoading(false);
-      return;
-    }
+      if (!isMounted) return;
 
-    const { data: profileData, error: profileError } = await supabase
-      .from('profiles')
-      .select('role')
-      .eq('id', user.id)
-      .maybeSingle();
-
-    if (profileError) {
-      setAdminRole(null);
-      setItems([]);
-      setPageStatus(profileError.message);
-      setLoading(false);
-      return;
-    }
-
-    const role = profileData?.role;
-
-    if (role !== 'admin' && role !== 'super_admin') {
-      setAdminRole(null);
-      setItems([]);
-      setPageStatus('Access denied. Admin role is required.');
-      setLoading(false);
-      return;
-    }
-
-    setAdminRole(role);
-
-    const [companyMessagesResult, workerRequestsResult] = await Promise.all([
-      supabase
-        .from('company_messages')
-        .select('*')
-        .order('created_at', { ascending: false }),
-
-      supabase
-        .from('worker_requests')
-        .select('*')
-        .order('created_at', { ascending: false }),
-    ]);
-
-    if (companyMessagesResult.error) {
-      setItems([]);
-      setPageStatus(companyMessagesResult.error.message);
-      setLoading(false);
-      return;
-    }
-
-    if (workerRequestsResult.error) {
-      setItems([]);
-      setPageStatus(workerRequestsResult.error.message);
-      setLoading(false);
-      return;
-    }
-
-    const companyMessages =
-      (companyMessagesResult.data ?? []) as CompanyMessageRow[];
-    const workerRequests =
-      (workerRequestsResult.data ?? []) as WorkerRequestRow[];
-
-    const companyIds = Array.from(
-      new Set(
-        companyMessages
-          .map((message) => message.company_id)
-          .filter((id): id is string => Boolean(id))
-      )
-    );
-
-    const workerIds = Array.from(
-      new Set(
-        workerRequests
-          .map((request) => request.worker_id)
-          .filter((id): id is string => Boolean(id))
-      )
-    );
-
-    const [companiesResult, workersResult] = await Promise.all([
-      companyIds.length > 0
-        ? supabase.from('companies').select('id, name, slug').in('id', companyIds)
-        : Promise.resolve({ data: [], error: null }),
-
-      workerIds.length > 0
-        ? supabase.from('workers').select('id, name, slug').in('id', workerIds)
-        : Promise.resolve({ data: [], error: null }),
-    ]);
-
-    if (companiesResult.error) {
-      setPageStatus(companiesResult.error.message);
-      setLoading(false);
-      return;
-    }
-
-    if (workersResult.error) {
-      setPageStatus(workersResult.error.message);
-      setLoading(false);
-      return;
-    }
-
-    const companiesMap = buildOwnerMap((companiesResult.data ?? []) as OwnerRow[]);
-    const workersMap = buildOwnerMap((workersResult.data ?? []) as OwnerRow[]);
-
-    const normalizedCompanyItems: AdminArchiveItem[] = companyMessages.map(
-      (message) => {
-        const owner = message.company_id
-          ? companiesMap[message.company_id]
-          : undefined;
-
-        return {
-          kind: 'company',
-          id: message.id,
-          owner_id: message.company_id,
-          owner_name: owner?.name || 'Unknown company',
-          owner_href: getCompanyHref(owner, message.company_id),
-          client_id: message.client_id,
-          name: message.name,
-          email: message.email,
-          phone: null,
-          message: message.message,
-          created_at: message.created_at,
-          status: message.status,
-          owner_seen: message.company_seen,
-          admin_seen: message.admin_seen,
-          is_archived: message.is_archived,
-          moderation_status: message.moderation_status,
-          admin_note: message.admin_note,
-          source_channel: message.source_channel,
-          source_url: message.source_url,
-          event_type: message.event_type,
-        };
+      if (userError || !user) {
+        setAdminRole(null);
+        setItems([]);
+        setPageStatus('You must be signed in as an admin.');
+        setLoading(false);
+        return;
       }
-    );
 
-    const normalizedWorkerItems: AdminArchiveItem[] = workerRequests.map(
-      (request) => {
-        const owner = request.worker_id ? workersMap[request.worker_id] : undefined;
+      const { data: profileData, error: profileError } = await supabase
+        .from('profiles')
+        .select('role')
+        .eq('id', user.id)
+        .maybeSingle();
 
-        return {
-          kind: 'worker',
-          id: request.id,
-          owner_id: request.worker_id,
-          owner_name: owner?.name || 'Unknown worker',
-          owner_href: getWorkerHref(owner, request.worker_id),
-          client_id: request.client_id,
-          name: request.name,
-          email: request.email,
-          phone: request.phone,
-          message: request.message,
-          created_at: request.created_at,
-          status: request.status,
-          owner_seen: request.worker_seen,
-          admin_seen: request.admin_seen,
-          is_archived: request.is_archived,
-          moderation_status: request.moderation_status,
-          admin_note: request.admin_note,
-          source_channel: request.source_channel,
-          source_url: request.source_url,
-          event_type: request.event_type,
-        };
+      if (!isMounted) return;
+
+      if (profileError) {
+        setAdminRole(null);
+        setItems([]);
+        setPageStatus(profileError.message);
+        setLoading(false);
+        return;
       }
-    );
 
-    const combinedItems = [
-      ...normalizedCompanyItems,
-      ...normalizedWorkerItems,
-    ].sort((a, b) => getTimeValue(b.created_at) - getTimeValue(a.created_at));
+      const role = profileData?.role;
 
-    const nextModerationDrafts: Record<string, string> = {};
-    const nextNoteDrafts: Record<string, string> = {};
+      if (role !== 'admin' && role !== 'super_admin') {
+        setAdminRole(null);
+        setItems([]);
+        setPageStatus('Access denied. Admin role is required.');
+        setLoading(false);
+        return;
+      }
 
-    combinedItems.forEach((item) => {
-      const key = getItemKey(item);
-      nextModerationDrafts[key] = item.moderation_status || 'normal';
-      nextNoteDrafts[key] = item.admin_note || '';
-    });
+      setAdminRole(role);
 
-    setItems(combinedItems);
-    setModerationStatusDrafts(nextModerationDrafts);
-    setAdminNoteDrafts(nextNoteDrafts);
-    setLoading(false);
-  }
+      const [companyMessagesResult, workerRequestsResult] = await Promise.all([
+        supabase
+          .from('company_messages')
+          .select('*')
+          .order('created_at', { ascending: false }),
 
-  function getItemKey(item: AdminArchiveItem) {
-    return `${item.kind}:${item.id}`;
-  }
+        supabase
+          .from('worker_requests')
+          .select('*')
+          .order('created_at', { ascending: false }),
+      ]);
 
-  function getTableName(kind: ArchiveKind) {
-    return kind === 'company' ? 'company_messages' : 'worker_requests';
-  }
+      if (!isMounted) return;
+
+      if (companyMessagesResult.error) {
+        setItems([]);
+        setPageStatus(companyMessagesResult.error.message);
+        setLoading(false);
+        return;
+      }
+
+      if (workerRequestsResult.error) {
+        setItems([]);
+        setPageStatus(workerRequestsResult.error.message);
+        setLoading(false);
+        return;
+      }
+
+      const companyMessages =
+        (companyMessagesResult.data ?? []) as CompanyMessageRow[];
+      const workerRequests =
+        (workerRequestsResult.data ?? []) as WorkerRequestRow[];
+
+      const companyIds = Array.from(
+        new Set(
+          companyMessages
+            .map((message) => message.company_id)
+            .filter((id): id is string => Boolean(id))
+        )
+      );
+
+      const workerIds = Array.from(
+        new Set(
+          workerRequests
+            .map((request) => request.worker_id)
+            .filter((id): id is string => Boolean(id))
+        )
+      );
+
+      const [companiesResult, workersResult] = await Promise.all([
+        companyIds.length > 0
+          ? supabase
+              .from('companies')
+              .select('id, name, slug')
+              .in('id', companyIds)
+          : Promise.resolve({ data: [], error: null }),
+
+        workerIds.length > 0
+          ? supabase
+              .from('workers')
+              .select('id, name, slug')
+              .in('id', workerIds)
+          : Promise.resolve({ data: [], error: null }),
+      ]);
+
+      if (!isMounted) return;
+
+      if (companiesResult.error) {
+        setPageStatus(companiesResult.error.message);
+        setLoading(false);
+        return;
+      }
+
+      if (workersResult.error) {
+        setPageStatus(workersResult.error.message);
+        setLoading(false);
+        return;
+      }
+
+      const companiesMap = buildOwnerMap(
+        (companiesResult.data ?? []) as OwnerRow[]
+      );
+      const workersMap = buildOwnerMap((workersResult.data ?? []) as OwnerRow[]);
+
+      const normalizedCompanyItems: AdminArchiveItem[] = companyMessages.map(
+        (message) => {
+          const owner = message.company_id
+            ? companiesMap[message.company_id]
+            : undefined;
+
+          return {
+            kind: 'company',
+            id: message.id,
+            owner_id: message.company_id,
+            owner_name: owner?.name || 'Unknown company',
+            owner_href: getCompanyHref(owner, message.company_id),
+            client_id: message.client_id,
+            name: message.name,
+            email: message.email,
+            phone: null,
+            message: message.message,
+            created_at: message.created_at,
+            status: message.status,
+            owner_seen: message.company_seen,
+            admin_seen: message.admin_seen,
+            is_archived: message.is_archived,
+            moderation_status: message.moderation_status,
+            admin_note: message.admin_note,
+            source_channel: message.source_channel,
+            source_url: message.source_url,
+            event_type: message.event_type,
+          };
+        }
+      );
+
+      const normalizedWorkerItems: AdminArchiveItem[] = workerRequests.map(
+        (request) => {
+          const owner = request.worker_id
+            ? workersMap[request.worker_id]
+            : undefined;
+
+          return {
+            kind: 'worker',
+            id: request.id,
+            owner_id: request.worker_id,
+            owner_name: owner?.name || 'Unknown worker',
+            owner_href: getWorkerHref(owner, request.worker_id),
+            client_id: request.client_id,
+            name: request.name,
+            email: request.email,
+            phone: request.phone,
+            message: request.message,
+            created_at: request.created_at,
+            status: request.status,
+            owner_seen: request.worker_seen,
+            admin_seen: request.admin_seen,
+            is_archived: request.is_archived,
+            moderation_status: request.moderation_status,
+            admin_note: request.admin_note,
+            source_channel: request.source_channel,
+            source_url: request.source_url,
+            event_type: request.event_type,
+          };
+        }
+      );
+
+      const combinedItems = [
+        ...normalizedCompanyItems,
+        ...normalizedWorkerItems,
+      ].sort((a, b) => getTimeValue(b.created_at) - getTimeValue(a.created_at));
+
+      const nextModerationDrafts: Record<string, string> = {};
+      const nextNoteDrafts: Record<string, string> = {};
+
+      combinedItems.forEach((item) => {
+        const key = getItemKey(item);
+        nextModerationDrafts[key] = item.moderation_status || 'normal';
+        nextNoteDrafts[key] = item.admin_note || '';
+      });
+
+      setItems(combinedItems);
+      setModerationStatusDrafts(nextModerationDrafts);
+      setAdminNoteDrafts(nextNoteDrafts);
+      setLoading(false);
+    }
+
+    void loadArchive();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [refreshKey]);
 
   async function updateItem(
     item: AdminArchiveItem,
@@ -583,7 +608,7 @@ export default function AdminModerationPage() {
 
           <button
             type="button"
-            onClick={loadArchive}
+            onClick={() => setRefreshKey((value) => value + 1)}
             className="rounded-full bg-[#0b5b2f] px-4 py-2 text-sm font-bold text-white"
           >
             Refresh

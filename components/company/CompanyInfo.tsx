@@ -18,6 +18,7 @@ type CompanyInfoData = {
 };
 
 export default function CompanyInfo() {
+  const [companyId, setCompanyId] = useState<string | null>(null);
   const [phone, setPhone] = useState('');
   const [email, setEmail] = useState('');
   const [website, setWebsite] = useState('');
@@ -30,15 +31,59 @@ export default function CompanyInfo() {
   const [reviewsCount, setReviewsCount] = useState(0);
   const [loading, setLoading] = useState(false);
 
-  async function loadCompanyInfo() {
-    const companyId = await getCompanyId();
+  useEffect(() => {
+    let isMounted = true;
 
+    void getCompanyId().then(async (id) => {
+      if (!isMounted) return;
+
+      if (!id) {
+        alert('Company not found for this user.');
+        return;
+      }
+
+      const { data, error } = await supabase
+        .from('companies')
+        .select(
+          'phone, email, website, city, address, category, views, connections, rating, reviews_count'
+        )
+        .eq('id', id)
+        .single();
+
+      if (!isMounted) return;
+
+      if (error) {
+        alert(error.message);
+        return;
+      }
+
+      const company = data as CompanyInfoData;
+
+      setCompanyId(id);
+      setPhone(company.phone || '');
+      setEmail(company.email || '');
+      setWebsite(company.website || '');
+      setCity(company.city || '');
+      setAddress(company.address || '');
+      setCategory(company.category || '');
+      setViews(company.views || 0);
+      setConnections(company.connections || 0);
+      setRating(Number(company.rating || 0));
+      setReviewsCount(company.reviews_count || 0);
+    });
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  async function reloadCompanyInfo(id: string) {
     const { data, error } = await supabase
       .from('companies')
       .select(
         'phone, email, website, city, address, category, views, connections, rating, reviews_count'
       )
-      .eq('id', companyId)
+      .eq('id', id)
       .single();
 
     if (error) {
@@ -60,14 +105,13 @@ export default function CompanyInfo() {
     setReviewsCount(company.reviews_count || 0);
   }
 
-  useEffect(() => {
-    loadCompanyInfo();
-  }, []);
-
   async function saveCompanyInfo() {
-    setLoading(true);
+    if (!companyId) {
+      alert('Company ID not found.');
+      return;
+    }
 
-    const companyId = await getCompanyId();
+    setLoading(true);
 
     const { error } = await supabase
       .from('companies')
@@ -87,22 +131,18 @@ export default function CompanyInfo() {
       return;
     }
 
-    await loadCompanyInfo();
-
+    await reloadCompanyInfo(companyId);
     setLoading(false);
   }
 
   return (
     <div className="bg-white rounded-2xl border border-[#e2cfbc] p-6">
-
       <h2 className="text-2xl font-bold text-[#2c3e2f] mb-6">
         Company Info
       </h2>
 
       <div className="grid md:grid-cols-2 gap-6">
-
         <div className="space-y-3">
-
           <input
             value={phone}
             onChange={(e) => setPhone(e.target.value)}
@@ -152,32 +192,18 @@ export default function CompanyInfo() {
           >
             {loading ? 'Saving...' : 'Save Company Info'}
           </button>
-
         </div>
 
         <div className="space-y-3">
-
           <InsightCard label="Views" value={views} />
 
-          <InsightCard
-            label="Connections"
-            value={connections}
-          />
+          <InsightCard label="Connections" value={connections} />
 
-          <InsightCard
-            label="Rating"
-            value={`${rating} / 5`}
-          />
+          <InsightCard label="Rating" value={`${rating} / 5`} />
 
-          <InsightCard
-            label="Reviews"
-            value={reviewsCount}
-          />
-
+          <InsightCard label="Reviews" value={reviewsCount} />
         </div>
-
       </div>
-
     </div>
   );
 }
@@ -191,15 +217,9 @@ function InsightCard({
 }) {
   return (
     <div className="border border-[#e2cfbc] rounded-xl p-4 flex justify-between items-center">
+      <span className="text-sm text-[#2c3e2f]">{label}</span>
 
-      <span className="text-sm text-[#2c3e2f]">
-        {label}
-      </span>
-
-      <span className="text-sm font-semibold text-[#2c3e2f]">
-        {value}
-      </span>
-
+      <span className="text-sm font-semibold text-[#2c3e2f]">{value}</span>
     </div>
   );
 }

@@ -17,9 +17,39 @@ export default function CompanyHeader() {
   const [company, setCompany] = useState<Company | null>(null);
   const [loading, setLoading] = useState(false);
 
-  async function loadCompany() {
-    const companyId = await getCompanyId();
+  useEffect(() => {
+    let isMounted = true;
 
+    void getCompanyId().then(async (companyId) => {
+      if (!isMounted) return;
+
+      if (!companyId) {
+        alert('Company not found for this user.');
+        return;
+      }
+
+      const { data, error } = await supabase
+        .from('companies')
+        .select('name, category, city, status, logo, cover')
+        .eq('id', companyId)
+        .single();
+
+      if (!isMounted) return;
+
+      if (error) {
+        alert(error.message);
+        return;
+      }
+
+      setCompany(data);
+    });
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  async function reloadCompany(companyId: string) {
     const { data, error } = await supabase
       .from('companies')
       .select('name, category, city, status, logo, cover')
@@ -34,17 +64,16 @@ export default function CompanyHeader() {
     setCompany(data);
   }
 
-  useEffect(() => {
-    loadCompany();
-  }, []);
-
-  async function uploadImage(
-    file: File,
-    field: 'logo' | 'cover'
-  ) {
+  async function uploadImage(file: File, field: 'logo' | 'cover') {
     setLoading(true);
 
     const companyId = await getCompanyId();
+
+    if (!companyId) {
+      alert('Company not found for this user.');
+      setLoading(false);
+      return;
+    }
 
     const fileName = `${Date.now()}-${file.name}`;
     const filePath = `${companyId}/${field}/${fileName}`;
@@ -61,9 +90,7 @@ export default function CompanyHeader() {
 
     const {
       data: { publicUrl },
-    } = supabase.storage
-      .from('company-gallery')
-      .getPublicUrl(filePath);
+    } = supabase.storage.from('company-gallery').getPublicUrl(filePath);
 
     const { error } = await supabase
       .from('companies')
@@ -78,13 +105,12 @@ export default function CompanyHeader() {
       return;
     }
 
-    await loadCompany();
+    await reloadCompany(companyId);
     setLoading(false);
   }
 
   return (
     <div className="bg-white rounded-2xl border border-[#e2cfbc] overflow-hidden mb-6">
-
       <div className="relative h-56 bg-[#fefcf5] flex items-center justify-center">
         {company?.cover ? (
           <img
@@ -108,7 +134,7 @@ export default function CompanyHeader() {
               const file = e.target.files?.[0];
 
               if (file) {
-                uploadImage(file, 'cover');
+                void uploadImage(file, 'cover');
               }
             }}
             className="hidden"
@@ -117,7 +143,6 @@ export default function CompanyHeader() {
       </div>
 
       <div className="p-6">
-
         <div className="-mt-16 mb-4 relative z-10">
           <div className="w-32 h-32 rounded-full bg-white border-4 border-white shadow flex items-center justify-center overflow-hidden">
             {company?.logo ? (
@@ -127,9 +152,7 @@ export default function CompanyHeader() {
                 className="w-full h-full object-cover"
               />
             ) : (
-              <span className="text-gray-400 text-sm">
-                Logo
-              </span>
+              <span className="text-gray-400 text-sm">Logo</span>
             )}
           </div>
 
@@ -143,7 +166,7 @@ export default function CompanyHeader() {
                 const file = e.target.files?.[0];
 
                 if (file) {
-                  uploadImage(file, 'logo');
+                  void uploadImage(file, 'logo');
                 }
               }}
               className="hidden"
@@ -156,15 +179,9 @@ export default function CompanyHeader() {
         </h1>
 
         <div className="flex flex-wrap gap-3 mt-3 text-gray-500">
+          {company?.category && <span>{company.category}</span>}
 
-          {company?.category && (
-            <span>{company.category}</span>
-          )}
-
-          {company?.city && (
-            <span>{company.city}</span>
-          )}
-
+          {company?.city && <span>{company.city}</span>}
         </div>
 
         <div className="mt-4">
@@ -172,9 +189,7 @@ export default function CompanyHeader() {
             {(company?.status || 'available').toUpperCase()}
           </span>
         </div>
-
       </div>
-
     </div>
   );
 }

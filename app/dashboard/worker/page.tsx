@@ -460,7 +460,13 @@ export default function WorkerDashboardPage() {
   }
 
   useEffect(() => {
-    loadWorkerDashboard();
+    const timer = window.setTimeout(() => {
+      loadWorkerDashboard();
+    }, 0);
+
+    return () => {
+      window.clearTimeout(timer);
+    };
   }, []);
 
   async function handleCreateWorkerProfile(event: FormEvent<HTMLFormElement>) {
