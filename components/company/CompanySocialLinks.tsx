@@ -83,7 +83,7 @@ export default function CompanySocialLinks() {
         const id = await getCompanyId();
 
         setCompanyId(id);
-        await loadSocialLinks(id);
+      await loadSocialLinks(id ?? undefined);
       } catch (error) {
         clearSocialLinks();
         alert(

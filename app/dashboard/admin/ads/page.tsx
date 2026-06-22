@@ -203,7 +203,7 @@ export default function AdminAdsPage() {
       return;
     }
 
-    setAds((data as AdminAd[]) || []);
+  setAds(((data ?? []) as unknown) as AdminAd[]);
     setLoading(false);
   }
 

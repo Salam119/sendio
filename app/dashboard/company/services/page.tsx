@@ -39,7 +39,7 @@ export default function ServicesPage() {
       const id = await getCompanyId();
 
       setCompanyId(id);
-      await loadServices(id);
+    await loadServices(id ?? undefined);
     }
 
     init();
