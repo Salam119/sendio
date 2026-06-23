@@ -1,5 +1,6 @@
-'use client';
 
+'use client';
+import Image from 'next/image';
 import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { getCompanyId } from '@/lib/getCompanyId';
@@ -113,10 +114,12 @@ export default function CompanyHeader() {
     <div className="bg-white rounded-2xl border border-[#e2cfbc] overflow-hidden mb-6">
       <div className="relative h-56 bg-[#fefcf5] flex items-center justify-center">
         {company?.cover ? (
-          <img
+          <Image
             src={company.cover}
             alt="Cover"
-            className="w-full h-full object-cover"
+            fill
+            className="object-cover"
+            sizes="100vw"
           />
         ) : (
           <span className="text-gray-400 text-sm">
@@ -144,12 +147,14 @@ export default function CompanyHeader() {
 
       <div className="p-6">
         <div className="-mt-16 mb-4 relative z-10">
-          <div className="w-32 h-32 rounded-full bg-white border-4 border-white shadow flex items-center justify-center overflow-hidden">
+          <div className="relative w-32 h-32 rounded-full bg-white border-4 border-white shadow flex items-center justify-center overflow-hidden">
             {company?.logo ? (
-              <img
+              <Image
                 src={company.logo}
                 alt="Logo"
-                className="w-full h-full object-cover"
+                fill
+                className="object-cover"
+                sizes="128px"
               />
             ) : (
               <span className="text-gray-400 text-sm">Logo</span>
@@ -193,3 +198,6 @@ export default function CompanyHeader() {
     </div>
   );
 }
+
+
+

@@ -1,5 +1,6 @@
 'use client';
 
+import Image from 'next/image';
 import { ChangeEvent, FormEvent, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -772,10 +773,13 @@ export default function CompanyAdsPage() {
 
                     {mediaPreviewUrl && mediaFile.type.startsWith('image/') ? (
                       <div className="h-[120px] w-[150px] max-w-full overflow-hidden rounded-2xl border border-[#eadcc9] bg-[#fbf8f3]">
-                        <img
+                        <Image
                           src={mediaPreviewUrl}
                           alt="Selected ad preview"
+                          width={150}
+                          height={120}
                           className="h-full w-full object-cover"
+                          sizes="150px"
                         />
                       </div>
                     ) : null}
@@ -842,10 +846,13 @@ export default function CompanyAdsPage() {
                         ) : null}
 
                         {mediaUrl && !isVideo ? (
-                          <img
+                          <Image
                             src={mediaUrl}
                             alt={`${ad.title} advertisement`}
+                            width={150}
+                            height={120}
                             className="h-full w-full object-cover"
+                            sizes="150px"
                           />
                         ) : null}
 
@@ -979,3 +986,5 @@ export default function CompanyAdsPage() {
     </main>
   );
 }
+
+
