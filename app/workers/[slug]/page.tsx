@@ -1,5 +1,6 @@
 'use client';
 
+import Image from 'next/image';
 import Link from 'next/link';
 import { useEffect, useState, type FormEvent } from 'react';
 import { useParams } from 'next/navigation';
@@ -831,14 +832,28 @@ export default function PublicWorkerProfilePage() {
       <section className="hero">
         <div className="cover">
           {worker.cover ? (
-            <img src={worker.cover} alt={`${worker.name} cover`} />
+            <Image
+            src={worker.cover}
+            alt={`${worker.name} cover`}
+            width={1600}
+            height={420}
+            style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+            sizes="100vw"
+          />
           ) : null}
         </div>
 
         <div className="hero-content">
           <div className="avatar-box">
             {worker.avatar ? (
-              <img src={worker.avatar} alt={`${worker.name} avatar`} />
+              <Image
+              src={worker.avatar}
+              alt={`${worker.name} avatar`}
+              width={160}
+              height={160}
+              style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+              sizes="160px"
+            />
             ) : (
               <span>{worker.name.charAt(0).toUpperCase()}</span>
             )}
@@ -920,7 +935,14 @@ export default function PublicWorkerProfilePage() {
                       {item.type === 'video' ? (
                         <video src={item.url} controls />
                       ) : (
-                        <img src={item.url} alt={`${worker.name} achievement`} />
+                        <Image
+                        src={item.url}
+                        alt={`${worker.name} achievement`}
+                        width={800}
+                        height={440}
+                        style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                        sizes="(max-width: 768px) 100vw, 33vw"
+                      />
                       )}
                     </div>
 

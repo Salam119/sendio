@@ -1,5 +1,6 @@
 'use client';
 
+import Image from 'next/image';
 import Link from 'next/link';
 import { useEffect, useState, type FormEvent } from 'react';
 import { useParams } from 'next/navigation';
@@ -874,14 +875,28 @@ export default function PublicCompanyPage() {
       <section className="hero">
         <div className="cover">
           {company.cover ? (
-            <img src={company.cover} alt={`${company.name} cover`} />
+            <Image
+            src={company.cover}
+            alt={`${company.name} cover`}
+            width={1600}
+            height={420}
+            style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+            sizes="100vw"
+          />
           ) : null}
         </div>
 
         <div className="hero-content">
           <div className="logo-box">
             {company.logo ? (
-              <img src={company.logo} alt={`${company.name} logo`} />
+              <Image
+              src={company.logo}
+              alt={`${company.name} logo`}
+              width={160}
+              height={160}
+              style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+              sizes="160px"
+            />
             ) : (
               <span>{company.name.charAt(0).toUpperCase()}</span>
             )}
@@ -1024,7 +1039,14 @@ export default function PublicCompanyPage() {
                     {item.type === 'video' ? (
                       <video src={item.url} controls />
                     ) : (
-                      <img src={item.url} alt={`${company.name} gallery`} />
+                      <Image
+                      src={item.url}
+                      alt={`${company.name} gallery`}
+                      width={800}
+                      height={440}
+                      style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                      sizes="(max-width: 768px) 100vw, 33vw"
+                    />
                     )}
                   </div>
                 ))}

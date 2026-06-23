@@ -1,5 +1,6 @@
 'use client';
 
+import Image from 'next/image';
 import { FormEvent, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
@@ -1076,24 +1077,28 @@ export default function WorkerDashboardPage() {
       ) : null}
 
       <section className="overflow-hidden rounded-2xl bg-white shadow-sm">
-        <div className="h-40 bg-green-800">
+        <div className="relative h-40 bg-green-800">
           {worker.cover ? (
-            <img
-              src={worker.cover}
-              alt={worker.name}
-              className="h-full w-full object-cover"
-            />
+            <Image
+            src={worker.cover}
+            alt={worker.name}
+            fill
+            className="object-cover"
+            sizes="100vw"
+          />
           ) : null}
         </div>
 
         <div className="flex flex-col gap-4 px-6 pb-6 pt-0 md:flex-row md:items-end md:justify-between">
           <div className="-mt-12 flex items-end gap-4">
-            <div className="flex h-24 w-24 items-center justify-center overflow-hidden rounded-full border-4 border-white bg-gray-200 text-3xl font-bold text-gray-700">
+            <div className="relative flex h-24 w-24 items-center justify-center overflow-hidden rounded-full border-4 border-white bg-gray-200 text-3xl font-bold text-gray-700">
               {worker.avatar ? (
-                <img
+                <Image
                   src={worker.avatar}
                   alt={worker.name}
-                  className="h-full w-full object-cover"
+                  fill
+                  className="object-cover"
+                  sizes="96px"
                 />
               ) : (
                 worker.name.charAt(0).toUpperCase()
@@ -1253,7 +1258,7 @@ export default function WorkerDashboardPage() {
         <div className="mt-5 grid gap-4 md:grid-cols-3">
           {gallery.map((item) => (
             <div key={item.id} className="overflow-hidden rounded-xl border">
-              <div className="h-44 bg-gray-100">
+              <div className="relative h-44 bg-gray-100">
                 {item.type === 'video' ? (
                   <video
                     src={item.url}
@@ -1261,10 +1266,12 @@ export default function WorkerDashboardPage() {
                     className="h-full w-full object-cover"
                   />
                 ) : (
-                  <img
+                  <Image
                     src={item.url}
                     alt="Worker achievement"
-                    className="h-full w-full object-cover"
+                    fill
+                    className="object-cover"
+                    sizes="(max-width: 768px) 100vw, 33vw"
                   />
                 )}
               </div>
@@ -1811,3 +1818,4 @@ export default function WorkerDashboardPage() {
     </div>
   );
 }
+

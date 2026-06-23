@@ -1,5 +1,6 @@
 'use client';
 
+import Image from 'next/image';
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -405,10 +406,13 @@ export default function AdminAdsPage() {
                       ) : null}
 
                       {mediaUrl && !video ? (
-                        <img
+                        <Image
                           src={mediaUrl}
                           alt={`${ad.title} advertisement`}
+                          width={150}
+                          height={120}
                           className="h-full w-full object-cover"
+                          sizes="150px"
                         />
                       ) : null}
 
