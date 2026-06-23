@@ -43,6 +43,7 @@ export default function ServicesPage() {
     }
 
     init();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   async function addService() {
@@ -84,9 +85,15 @@ export default function ServicesPage() {
     await loadServices();
   }
 
+  void services;
+  void loading;
+  void addService;
+  void deleteService;
+
   return (
     <div className="space-y-6">
       {/* الكود الباقي كما هو بدون تغيير */}
     </div>
   );
 }
+

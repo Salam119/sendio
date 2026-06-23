@@ -176,9 +176,6 @@ export default function AdminDashboardPage() {
     return adminProfiles.filter((profile) => profile.role === 'admin').length;
   }, [adminProfiles]);
 
-  const superAdminCount = useMemo(() => {
-    return adminProfiles.filter((profile) => profile.role === 'super_admin').length;
-  }, [adminProfiles]);
 
   const permissionsByUserId = useMemo(() => {
     const map = new Map<string, AdminPermissionRow>();
