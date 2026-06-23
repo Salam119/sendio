@@ -49,6 +49,7 @@ export default function CompanyFeatures() {
     }
 
     initFeatures();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   async function addFeature() {

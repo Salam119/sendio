@@ -333,6 +333,7 @@ export default function AdminTeamPage() {
     return () => {
       window.clearTimeout(timer);
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   function updateDraft(userId: string, key: PermissionKey, checked: boolean) {

@@ -95,6 +95,7 @@ export default function CompanySocialLinks() {
     }
 
     initSocialLinks();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   async function saveSocialLinks() {

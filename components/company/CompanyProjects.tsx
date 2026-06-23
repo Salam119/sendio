@@ -51,6 +51,7 @@ export default function CompanyProjects() {
     }
 
     initProjects();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   async function addProject() {

@@ -467,6 +467,7 @@ export default function WorkerDashboardPage() {
     return () => {
       window.clearTimeout(timer);
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   async function handleCreateWorkerProfile(event: FormEvent<HTMLFormElement>) {
