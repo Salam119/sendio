@@ -1,5 +1,6 @@
 'use client';
 
+import Image from 'next/image';
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
@@ -3283,7 +3284,7 @@ export default function HomePage() {
       <div className="container">
         <div className="navbar">
           <div className="logo-area">
-            <img src="/logo.png" alt="Sendio logo" className="logo-img" />
+            <Image src="/logo.png" alt="Sendio logo" width={80} height={80} className="logo-img" priority />
             <span className="logo-text">Sendio</span>
           </div>
 
@@ -3603,7 +3604,14 @@ export default function HomePage() {
                           ) : null}
 
                           {media && !videoAd ? (
-                            <img src={media} alt={`${name} advertisement`} />
+                            <Image
+                              src={media}
+                              alt={`${name} advertisement`}
+                              width={320}
+                              height={180}
+                              style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                              sizes="(max-width: 768px) 100vw, 320px"
+                            />
                           ) : null}
 
                           {!media ? <span>{firstLetter}</span> : null}
@@ -3688,7 +3696,14 @@ export default function HomePage() {
                         ) : null}
 
                         {media && !videoAd ? (
-                          <img src={media} alt={`${adTitle} advertisement`} />
+                          <Image
+                            src={media}
+                            alt={`${adTitle} advertisement`}
+                            width={320}
+                            height={180}
+                            style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                            sizes="(max-width: 768px) 100vw, 320px"
+                          />
                         ) : null}
 
                         {!media ? (
@@ -3911,9 +3926,13 @@ export default function HomePage() {
                     >
                       <div className="directory-avatar worker-directory-avatar">
                         {worker.avatar ? (
-                          <img
+                          <Image
                             src={worker.avatar}
                             alt={`${worker.name} avatar`}
+                            width={96}
+                            height={96}
+                            style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                            sizes="96px"
                           />
                         ) : (
                           <span>{firstLetter}</span>
@@ -3999,7 +4018,14 @@ export default function HomePage() {
                     >
                       <div className="directory-avatar">
                         {company.logo ? (
-                          <img src={company.logo} alt={`${company.name} logo`} />
+                          <Image
+                            src={company.logo}
+                            alt={`${company.name} logo`}
+                            width={96}
+                            height={96}
+                            style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                            sizes="96px"
+                          />
                         ) : (
                           <span>{firstLetter}</span>
                         )}
@@ -4054,3 +4080,4 @@ export default function HomePage() {
     </>
   );
 }
+
