@@ -1,5 +1,6 @@
 'use client';
 
+import Image from 'next/image';
 import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 import {
@@ -116,10 +117,13 @@ export default function ServicesPage() {
 
               <div className="mediaBox">
                 {firstProvider?.image ? (
-                  <img
+                  <Image
                     src={firstProvider.image}
                     alt={firstProvider.name}
+                    width={160}
+                    height={160}
                     className="providerImage"
+                    sizes="160px"
                   />
                 ) : (
                   <div className="icons">

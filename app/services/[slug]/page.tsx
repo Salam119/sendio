@@ -1,5 +1,6 @@
 'use client';
 
+import Image from 'next/image';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
@@ -147,7 +148,14 @@ export default function ServiceCategoryPage() {
             >
               <div className="imageBox">
                 {provider.image ? (
-                  <img src={provider.image} alt={provider.name} />
+                  <Image
+                    src={provider.image}
+                    alt={provider.name}
+                    width={180}
+                    height={180}
+                    className="providerImage"
+                    sizes="180px"
+                  />
                 ) : (
                   <div className="fallbackIcons">
                     {category.icons.map((icon) => (

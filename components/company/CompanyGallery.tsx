@@ -1,5 +1,6 @@
 'use client';
 
+import Image from 'next/image';
 import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { getCompanyId } from '@/lib/getCompanyId';
@@ -201,11 +202,15 @@ export default function CompanyGallery() {
               className="border border-[#e2cfbc] rounded-2xl overflow-hidden"
             >
               {item.type === 'image' ? (
-                <img
-                  src={item.url}
-                  alt=""
-                  className="w-full h-56 object-cover"
-                />
+                <div className="relative w-full h-56">
+                  <Image
+                    src={item.url}
+                    alt="Gallery image"
+                    fill
+                    className="object-cover"
+                    sizes="(max-width: 768px) 100vw, 50vw"
+                  />
+                </div>
               ) : (
                 <video
                   src={item.url}
@@ -227,3 +232,6 @@ export default function CompanyGallery() {
     </div>
   );
 }
+
+
+
