@@ -1828,9 +1828,19 @@ export default function HomePage() {
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
 
         :root {
-          --sendio-logo-size: 74px;
-          --sendio-logo-text-size: 2.85rem;
-          --sendio-logo-gap: 16px;
+          --sendio-logo-size: 66px;
+          --sendio-logo-text-size: 2.35rem;
+          --sendio-logo-gap: 12px;
+          --sendio-button-bg: #eef6ff;
+          --sendio-button-bg-hover: #e3efff;
+          --sendio-hero-bg: #e8e1f1;
+          --sendio-cream: #ffffff;
+          --sendio-page-bg: #ffffff;
+          --sendio-card-bg: #ffffff;
+          --sendio-soft-border: #dbeafe;
+          --sendio-radius: 12px;
+          --sendio-text-soft: #1f2937;
+          --sendio-blue-dot: #2563eb;
         }
 
         * {
@@ -1841,7 +1851,7 @@ export default function HomePage() {
 
         body {
           font-family: 'Inter', sans-serif;
-          background-color: #fefcf5;
+          background-color: var(--sendio-page-bg);
           color: #1e2a2f;
           line-height: 1.4;
           scroll-behavior: smooth;
@@ -1857,9 +1867,9 @@ export default function HomePage() {
           display: flex;
           justify-content: space-between;
           align-items: center;
-          padding: 18px 0 22px;
+          padding: 10px 0 14px;
           flex-wrap: wrap;
-          gap: 20px;
+          gap: 16px;
         }
 
         .logo-area {
@@ -1878,12 +1888,13 @@ export default function HomePage() {
         .logo-text {
           font-size: var(--sendio-logo-text-size);
           font-weight: 900;
-          letter-spacing: -1.2px;
+          letter-spacing: -1px;
           line-height: 1;
-          background: linear-gradient(135deg, #c49a6c, #8b5a2b);
-          -webkit-background-clip: text;
-          background-clip: text;
-          color: transparent;
+          color: var(--sendio-text-soft);
+        }
+
+        .logo-dot {
+          color: var(--sendio-blue-dot);
         }
 
         .nav-links {
@@ -1902,38 +1913,41 @@ export default function HomePage() {
         }
 
         .nav-links a:hover {
-          color: #c49a6c;
+          color: var(--sendio-button-bg);
         }
 
         .filter-nav-button {
-          border: 1px solid #d8c3a5;
-          background: #eadcc9;
-          color: #4f3b25;
-          border-radius: 999px;
+          border: 1px solid var(--sendio-soft-border);
+          background: var(--sendio-button-bg);
+          color: #111827;
+          border-radius: var(--sendio-radius);
           padding: 8px 15px;
           font-size: 0.86rem;
           font-weight: 900;
           cursor: pointer;
-          box-shadow: 0 8px 18px rgba(139, 90, 43, 0.1);
+          box-shadow: none;
           transition: 0.2s;
         }
 
         .filter-nav-button:hover,
         .filter-nav-button-active {
-          background: #ddc8ad;
-          transform: translateY(-2px);
+          background: var(--sendio-button-bg-hover);
+          color: #111827;
+          transform: translateY(-1px);
         }
 
         .book-btn-nav {
-          background: #c49a6c;
-          color: white !important;
+          background: var(--sendio-button-bg);
+          color: #111827 !important;
           padding: 8px 20px;
-          border-radius: 40px;
-          font-weight: 600;
+          border-radius: var(--sendio-radius);
+          font-weight: 800;
+          border: 1px solid var(--sendio-soft-border);
         }
 
         .book-btn-nav:hover {
-          background: #a57c52;
+          background: var(--sendio-button-bg-hover);
+          color: #111827 !important;
         }
 
         .filter-panel {
@@ -1995,18 +2009,18 @@ export default function HomePage() {
 
         .filter-segment button:hover,
         .filter-segment-active {
-          background: #0b5b2f !important;
-          color: white !important;
+          background: var(--sendio-button-bg) !important;
+          color: #111827 !important;
         }
 
         .filter-input,
         .filter-select {
           width: 100%;
           min-height: 46px;
-          border: 1px solid #d8c3a5;
-          background: #fbf8f3;
-          color: #173321;
-          border-radius: 15px;
+          border: 1px solid var(--sendio-soft-border);
+          background: var(--sendio-cream);
+          color: #111827;
+          border-radius: 8px;
           padding: 11px 13px;
           font-size: 0.86rem;
           font-weight: 800;
@@ -2015,8 +2029,8 @@ export default function HomePage() {
 
         .filter-input:focus,
         .filter-select:focus {
-          border-color: #0b5b2f;
-          box-shadow: 0 0 0 3px rgba(11, 91, 47, 0.08);
+          border-color: var(--sendio-blue-dot);
+          box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.08);
         }
 
         .filter-input::placeholder {
@@ -2035,10 +2049,10 @@ export default function HomePage() {
 
         .filter-suggestion-button {
           width: 100%;
-          border: 1px solid #eadcc9;
-          background: white;
-          color: #4f3b25;
-          border-radius: 13px;
+          border: 1px solid var(--sendio-soft-border);
+          background: var(--sendio-button-bg);
+          color: #111827;
+          border-radius: var(--sendio-radius);
           padding: 9px 11px;
           font-size: 0.78rem;
           font-weight: 900;
@@ -2048,7 +2062,7 @@ export default function HomePage() {
         }
 
         .filter-suggestion-button:hover {
-          background: #f1e6d8;
+          background: var(--sendio-button-bg-hover);
           transform: translateY(-1px);
         }
 
@@ -2057,73 +2071,75 @@ export default function HomePage() {
           display: flex;
           align-items: center;
           gap: 10px;
-          color: #4f3b25;
+          color: #111827;
           font-size: 0.84rem;
           font-weight: 900;
           cursor: pointer;
-          background: #fbf8f3;
-          border: 1px solid #eadcc9;
-          border-radius: 15px;
+          background: var(--sendio-cream);
+          border: 1px solid var(--sendio-soft-border);
+          border-radius: 8px;
           padding: 11px 13px;
         }
 
         .filter-search-button {
           width: 100%;
-          border: 0;
-          border-radius: 999px;
+          border: 1px solid var(--sendio-soft-border);
+          border-radius: var(--sendio-radius);
           padding: 12px 15px;
           font-size: 0.86rem;
           font-weight: 900;
           cursor: pointer;
-          background: #0b5b2f;
-          color: white;
-          box-shadow: 0 10px 20px rgba(11, 91, 47, 0.16);
+          background: var(--sendio-button-bg);
+          color: #111827;
+          box-shadow: none;
           transition: 0.2s;
         }
 
         .filter-search-button:hover {
-          background: #084625;
-          transform: translateY(-2px);
+          background: var(--sendio-button-bg-hover);
+          transform: translateY(-1px);
         }
 
         .hero {
-          background: linear-gradient(135deg, #1e2a2f, #0b5b2f);
-          border-radius: 34px;
+          background: var(--sendio-hero-bg);
+          border-radius: 30px;
           margin: 16px 0 34px 0;
-          padding: 38px 34px;
+          padding: 28px 34px;
+          min-height: 440px;
           display: flex;
           flex-wrap: wrap;
-          gap: 28px;
+          gap: 24px;
           align-items: center;
           justify-content: space-between;
+          overflow: hidden;
         }
 
         .hero-content {
           flex: 1.2;
-          color: white;
+          color: #111827;
           min-width: 280px;
         }
 
         .hero-badge {
-          font-size: 0.78rem;
+          font-size: 0.74rem;
           letter-spacing: 2px;
-          color: #f5d6b3;
-          font-weight: 600;
-          margin-bottom: 14px;
+          color: #374151;
+          font-weight: 700;
+          margin-bottom: 12px;
         }
 
         .hero-title {
-          font-size: 2.75rem;
+          font-size: 2.45rem;
           font-weight: 800;
-          line-height: 1.15;
-          margin-bottom: 16px;
-          color: white;
+          line-height: 1.1;
+          margin-bottom: 14px;
+          color: #111827;
         }
 
         .hero-desc {
-          font-size: 0.98rem;
-          color: #f9f3e7;
-          margin-bottom: 18px;
+          font-size: 0.96rem;
+          color: #374151;
+          margin-bottom: 16px;
           max-width: 82%;
         }
 
@@ -2138,29 +2154,30 @@ export default function HomePage() {
 
         .home-search {
           width: 100%;
-          background: rgba(255, 255, 255, 0.95);
-          border: 1px solid rgba(196, 154, 108, 0.25);
-          border-radius: 999px;
+          height: 58px;
+          background: var(--sendio-cream);
+          border: 1px solid var(--sendio-soft-border);
+          border-radius: 8px;
           padding: 7px;
           display: flex;
           align-items: center;
-          box-shadow: 0 12px 24px -16px rgba(0, 0, 0, 0.35);
+          box-shadow: 0 10px 20px rgba(37, 99, 235, 0.06);
         }
 
         .home-search-icon {
           width: 34px;
           height: 34px;
           min-width: 34px;
-          border-radius: 50%;
-          background: #eadcc9;
-          color: #4f3b25;
+          border-radius: 8px;
+          background: var(--sendio-button-bg);
+          color: #111827;
           display: flex;
           align-items: center;
           justify-content: center;
           font-size: 0.92rem;
           font-weight: 900;
-          border: 1px solid #d8c3a5;
-          box-shadow: 0 8px 18px rgba(139, 90, 43, 0.12);
+          border: 1px solid var(--sendio-soft-border);
+          box-shadow: none;
         }
 
         .home-search input {
@@ -2168,10 +2185,10 @@ export default function HomePage() {
           border: none;
           outline: none;
           background: transparent;
-          color: #1e2a2f;
-          padding: 11px 15px;
+          color: #111827;
+          padding: 10px 14px;
           font-size: 0.9rem;
-          font-weight: 600;
+          font-weight: 700;
         }
 
         .home-search input::placeholder {
@@ -2194,28 +2211,28 @@ export default function HomePage() {
         }
 
         .search-suggestions button {
-          border: 1px solid #d8c3a5;
-          background: #eadcc9;
-          color: #4f3b25;
-          border-radius: 999px;
+          border: 1px solid var(--sendio-soft-border);
+          background: var(--sendio-button-bg);
+          color: #111827;
+          border-radius: var(--sendio-radius);
           padding: 7px 11px;
           font-size: 0.72rem;
           font-weight: 900;
           cursor: pointer;
-          box-shadow: 0 8px 18px rgba(139, 90, 43, 0.1);
+          box-shadow: none;
           transition: 0.2s;
         }
 
         .search-suggestions button:hover {
-          background: #ddc8ad;
-          transform: translateY(-2px);
+          background: var(--sendio-button-bg-hover);
+          transform: translateY(-1px);
         }
 
         .search-intent-hint {
-          color: #f9f3e7;
-          background: rgba(234, 220, 201, 0.16);
-          border: 1px solid rgba(234, 220, 201, 0.35);
-          border-radius: 16px;
+          color: #111827;
+          background: rgba(254, 252, 245, 0.76);
+          border: 1px solid rgba(37, 99, 235, 0.12);
+          border-radius: 8px;
           padding: 9px 12px;
           font-size: 0.76rem;
           font-weight: 800;
@@ -2225,29 +2242,31 @@ export default function HomePage() {
         }
 
         .btn-primary {
-          background: #c49a6c;
-          border: none;
+          background: var(--sendio-button-bg);
+          border: 1px solid var(--sendio-soft-border);
           padding: 12px 28px;
           font-size: 0.95rem;
-          font-weight: 700;
-          border-radius: 50px;
-          color: white;
+          font-weight: 800;
+          border-radius: 8px;
+          color: #111827;
           cursor: pointer;
           transition: 0.2s;
           display: inline-block;
           text-decoration: none;
+          box-shadow: 0 10px 20px rgba(37, 99, 235, 0.08);
         }
 
         .btn-primary:hover {
-          background: #a07648;
+          background: var(--sendio-button-bg-hover);
+          color: #111827;
           transform: scale(1.02);
         }
 
         .home-search-notice {
-          color: #f9f3e7;
-          background: rgba(234, 220, 201, 0.16);
-          border: 1px solid rgba(234, 220, 201, 0.35);
-          border-radius: 999px;
+          color: #111827;
+          background: rgba(254, 252, 245, 0.82);
+          border: 1px solid var(--sendio-soft-border);
+          border-radius: 8px;
           padding: 9px 13px;
           font-size: 0.82rem;
           font-weight: 800;
@@ -2258,19 +2277,21 @@ export default function HomePage() {
         .hero-stats {
           flex: 0.72;
           min-width: 260px;
-          background: rgba(255, 255, 255, 0.92);
+          min-height: 85px;
+          background: var(--sendio-cream);
           backdrop-filter: blur(4px);
-          border-radius: 24px;
-          padding: 18px;
-          box-shadow: 0 16px 28px -12px rgba(0,0,0,0.15);
+          border-radius: var(--sendio-radius);
+          padding: 14px 18px;
+          box-shadow: 0 12px 22px -16px rgba(0, 0, 0, 0.18);
+          border: 1px solid rgba(37, 99, 235, 0.1);
         }
 
         .stat-item {
-          margin-bottom: 16px;
-          border-bottom: 1px solid #e2cfbc;
-          padding-bottom: 12px;
-          color: #2b2b1f;
-          font-size: 0.92rem;
+          margin-bottom: 10px;
+          border-bottom: 1px solid rgba(37, 99, 235, 0.12);
+          padding-bottom: 8px;
+          color: #111827;
+          font-size: 0.84rem;
         }
 
         .stat-item:last-child {
@@ -2280,9 +2301,9 @@ export default function HomePage() {
         }
 
         .stat-number {
-          font-size: 1.55rem;
-          font-weight: 800;
-          color: #c49a6c;
+          font-size: 1.35rem;
+          font-weight: 900;
+          color: #111827;
         }
 
         .new-section-wrapper {
@@ -2384,7 +2405,7 @@ export default function HomePage() {
           inset: 0;
           width: 100%;
           height: 100%;
-          border-radius: 0;
+          border-radius: var(--sendio-radius);
           overflow: hidden;
           background: linear-gradient(135deg, #0b5b2f, #c49a6c);
           display: flex;
@@ -2450,12 +2471,13 @@ export default function HomePage() {
 
         .ad-cta {
           font-size: 0.68rem;
-          color: white;
+          color: #111827;
           font-weight: 900;
           margin-top: 7px;
-          background: rgba(11, 91, 47, 0.9);
-          border-radius: 999px;
+          background: var(--sendio-button-bg);
+          border-radius: var(--sendio-radius);
           padding: 4px 10px;
+          text-shadow: none;
         }
 
         .services-row {
@@ -2631,25 +2653,28 @@ export default function HomePage() {
         }
 
         .btn-custom {
-          border: none;
+          border: 1px solid var(--sendio-soft-border);
           cursor: pointer;
           padding: 10px 24px;
-          border-radius: 40px;
+          border-radius: var(--sendio-radius);
           font-size: 0.85rem;
-          font-weight: 600;
+          font-weight: 800;
           transition: 0.2s;
           text-decoration: none;
           display: inline-block;
+          background: var(--sendio-button-bg);
+          color: #111827;
         }
 
         .btn-main-blue {
-          background-color: #003366;
-          color: white;
+          background-color: var(--sendio-button-bg);
+          color: #111827;
         }
 
         .btn-custom:hover {
-          transform: translateY(-2px);
-          opacity: 0.92;
+          transform: translateY(-1px);
+          background: var(--sendio-button-bg-hover);
+          opacity: 1;
         }
 
         .user-view {
@@ -2657,11 +2682,11 @@ export default function HomePage() {
           align-items: center;
           justify-content: center;
           gap: 15px;
-          background: white;
-          padding: 11px 24px;
-          border-radius: 50px;
-          border: 2px solid #c49a6c;
-          box-shadow: 0 4px 15px rgba(0,0,0,0.05);
+          background: transparent;
+          padding: 0;
+          border-radius: var(--sendio-radius);
+          border: 0;
+          box-shadow: none;
           flex-wrap: wrap;
         }
 
@@ -2676,8 +2701,9 @@ export default function HomePage() {
           width: 43px;
           height: 43px;
           border-radius: 50%;
-          background: linear-gradient(135deg, #c49a6c, #8b5a2b);
-          color: white;
+          background: transparent;
+          color: #111827;
+          border: 1px solid rgba(37, 99, 235, 0.16);
           display: flex;
           align-items: center;
           justify-content: center;
@@ -2707,7 +2733,7 @@ export default function HomePage() {
         .user-name-label {
           display: block;
           font-weight: 800;
-          color: #003366;
+          color: #111827;
           font-size: 14px;
         }
 
@@ -2720,26 +2746,27 @@ export default function HomePage() {
 
         .admin-dashboard-button {
           text-decoration: none;
-          color: white;
-          background: #0b5b2f;
-          border-radius: 999px;
-          padding: 8px 12px;
+          color: #111827;
+          background: transparent;
+          border-radius: var(--sendio-radius);
+          padding: 8px 4px;
           font-size: 12px;
           font-weight: 900;
-          box-shadow: 0 6px 14px rgba(11, 91, 47, 0.16);
+          box-shadow: none;
         }
 
         .admin-dashboard-button:hover {
-          background: #084625;
+          background: transparent;
+          color: var(--sendio-button-bg);
         }
 
         .company-message-alert {
           width: 42px;
           height: 42px;
           border-radius: 50%;
-          background: #f1e6d8;
-          color: #0b5b2f;
-          border: 1px solid #d8c3a5;
+          background: transparent;
+          color: #111827;
+          border: 1px solid rgba(37, 99, 235, 0.16);
           display: inline-flex;
           align-items: center;
           justify-content: center;
@@ -2747,13 +2774,14 @@ export default function HomePage() {
           position: relative;
           font-size: 18px;
           font-weight: 900;
-          box-shadow: 0 6px 14px rgba(11, 91, 47, 0.14);
+          box-shadow: none;
           transition: 0.2s;
         }
 
         .company-message-alert:hover {
-          transform: translateY(-2px);
-          background: #eadcc9;
+          transform: translateY(-1px);
+          background: transparent;
+          color: var(--sendio-button-bg);
         }
 
         .company-message-alert-dot {
@@ -2775,8 +2803,8 @@ export default function HomePage() {
           height: 18px;
           padding: 0 5px;
           border-radius: 999px;
-          background: #0b5b2f;
-          color: white;
+          background: var(--sendio-button-bg);
+          color: #111827;
           font-size: 10px;
           line-height: 18px;
           text-align: center;
@@ -2785,14 +2813,18 @@ export default function HomePage() {
 
         .logout-button {
           border: none;
-          background: #fff0f1;
+          background: transparent;
           color: #ff4757;
           margin-left: 4px;
           font-size: 12px;
           cursor: pointer;
           font-weight: 800;
-          padding: 8px 12px;
-          border-radius: 999px;
+          padding: 8px 4px;
+          border-radius: var(--sendio-radius);
+        }
+
+        .logout-button:hover {
+          color: var(--sendio-button-bg);
         }
 
         .role-showcase {
@@ -2805,78 +2837,72 @@ export default function HomePage() {
         }
 
         .role-card {
-          flex: 0 0 190px;
-          max-width: 190px;
-          min-height: 58px;
-          background: #fffaf2;
-          border-radius: 999px;
-          padding: 8px 13px;
-          border: 1px solid #f3e5d9;
-          transition: 0.3s;
+          flex: 0 0 177px;
+          width: 177px;
+          max-width: 177px;
+          height: 38px;
+          min-height: 38px;
+          background: var(--sendio-button-bg);
+          border-radius: var(--sendio-radius);
+          padding: 0 12px;
+          border: 1px solid var(--sendio-soft-border);
+          transition: 0.2s;
           text-decoration: none;
-          color: inherit;
+          color: #111827;
           display: grid;
-          grid-template-columns: 34px 1fr;
-          column-gap: 10px;
+          grid-template-columns: 26px 1fr;
+          column-gap: 8px;
           align-items: center;
           text-align: left;
         }
 
         .role-icon {
           grid-row: 1 / 3;
-          width: 34px;
-          height: 34px;
-          min-width: 34px;
-          min-height: 34px;
-          border-radius: 50%;
-          background: linear-gradient(135deg, #c49a6c, #8b5a2b);
-          color: white;
+          width: 26px;
+          height: 26px;
+          min-width: 26px;
+          min-height: 26px;
+          border-radius: var(--sendio-radius);
+          background: transparent;
+          color: #111827;
           display: flex;
           align-items: center;
           justify-content: center;
-          font-size: 15px;
-          font-weight: 800;
+          font-size: 13px;
+          font-weight: 900;
           margin: 0;
         }
 
         .role-card h3 {
           margin: 0;
-          color: #1e2a2f;
+          color: #111827;
           font-size: 0.82rem;
           font-weight: 900;
           line-height: 1.05;
         }
 
         .role-badge {
-          margin-top: 2px;
-          background: transparent;
-          display: block;
-          padding: 0;
-          border-radius: 0;
-          font-size: 0.62rem;
-          font-weight: 700;
-          color: #6e5e4a;
-          line-height: 1.15;
+          display: none;
         }
 
         .role-card-active {
-          background-color: #0b5b2f !important;
-          border-color: #0b5b2f !important;
-          transform: scale(1.01);
+          background-color: var(--sendio-button-bg-hover) !important;
+          border-color: rgba(37, 99, 235, 0.2) !important;
+          transform: none;
           cursor: pointer;
         }
 
         .role-card-active h3 {
-          color: white !important;
+          color: #111827 !important;
         }
 
         .role-card-active .role-icon {
-          background: rgba(255, 255, 255, 0.18);
-          color: white !important;
+          background: transparent;
+          color: #111827 !important;
         }
 
         .role-card-active .role-badge {
-          color: rgba(255, 255, 255, 0.86) !important;
+          color: #111827 !important;
         }
 
         .role-card-clickable {
@@ -2884,12 +2910,13 @@ export default function HomePage() {
         }
 
         .role-card-clickable:hover {
-          transform: translateY(-3px);
-          box-shadow: 0 10px 20px rgba(0,0,0,0.05);
+          transform: translateY(-1px);
+          background: var(--sendio-button-bg-hover);
+          box-shadow: none;
         }
 
         .role-card-active:hover {
-          transform: translateY(-3px) scale(1.01);
+          transform: translateY(-1px);
         }
 
         .public-directory {
@@ -3151,6 +3178,192 @@ export default function HomePage() {
           text-overflow: ellipsis;
         }
 
+
+        /* Sendio visual unity phase 3: lower homepage cards and buttons */
+        .public-directory,
+        .service-card-new,
+        .directory-card,
+        .directory-empty,
+        .role-card,
+        .filter-panel,
+        .filter-input,
+        .filter-select,
+        .filter-check-row,
+        .home-search,
+        .home-search-notice,
+        .search-intent-hint,
+        .directory-intent-note {
+          border-radius: var(--sendio-radius);
+        }
+
+        .public-directory {
+          background: #ffffff;
+          border: 1px solid var(--sendio-soft-border);
+          box-shadow: 0 12px 28px rgba(37, 99, 235, 0.04);
+        }
+
+        .directory-title,
+        .directory-side-title h3,
+        .service-title-new {
+          color: #111827;
+        }
+
+        .directory-kicker,
+        .directory-text,
+        .directory-meta,
+        .directory-rating-score {
+          color: #374151;
+        }
+
+        .directory-count-badge,
+        .directory-side-title span,
+        .directory-intent-note,
+        .service-ad-label,
+        .worker-availability-button {
+          background: var(--sendio-button-bg);
+          color: #111827;
+          border: 1px solid var(--sendio-soft-border);
+          border-radius: var(--sendio-radius);
+          box-shadow: none;
+        }
+
+        .directory-dashboard-button {
+          color: #111827;
+          background: var(--sendio-button-bg);
+          border: 1px solid var(--sendio-soft-border);
+          border-radius: var(--sendio-radius);
+          box-shadow: none;
+        }
+
+        .directory-dashboard-button:hover {
+          color: #111827;
+          background: var(--sendio-button-bg-hover);
+          transform: translateY(-1px);
+        }
+
+        .directory-card,
+        .directory-empty {
+          background: #ffffff;
+          border: 1px solid var(--sendio-soft-border);
+          border-radius: var(--sendio-radius);
+          box-shadow: none;
+        }
+
+        .directory-card:hover {
+          border-color: rgba(37, 99, 235, 0.32);
+          box-shadow: 0 10px 20px rgba(37, 99, 235, 0.08);
+          transform: translateY(-2px);
+        }
+
+        .directory-avatar {
+          border-radius: var(--sendio-radius);
+          background: var(--sendio-button-bg);
+          color: #111827;
+          border: 1px solid var(--sendio-soft-border);
+        }
+
+        .worker-directory-avatar {
+          background: #f3f4f6;
+          color: #374151;
+          border: 1px solid rgba(107, 114, 128, 0.18);
+        }
+
+        .worker-status-available,
+        .worker-status-unavailable {
+          background: var(--sendio-button-bg);
+          color: #111827;
+          border-color: var(--sendio-soft-border);
+        }
+
+        .directory-rating-stars {
+          color: #2563eb;
+        }
+
+        .directory-divider {
+          background: linear-gradient(
+            to bottom,
+            transparent,
+            rgba(37, 99, 235, 0.24),
+            transparent
+          );
+        }
+
+        .service-card-new {
+          background: #ffffff;
+          border: 1px solid var(--sendio-soft-border);
+          color: #111827;
+          box-shadow: none;
+        }
+
+        .service-card-new:hover {
+          border-color: rgba(37, 99, 235, 0.32);
+          box-shadow: 0 10px 20px rgba(37, 99, 235, 0.08);
+          transform: translateY(-2px);
+        }
+
+        .service-card-with-ad {
+          background: #ffffff;
+          border-color: var(--sendio-soft-border);
+          color: #111827;
+        }
+
+        .service-card-with-ad .service-title-new,
+        .service-ad-title,
+        .service-ad-meta,
+        .service-ad-count {
+          color: #111827;
+          text-shadow: none;
+        }
+
+        .service-card-with-ad .service-icon-new,
+        .service-icon-new {
+          background: var(--sendio-button-bg);
+          color: #111827;
+          border-radius: var(--sendio-radius);
+          border: 1px solid var(--sendio-soft-border);
+        }
+
+        .service-ad-media {
+          background: #ffffff;
+        }
+
+        .service-card-overlay {
+          background: linear-gradient(
+            to top,
+            rgba(255, 255, 255, 0.9),
+            rgba(255, 255, 255, 0.55),
+            rgba(255, 255, 255, 0.16)
+          );
+        }
+
+        .ad-cta,
+        .btn-primary,
+        .book-btn-nav,
+        .filter-nav-button,
+        .filter-search-button,
+        .filter-suggestion-button,
+        .search-suggestions button,
+        .role-card {
+          background: var(--sendio-button-bg);
+          color: #111827;
+          border: 1px solid var(--sendio-soft-border);
+          border-radius: var(--sendio-radius);
+          box-shadow: none;
+        }
+
+        .ad-cta:hover,
+        .btn-primary:hover,
+        .book-btn-nav:hover,
+        .filter-nav-button:hover,
+        .filter-search-button:hover,
+        .filter-suggestion-button:hover,
+        .search-suggestions button:hover,
+        .role-card:hover {
+          background: var(--sendio-button-bg-hover);
+          color: #111827;
+        }
+
+
         .footer-clean {
           border-top: 1px solid #e1d5c6;
           padding: 32px 0 18px;
@@ -3178,10 +3391,84 @@ export default function HomePage() {
           font-size: 0.8rem;
         }
 
+
+
+        /* Sendio visual unity phase 4: final lower footer and remaining bottom elements */
+        .footer-clean {
+          border-top: 1px solid var(--sendio-soft-border);
+          background: #ffffff;
+          padding: 28px 0 18px;
+          margin-top: 24px;
+        }
+
+        .footer-links {
+          display: flex;
+          justify-content: center;
+          gap: 10px;
+          flex-wrap: wrap;
+          margin: 18px 0;
+        }
+
+        .footer-links a {
+          min-width: 92px;
+          height: 38px;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          color: #111827;
+          background: var(--sendio-button-bg);
+          border: 1px solid var(--sendio-soft-border);
+          border-radius: var(--sendio-radius);
+          text-decoration: none;
+          font-size: 0.82rem;
+          font-weight: 900;
+          transition: 0.2s;
+        }
+
+        .footer-links a:hover {
+          background: var(--sendio-button-bg-hover);
+          color: #111827;
+          transform: translateY(-1px);
+        }
+
+        .copyright {
+          text-align: center;
+          padding: 16px 0 34px;
+          color: #374151;
+          font-size: 0.8rem;
+          font-weight: 700;
+        }
+
+        .public-directory .directory-empty {
+          background: #ffffff;
+          border: 1px dashed rgba(37, 99, 235, 0.16);
+          opacity: 0.5;
+        }
+
+        .public-directory,
+        .directory-card,
+        .directory-empty,
+        .footer-clean {
+          border-color: var(--sendio-soft-border);
+        }
+
+        .directory-card,
+        .directory-empty {
+          min-height: 112px;
+        }
+
+        .directory-name,
+        .directory-side-title h3,
+        .directory-title,
+        .footer-links a,
+        .copyright {
+          color: #111827;
+        }
+
         @media (max-width: 1100px) {
           :root {
-            --sendio-logo-size: 66px;
-            --sendio-logo-text-size: 2.45rem;
+            --sendio-logo-size: 60px;
+            --sendio-logo-text-size: 2.15rem;
           }
 
           .company-card,
@@ -3201,13 +3488,14 @@ export default function HomePage() {
 
         @media (max-width: 780px) {
           :root {
-            --sendio-logo-size: 58px;
-            --sendio-logo-text-size: 2.15rem;
-            --sendio-logo-gap: 12px;
+            --sendio-logo-size: 54px;
+            --sendio-logo-text-size: 1.95rem;
+            --sendio-logo-gap: 10px;
           }
 
           .hero {
-            padding: 32px 24px;
+            padding: 24px 20px;
+            min-height: auto;
           }
 
           .hero-title {
@@ -3250,8 +3538,9 @@ export default function HomePage() {
           }
 
           .role-card {
-            flex: 1 1 100%;
-            max-width: 320px;
+            flex: 0 0 177px;
+            width: 177px;
+            max-width: 177px;
           }
 
           .public-directory-header {
@@ -3284,8 +3573,8 @@ export default function HomePage() {
       <div className="container">
         <div className="navbar">
           <div className="logo-area">
-            <Image src="/logo.png" alt="Sendio logo" width={80} height={80} className="logo-img" priority />
-            <span className="logo-text">Sendio</span>
+            <img src="/logo.png" alt="Sendio logo" className="logo-img" />
+            <span className="logo-text">Send<span className="logo-dot">i</span>o</span>
           </div>
 
           <ul className="nav-links">
