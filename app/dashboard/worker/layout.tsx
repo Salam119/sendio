@@ -118,10 +118,6 @@ export default function WorkerDashboardLayout({
 
   const dropdownItemClass =
     'block w-full px-4 py-2 text-left font-semibold text-gray-700 hover:bg-[#e8f9f2]';
-
-  const navButtonClass =
-    'flex h-[34px] items-center justify-center rounded-full bg-[#e8f9f2] px-4 text-[13px] font-bold text-gray-800 shadow-sm transition hover:bg-[#d7f3e8]';
-
   return (
     <main className="min-h-screen bg-gray-50 text-gray-900">
       <header className="border-b bg-white">
@@ -318,35 +314,8 @@ export default function WorkerDashboardLayout({
               </div>
             </div>
           </div>
-
-          <div className="flex flex-wrap items-center justify-end gap-2">
-            <button
-              type="button"
-              onClick={() => router.back()}
-              className={navButtonClass}
-            >
-              ← Back
-            </button>
-
-            <button
-              type="button"
-              onClick={() => router.forward()}
-              className={navButtonClass}
-            >
-              Next →
-            </button>
-
-            <button
-              type="button"
-              onClick={() => router.push('/dashboard/worker')}
-              className="flex h-[34px] items-center justify-center rounded-full bg-[#23a7f1] px-4 text-[13px] font-bold text-white shadow-sm transition hover:bg-[#168ed1]"
-            >
-              Home
-            </button>
-          </div>
         </div>
       </header>
-
       <section className="mx-auto max-w-6xl px-4 py-6">{children}</section>
     </main>
   );

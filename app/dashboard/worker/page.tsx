@@ -368,7 +368,6 @@ export default function WorkerDashboardPage() {
   const [savingService, setSavingService] = useState(false);
   const [savingSkill, setSavingSkill] = useState(false);
   const [savingSocial, setSavingSocial] = useState(false);
-  const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const [uploadingGallery, setUploadingGallery] = useState(false);
 
   const [error, setError] = useState<string | null>(null);
@@ -748,54 +747,52 @@ export default function WorkerDashboardPage() {
     setSavingProfile(false);
   }
 
-  async function handleAvatarUpload(file: File | undefined) {
-    if (!worker || !file) return;
+  async function handleSetAvatarFromGallery(item: WorkerGalleryItem) {
+    if (!worker) return;
 
-    const validationError = validateImageFile(file);
-
-    if (validationError) {
-      setError(validationError);
+    if (item.type !== 'image') {
+      setError('Profile photo must be selected from uploaded images only.');
       return;
     }
 
-    setUploadingAvatar(true);
     setError(null);
     setNotice(null);
 
-    try {
-      const oldAvatar = worker.avatar;
-      const uploaded = await uploadFileToWorkerStorage(worker.id, 'avatar', file);
+    const { data, error: updateError } = await supabase
+      .from('workers')
+      .update({
+        avatar: item.url,
+      })
+      .eq('id', worker.id)
+      .select('*')
+      .single();
 
-      const { data, error: updateError } = await supabase
-        .from('workers')
-        .update({
-          avatar: uploaded.publicUrl,
-        })
-        .eq('id', worker.id)
-        .select('*')
-        .single();
-
-      if (updateError) {
-        await supabase.storage.from(WORKER_MEDIA_BUCKET).remove([uploaded.path]);
-        throw new Error(updateError.message);
-      }
-
-      await removeStorageFileByUrl(oldAvatar);
-
-      const updatedWorker = data as WorkerProfile;
-
-      setWorker(updatedWorker);
-      fillEditForm(updatedWorker);
-      setNotice('Profile image uploaded successfully.');
-    } catch (uploadError) {
-      setError(
-        uploadError instanceof Error
-          ? uploadError.message
-          : 'Profile image could not be uploaded.'
-      );
+    if (updateError) {
+      setError(updateError.message);
+      return;
     }
 
-    setUploadingAvatar(false);
+    const updatedWorker = data as WorkerProfile;
+
+    setWorker(updatedWorker);
+    fillEditForm(updatedWorker);
+    setNotice('Profile photo selected from your uploaded images.');
+  }
+
+  async function handleStudioUpload(file: File | undefined) {
+    if (!file) return;
+
+    if (isImageFile(file)) {
+      await handleGalleryUpload(file, 'image');
+      return;
+    }
+
+    if (isVideoFile(file)) {
+      await handleGalleryUpload(file, 'video');
+      return;
+    }
+
+    setError('Please upload an image or video file.');
   }
 
   async function handleGalleryUpload(
@@ -882,6 +879,27 @@ export default function WorkerDashboardPage() {
 
     setError(null);
     setNotice(null);
+
+    if (worker?.avatar === item.url) {
+      const { data, error: avatarUpdateError } = await supabase
+        .from('workers')
+        .update({
+          avatar: null,
+        })
+        .eq('id', worker.id)
+        .select('*')
+        .single();
+
+      if (avatarUpdateError) {
+        setError(avatarUpdateError.message);
+        return;
+      }
+
+      const updatedWorker = data as WorkerProfile;
+
+      setWorker(updatedWorker);
+      fillEditForm(updatedWorker);
+    }
 
     const { error: deleteError } = await supabase
       .from('worker_gallery')
@@ -1210,18 +1228,12 @@ export default function WorkerDashboardPage() {
             </div>
 
             <div className="flex flex-wrap gap-2">
-              <a
-                href="#basic-info"
+              <Link
+                href={`/workers/${encodeURIComponent(worker.slug?.trim() || worker.id)}`}
                 className="rounded-full bg-[#23a7f1] px-5 py-2 text-sm font-bold text-white hover:bg-[#168ed1]"
               >
                 Edit Profile
-              </a>
-              <a
-                href="#media-management"
-                className="rounded-full bg-[#23a7f1] px-5 py-2 text-sm font-bold text-white hover:bg-[#168ed1]"
-              >
-                Upload Media
-              </a>
+              </Link>
             </div>
           </div>
 
@@ -1234,6 +1246,7 @@ export default function WorkerDashboardPage() {
               <FaArrowLeft aria-hidden="true" />
               Back
             </button>
+
             <a
               href="#profile-completion"
               className="inline-flex h-11 items-center gap-2 rounded-full border border-[#dbeafe] bg-[#eef6ff] px-4 text-sm font-bold text-[#1d4ed8] hover:bg-[#e3efff]"
@@ -1241,8 +1254,9 @@ export default function WorkerDashboardPage() {
               <FaArrowRight aria-hidden="true" />
               Next
             </a>
+
             <Link
-              href="/"
+              href="/dashboard/worker"
               className="inline-flex h-11 items-center gap-2 rounded-full border border-[#dbeafe] bg-[#eef6ff] px-4 text-sm font-bold text-[#1d4ed8] hover:bg-[#e3efff]"
             >
               <FaHouse aria-hidden="true" />
@@ -1312,92 +1326,21 @@ export default function WorkerDashboardPage() {
 
       <section className="grid items-start gap-6 lg:grid-cols-2">
         <div id="profile-photo" className="overflow-hidden rounded-2xl bg-white p-5 shadow-sm">
-        <div>
           <h3 className="text-xl font-bold">Profile Photo</h3>
 
-          <div className="mt-5 grid gap-4">
-            <div className="max-w-[370px] rounded-[24px] bg-[#e8f9f2] p-4">
-              <p className="text-sm font-semibold">Profile Image</p>
-              <p className="mt-1 text-xs text-gray-500">
-                Image only, max {MAX_IMAGE_SIZE_MB}MB.
-              </p>
-
-              <input
-                type="file"
-                accept="image/*"
-                onChange={(event) =>
-                  handleAvatarUpload(event.target.files?.[0])
-                }
-                className="mt-4 w-full max-w-[345px] text-sm"
-                disabled={uploadingAvatar}
+          <div className="relative mt-5 h-[260px] w-full overflow-hidden rounded-[24px] bg-[#e8f9f2]">
+            {worker.avatar ? (
+              <Image
+                src={worker.avatar}
+                alt={worker.name}
+                fill
+                className="object-contain"
+                sizes="(max-width: 1024px) 100vw, 486px"
               />
-
-              <p className="mt-3 text-sm text-gray-600">
-                {uploadingAvatar ? 'Uploading profile image...' : 'Avatar'}
-              </p>
-            </div>
-
-          </div>
-        </div>
-        <div className="mt-5 h-3 rounded-b-2xl bg-[#c7f7f1]" />
-
-        <div className="hidden rounded-2xl bg-white p-6 shadow-sm">
-          <h3 className="text-xl font-semibold">Achievement Uploads</h3>
-
-          <p className="mt-2 text-sm text-gray-600">
-            Images: {imageGalleryCount}/{MAX_ACHIEVEMENT_IMAGES} — Videos:{' '}
-            {videoGalleryCount}/{MAX_ACHIEVEMENT_VIDEOS}
-          </p>
-
-          <div className="mt-5 grid gap-4 md:grid-cols-2">
-            <div className="rounded-xl border bg-gray-50 p-4">
-              <p className="text-sm font-semibold">Add Achievement Image</p>
-              <p className="mt-1 text-xs text-gray-500">
-                Max {MAX_ACHIEVEMENT_IMAGES} images, {MAX_IMAGE_SIZE_MB}MB each.
-              </p>
-
-              <input
-                type="file"
-                accept="image/*"
-                onChange={(event) =>
-                  handleGalleryUpload(event.target.files?.[0], 'image')
-                }
-                className="mt-4 w-full text-sm"
-                disabled={
-                  uploadingGallery ||
-                  imageGalleryCount >= MAX_ACHIEVEMENT_IMAGES
-                }
-              />
-            </div>
-
-            <div className="rounded-xl border bg-gray-50 p-4">
-              <p className="text-sm font-semibold">Add Achievement Video</p>
-              <p className="mt-1 text-xs text-gray-500">
-                Max {MAX_ACHIEVEMENT_VIDEOS} videos. Any video format, max{' '}
-                {MAX_VIDEO_SIZE_MB}MB.
-              </p>
-
-              <input
-                type="file"
-                accept="video/*"
-                onChange={(event) =>
-                  handleGalleryUpload(event.target.files?.[0], 'video')
-                }
-                className="mt-4 w-full text-sm"
-                disabled={
-                  uploadingGallery ||
-                  videoGalleryCount >= MAX_ACHIEVEMENT_VIDEOS
-                }
-              />
-            </div>
+            ) : null}
           </div>
 
-          {uploadingGallery ? (
-            <p className="mt-4 text-sm text-gray-600">
-              Uploading achievement media...
-            </p>
-          ) : null}
-        </div>
+          <div className="mt-5 h-3 rounded-b-2xl bg-[#c7f7f1]" />
         </div>
 
         <div id="skills" className="overflow-hidden rounded-2xl bg-white p-6 shadow-sm">
@@ -1452,6 +1395,22 @@ export default function WorkerDashboardPage() {
         </div>
       </section>
       <section className="grid gap-3">
+        <div className="flex justify-end">
+          <label className="flex h-10 cursor-pointer items-center justify-center rounded-full bg-[#23a7f1] px-5 text-sm font-bold text-white shadow-sm hover:bg-[#168ed1]">
+            Upload from Studio
+            <input
+              type="file"
+              accept="image/*,video/*"
+              onChange={(event) => {
+                handleStudioUpload(event.target.files?.[0]);
+                event.currentTarget.value = '';
+              }}
+              className="sr-only"
+              disabled={uploadingGallery}
+            />
+          </label>
+        </div>
+
       <section id="media-management" className="grid items-start gap-3 xl:grid-cols-3">
         <div className="w-full max-w-[486px] justify-self-center rounded-2xl bg-white p-4 shadow-sm xl:justify-self-stretch">
           <div className="flex items-center justify-between gap-2">
@@ -1502,21 +1461,9 @@ export default function WorkerDashboardPage() {
                       <span className="text-[11px] font-bold">Paid</span>
                     </div>
                   ) : (
-                    <label className="flex h-full cursor-pointer flex-col items-center justify-center px-2 text-center text-[11px] font-bold text-gray-600">
-                      Add Video
-                      <input
-                        type="file"
-                        accept="video/*"
-                        onChange={(event) =>
-                          handleGalleryUpload(event.target.files?.[0], 'video')
-                        }
-                        className="sr-only"
-                        disabled={
-                          uploadingGallery ||
-                          videoGalleryCount >= MAX_ACHIEVEMENT_VIDEOS
-                        }
-                      />
-                    </label>
+                    <div className="flex h-full flex-col items-center justify-center px-2 text-center text-[11px] font-bold text-gray-500">
+                      Empty Video
+                    </div>
                   )}
                 </div>
               );
@@ -1594,14 +1541,24 @@ export default function WorkerDashboardPage() {
                           href={item.url}
                           target="_blank"
                           rel="noreferrer"
-                          className="text-[11px] font-bold text-[#23a7f1]"
+                          className="text-[10px] font-bold text-[#23a7f1]"
                         >
                           Open
                         </a>
+
+                        <button
+                          type="button"
+                          onClick={() => handleSetAvatarFromGallery(item)}
+                          disabled={worker.avatar === item.url}
+                          className="text-[10px] font-bold text-green-700 disabled:text-gray-400"
+                        >
+                          {worker.avatar === item.url ? 'Set' : 'Photo'}
+                        </button>
+
                         <button
                           type="button"
                           onClick={() => handleDeleteGalleryItem(item)}
-                          className="text-[11px] font-bold text-red-600"
+                          className="text-[10px] font-bold text-red-600"
                         >
                           Delete
                         </button>
@@ -1613,21 +1570,9 @@ export default function WorkerDashboardPage() {
                       <span className="text-[11px] font-bold">Paid</span>
                     </div>
                   ) : (
-                    <label className="flex h-full cursor-pointer flex-col items-center justify-center px-2 text-center text-[11px] font-bold text-gray-600">
-                      Add Image
-                      <input
-                        type="file"
-                        accept="image/*"
-                        onChange={(event) =>
-                          handleGalleryUpload(event.target.files?.[0], 'image')
-                        }
-                        className="sr-only"
-                        disabled={
-                          uploadingGallery ||
-                          imageGalleryCount >= MAX_ACHIEVEMENT_IMAGES
-                        }
-                      />
-                    </label>
+                    <div className="flex h-full flex-col items-center justify-center px-2 text-center text-[11px] font-bold text-gray-500">
+                      Empty Image
+                    </div>
                   )}
                 </div>
               );
