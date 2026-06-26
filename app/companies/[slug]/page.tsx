@@ -665,7 +665,7 @@ export default function PublicCompanyPage() {
 
     openContactUrl(url);
   }
-
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
   function renderProtectedLink(
     label: string,
     url: string | null,
@@ -1581,7 +1581,7 @@ export default function PublicCompanyPage() {
               </section>
             ) : null}
 
-            {companyShowcase ? (
+           {hasPublicShowcase && companyShowcase ? (
               <section className="public-tool-card showcase-public-card">
                 <div className="showcase-heading-row">
                   <span className="showcase-type-badge">
