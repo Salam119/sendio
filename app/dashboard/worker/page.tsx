@@ -5,9 +5,12 @@ import Link from 'next/link';
 import { FormEvent, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
+  FaArrowLeft,
+  FaArrowRight,
   FaEnvelope,
   FaFacebookF,
   FaGlobe,
+  FaHouse,
   FaInstagram,
   FaLinkedinIn,
   FaLock,
@@ -1173,8 +1176,8 @@ export default function WorkerDashboardPage() {
         </div>
       ) : null}
 
-      <section className="flex min-h-80 w-full max-w-[1502px] flex-col justify-center rounded-2xl bg-[#c7f7f1] p-6 shadow-sm md:p-8">
-        <div className="flex flex-col items-start gap-5">
+      <section className="w-full max-w-[1502px] rounded-2xl bg-[#c7f7f1] p-5 shadow-sm md:p-6">
+        <div className="grid items-center gap-5 lg:grid-cols-[auto_1fr_auto]">
           <div className="relative flex h-28 w-28 items-center justify-center overflow-hidden rounded-full border-4 border-white bg-white text-4xl font-bold text-gray-700 shadow-sm">
             {worker.avatar ? (
               <Image
@@ -1189,11 +1192,14 @@ export default function WorkerDashboardPage() {
             )}
           </div>
 
-          <div className="space-y-2">
-            <h2 className="text-3xl font-bold">{worker.name}</h2>
-            <p className="text-base font-semibold text-gray-700">
-              {worker.profession || 'Profession not added yet'}
-            </p>
+          <div className="space-y-3">
+            <div>
+              <h2 className="text-3xl font-bold">{worker.name}</h2>
+              <p className="text-base font-semibold text-gray-700">
+                {worker.profession || 'Profession not added yet'}
+              </p>
+            </div>
+
             <div className="flex flex-wrap gap-2">
               <span className="rounded-full bg-[#e8f9f2] px-4 py-2 text-sm font-bold text-gray-800">
                 {worker.city || 'City not added yet'}
@@ -1202,21 +1208,46 @@ export default function WorkerDashboardPage() {
                 {formatStatus(worker.status)}
               </span>
             </div>
+
+            <div className="flex flex-wrap gap-2">
+              <a
+                href="#basic-info"
+                className="rounded-full bg-[#23a7f1] px-5 py-2 text-sm font-bold text-white hover:bg-[#168ed1]"
+              >
+                Edit Profile
+              </a>
+              <a
+                href="#media-management"
+                className="rounded-full bg-[#23a7f1] px-5 py-2 text-sm font-bold text-white hover:bg-[#168ed1]"
+              >
+                Upload Media
+              </a>
+            </div>
           </div>
 
-          <div className="flex flex-wrap gap-2">
-            <a
-              href="#basic-info"
-              className="rounded-full bg-[#23a7f1] px-5 py-2 text-sm font-bold text-white hover:bg-[#168ed1]"
+          <div className="flex flex-wrap items-center justify-start gap-2 lg:justify-end">
+            <button
+              type="button"
+              onClick={() => router.back()}
+              className="inline-flex h-11 items-center gap-2 rounded-full border border-[#dbeafe] bg-[#eef6ff] px-4 text-sm font-bold text-[#1d4ed8] hover:bg-[#e3efff]"
             >
-              Edit Profile
-            </a>
+              <FaArrowLeft aria-hidden="true" />
+              Back
+            </button>
             <a
-              href="#media-management"
-              className="rounded-full bg-[#23a7f1] px-5 py-2 text-sm font-bold text-white hover:bg-[#168ed1]"
+              href="#profile-completion"
+              className="inline-flex h-11 items-center gap-2 rounded-full border border-[#dbeafe] bg-[#eef6ff] px-4 text-sm font-bold text-[#1d4ed8] hover:bg-[#e3efff]"
             >
-              Upload Media
+              <FaArrowRight aria-hidden="true" />
+              Next
             </a>
+            <Link
+              href="/"
+              className="inline-flex h-11 items-center gap-2 rounded-full border border-[#dbeafe] bg-[#eef6ff] px-4 text-sm font-bold text-[#1d4ed8] hover:bg-[#e3efff]"
+            >
+              <FaHouse aria-hidden="true" />
+              Home
+            </Link>
           </div>
         </div>
       </section>
@@ -1614,333 +1645,472 @@ export default function WorkerDashboardPage() {
       </section>
 
 
-      <section className="grid items-start gap-6 lg:grid-cols-2">
-        <div id="basic-info" className="overflow-hidden rounded-2xl bg-white p-6 shadow-sm">
-        <h3 className="text-xl font-semibold">Basic Information</h3>
+      <section className="grid items-start gap-4 lg:grid-cols-2">
+        <div className="grid gap-4">
+          <div id="basic-info" className="overflow-hidden rounded-2xl bg-white p-6 shadow-sm">
+            <h3 className="text-xl font-semibold">Basic Information</h3>
 
-        <form
-          onSubmit={handleUpdateProfile}
-          className="mt-5 grid max-w-[370px] gap-2"
-        >
-          <div>
-            <label className="mb-1 block text-sm font-medium">Name</label>
-            <input
-              type="text"
-              value={editForm.name}
-              onChange={(event) =>
-                setEditForm((current) => ({
-                  ...current,
-                  name: event.target.value,
-                }))
-              }
-              className="h-11 w-full max-w-[345px] rounded-[24px] border-0 bg-[#e8f9f2] px-4 text-sm font-medium outline-none focus:ring-2 focus:ring-[#23a7f1]"
-              required
-            />
-          </div>
-
-          <div>
-            <label className="mb-1 block text-sm font-medium">
-              Profession
-            </label>
-            <input
-              type="text"
-              value={editForm.profession}
-              onChange={(event) =>
-                setEditForm((current) => ({
-                  ...current,
-                  profession: event.target.value,
-                }))
-              }
-              className="h-11 w-full max-w-[345px] rounded-[24px] border-0 bg-[#e8f9f2] px-4 text-sm font-medium outline-none focus:ring-2 focus:ring-[#23a7f1]"
-            />
-          </div>
-
-          <div>
-            <label className="mb-1 block text-sm font-medium">City</label>
-            <input
-              type="text"
-              value={editForm.city}
-              onChange={(event) =>
-                setEditForm((current) => ({
-                  ...current,
-                  city: event.target.value,
-                }))
-              }
-              className="h-11 w-full max-w-[345px] rounded-[24px] border-0 bg-[#e8f9f2] px-4 text-sm font-medium outline-none focus:ring-2 focus:ring-[#23a7f1]"
-            />
-          </div>
-
-          <div>
-            <label className="mb-1 block text-sm font-medium">Address</label>
-            <input
-              type="text"
-              value={editForm.address}
-              onChange={(event) =>
-                setEditForm((current) => ({
-                  ...current,
-                  address: event.target.value,
-                }))
-              }
-              className="h-11 w-full max-w-[345px] rounded-[24px] border-0 bg-[#e8f9f2] px-4 text-sm font-medium outline-none focus:ring-2 focus:ring-[#23a7f1]"
-            />
-          </div>
-
-          <div>
-            <label className="mb-1 block text-sm font-medium">Phone</label>
-            <input
-              type="text"
-              value={editForm.phone}
-              onChange={(event) =>
-                setEditForm((current) => ({
-                  ...current,
-                  phone: event.target.value,
-                }))
-              }
-              className="h-11 w-full max-w-[345px] rounded-[24px] border-0 bg-[#e8f9f2] px-4 text-sm font-medium outline-none focus:ring-2 focus:ring-[#23a7f1]"
-            />
-          </div>
-
-          <div>
-            <label className="mb-1 block text-sm font-medium">Email</label>
-            <input
-              type="email"
-              value={editForm.email}
-              onChange={(event) =>
-                setEditForm((current) => ({
-                  ...current,
-                  email: event.target.value,
-                }))
-              }
-              className="h-11 w-full max-w-[345px] rounded-[24px] border-0 bg-[#e8f9f2] px-4 text-sm font-medium outline-none focus:ring-2 focus:ring-[#23a7f1]"
-            />
-          </div>
-
-          <div>
-            <label className="mb-1 block text-sm font-medium">Website</label>
-            <input
-              type="text"
-              value={editForm.website}
-              onChange={(event) =>
-                setEditForm((current) => ({
-                  ...current,
-                  website: event.target.value,
-                }))
-              }
-              className="h-11 w-full max-w-[345px] rounded-[24px] border-0 bg-[#e8f9f2] px-4 text-sm font-medium outline-none focus:ring-2 focus:ring-[#23a7f1]"
-            />
-          </div>
-
-          <div>
-            <label className="mb-1 block text-sm font-medium">WhatsApp</label>
-            <input
-              type="text"
-              value={editForm.whatsapp}
-              onChange={(event) =>
-                setEditForm((current) => ({
-                  ...current,
-                  whatsapp: event.target.value,
-                }))
-              }
-              className="h-11 w-full max-w-[345px] rounded-[24px] border-0 bg-[#e8f9f2] px-4 text-sm font-medium outline-none focus:ring-2 focus:ring-[#23a7f1]"
-            />
-          </div>
-
-          <div>
-            <label className="mb-1 block text-sm font-medium">Status</label>
-            <select
-              value={editForm.status}
-              onChange={(event) =>
-                setEditForm((current) => ({
-                  ...current,
-                  status: event.target.value,
-                }))
-              }
-              className="h-11 w-full max-w-[345px] rounded-[24px] border-0 bg-[#e8f9f2] px-4 text-sm font-medium outline-none focus:ring-2 focus:ring-[#23a7f1]"
+            <form
+              onSubmit={handleUpdateProfile}
+              className="mt-5 grid max-w-[370px] gap-2"
             >
-              <option value="available">Available</option>
-              <option value="busy">Busy</option>
-              <option value="unavailable">Unavailable</option>
-            </select>
-          </div>
-
-          <div>
-            <label className="mb-1 block text-sm font-medium">
-              Experience Years
-            </label>
-            <input
-              type="number"
-              min="0"
-              value={editForm.experience_years}
-              onChange={(event) =>
-                setEditForm((current) => ({
-                  ...current,
-                  experience_years: event.target.value,
-                }))
-              }
-              className="h-11 w-full max-w-[345px] rounded-[24px] border-0 bg-[#e8f9f2] px-4 text-sm font-medium outline-none focus:ring-2 focus:ring-[#23a7f1]"
-            />
-          </div>
-
-          <div>
-            <label className="mb-1 block text-sm font-medium">
-              Working Hours
-            </label>
-            <textarea
-              value={editForm.working_hours}
-              onChange={(event) =>
-                setEditForm((current) => ({
-                  ...current,
-                  working_hours: event.target.value,
-                }))
-              }
-              rows={1}
-              className="min-h-11 w-full max-w-[345px] resize-none rounded-[24px] border-0 bg-[#e8f9f2] px-4 py-3 text-sm font-medium outline-none [field-sizing:content] focus:ring-2 focus:ring-[#23a7f1]"
-            />
-          </div>
-
-          <div>
-            <label className="mb-1 block text-sm font-medium">About</label>
-            <textarea
-              value={editForm.description}
-              onChange={(event) =>
-                setEditForm((current) => ({
-                  ...current,
-                  description: event.target.value,
-                }))
-              }
-              rows={1}
-              className="min-h-11 w-full max-w-[345px] resize-none rounded-[24px] border-0 bg-[#e8f9f2] px-4 py-3 text-sm font-medium outline-none [field-sizing:content] focus:ring-2 focus:ring-[#23a7f1]"
-            />
-          </div>
-
-          <div>
-            <button
-              type="submit"
-              disabled={savingProfile}
-              className="h-11 rounded-[24px] bg-[#23a7f1] px-5 text-sm font-bold text-white hover:bg-[#168ed1] disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              {savingProfile ? 'Saving...' : 'Save Profile'}
-            </button>
-          </div>
-        </form>
-        <div className="mt-5 h-3 rounded-b-2xl bg-[#c7f7f1]" />
-        </div>
-
-        <div className="grid gap-6">
-          <div id="contact" className="overflow-hidden rounded-2xl bg-white p-6 shadow-sm">
-            <h3 className="text-xl font-semibold">Contact</h3>
-
-            {contactActions.length > 0 ? (
-              <div className="mt-5 grid gap-2">
-                {contactActions.map((action) => {
-                  const Icon = action.icon;
-
-                  return (
-                    <div key={action.label} className="flex items-center gap-2">
-                      <a
-                        href={action.href ?? '#'}
-                        title={action.label}
-                        aria-label={action.label}
-                        target={action.href?.startsWith('http') ? '_blank' : undefined}
-                        rel={action.href?.startsWith('http') ? 'noreferrer' : undefined}
-                        className="flex h-9 w-9 items-center justify-center rounded-full bg-[#23a7f1] text-white shadow-sm hover:bg-[#168ed1]"
-                      >
-                        <Icon aria-hidden="true" />
-                      </a>
-                      <a
-                        href={action.href ?? '#'}
-                        title={action.label}
-                        aria-label={action.label}
-                        target={action.href?.startsWith('http') ? '_blank' : undefined}
-                        rel={action.href?.startsWith('http') ? 'noreferrer' : undefined}
-                        className="h-[39px] w-full max-w-[240px] rounded-[22px] bg-[#e8f9f2] hover:ring-2 hover:ring-[#23a7f1]"
-                      />
-                    </div>
-                  );
-                })}
+              <div>
+                <label className="mb-1 block text-sm font-medium">Name</label>
+                <input
+                  type="text"
+                  value={editForm.name}
+                  onChange={(event) =>
+                    setEditForm((current) => ({
+                      ...current,
+                      name: event.target.value,
+                    }))
+                  }
+                  className="h-11 w-full max-w-[345px] rounded-[24px] border-0 bg-[#e8f9f2] px-4 text-sm font-medium outline-none focus:ring-2 focus:ring-[#23a7f1]"
+                  required
+                />
               </div>
-            ) : null}
 
-            <form onSubmit={handleSaveSocialLinks} className="mt-5 grid max-w-[370px] gap-2">
+              <div>
+                <label className="mb-1 block text-sm font-medium">
+                  Profession
+                </label>
+                <input
+                  type="text"
+                  value={editForm.profession}
+                  onChange={(event) =>
+                    setEditForm((current) => ({
+                      ...current,
+                      profession: event.target.value,
+                    }))
+                  }
+                  className="h-11 w-full max-w-[345px] rounded-[24px] border-0 bg-[#e8f9f2] px-4 text-sm font-medium outline-none focus:ring-2 focus:ring-[#23a7f1]"
+                />
+              </div>
+
+              <div>
+                <label className="mb-1 block text-sm font-medium">City</label>
+                <input
+                  type="text"
+                  value={editForm.city}
+                  onChange={(event) =>
+                    setEditForm((current) => ({
+                      ...current,
+                      city: event.target.value,
+                    }))
+                  }
+                  className="h-11 w-full max-w-[345px] rounded-[24px] border-0 bg-[#e8f9f2] px-4 text-sm font-medium outline-none focus:ring-2 focus:ring-[#23a7f1]"
+                />
+              </div>
+
+              <div>
+                <label className="mb-1 block text-sm font-medium">Address</label>
+                <input
+                  type="text"
+                  value={editForm.address}
+                  onChange={(event) =>
+                    setEditForm((current) => ({
+                      ...current,
+                      address: event.target.value,
+                    }))
+                  }
+                  className="h-11 w-full max-w-[345px] rounded-[24px] border-0 bg-[#e8f9f2] px-4 text-sm font-medium outline-none focus:ring-2 focus:ring-[#23a7f1]"
+                />
+              </div>
+
+              <div>
+                <label className="mb-1 block text-sm font-medium">Phone</label>
+                <input
+                  type="text"
+                  value={editForm.phone}
+                  onChange={(event) =>
+                    setEditForm((current) => ({
+                      ...current,
+                      phone: event.target.value,
+                    }))
+                  }
+                  className="h-11 w-full max-w-[345px] rounded-[24px] border-0 bg-[#e8f9f2] px-4 text-sm font-medium outline-none focus:ring-2 focus:ring-[#23a7f1]"
+                />
+              </div>
+
+              <div>
+                <label className="mb-1 block text-sm font-medium">Email</label>
+                <input
+                  type="email"
+                  value={editForm.email}
+                  onChange={(event) =>
+                    setEditForm((current) => ({
+                      ...current,
+                      email: event.target.value,
+                    }))
+                  }
+                  className="h-11 w-full max-w-[345px] rounded-[24px] border-0 bg-[#e8f9f2] px-4 text-sm font-medium outline-none focus:ring-2 focus:ring-[#23a7f1]"
+                />
+              </div>
+
+              <div>
+                <label className="mb-1 block text-sm font-medium">Website</label>
+                <input
+                  type="text"
+                  value={editForm.website}
+                  onChange={(event) =>
+                    setEditForm((current) => ({
+                      ...current,
+                      website: event.target.value,
+                    }))
+                  }
+                  className="h-11 w-full max-w-[345px] rounded-[24px] border-0 bg-[#e8f9f2] px-4 text-sm font-medium outline-none focus:ring-2 focus:ring-[#23a7f1]"
+                />
+              </div>
+
+              <div>
+                <label className="mb-1 block text-sm font-medium">WhatsApp</label>
+                <input
+                  type="text"
+                  value={editForm.whatsapp}
+                  onChange={(event) =>
+                    setEditForm((current) => ({
+                      ...current,
+                      whatsapp: event.target.value,
+                    }))
+                  }
+                  className="h-11 w-full max-w-[345px] rounded-[24px] border-0 bg-[#e8f9f2] px-4 text-sm font-medium outline-none focus:ring-2 focus:ring-[#23a7f1]"
+                />
+              </div>
+
+              <div>
+                <label className="mb-1 block text-sm font-medium">Status</label>
+                <select
+                  value={editForm.status}
+                  onChange={(event) =>
+                    setEditForm((current) => ({
+                      ...current,
+                      status: event.target.value,
+                    }))
+                  }
+                  className="h-11 w-full max-w-[345px] rounded-[24px] border-0 bg-[#e8f9f2] px-4 text-sm font-medium outline-none focus:ring-2 focus:ring-[#23a7f1]"
+                >
+                  <option value="available">Available</option>
+                  <option value="busy">Busy</option>
+                  <option value="unavailable">Unavailable</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="mb-1 block text-sm font-medium">
+                  Experience Years
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  value={editForm.experience_years}
+                  onChange={(event) =>
+                    setEditForm((current) => ({
+                      ...current,
+                      experience_years: event.target.value,
+                    }))
+                  }
+                  className="h-11 w-full max-w-[345px] rounded-[24px] border-0 bg-[#e8f9f2] px-4 text-sm font-medium outline-none focus:ring-2 focus:ring-[#23a7f1]"
+                />
+              </div>
+
+              <div>
+                <label className="mb-1 block text-sm font-medium">
+                  Working Hours
+                </label>
+                <textarea
+                  value={editForm.working_hours}
+                  onChange={(event) =>
+                    setEditForm((current) => ({
+                      ...current,
+                      working_hours: event.target.value,
+                    }))
+                  }
+                  rows={1}
+                  className="min-h-11 w-full max-w-[345px] resize-none rounded-[24px] border-0 bg-[#e8f9f2] px-4 py-3 text-sm font-medium outline-none [field-sizing:content] focus:ring-2 focus:ring-[#23a7f1]"
+                />
+              </div>
+
+              <div>
+                <label className="mb-1 block text-sm font-medium">About</label>
+                <textarea
+                  value={editForm.description}
+                  onChange={(event) =>
+                    setEditForm((current) => ({
+                      ...current,
+                      description: event.target.value,
+                    }))
+                  }
+                  rows={1}
+                  className="min-h-11 w-full max-w-[345px] resize-none rounded-[24px] border-0 bg-[#e8f9f2] px-4 py-3 text-sm font-medium outline-none [field-sizing:content] focus:ring-2 focus:ring-[#23a7f1]"
+                />
+              </div>
+
+              <div>
+                <button
+                  type="submit"
+                  disabled={savingProfile}
+                  className="h-11 rounded-[24px] bg-[#23a7f1] px-5 text-sm font-bold text-white hover:bg-[#168ed1] disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {savingProfile ? 'Saving...' : 'Save Profile'}
+                </button>
+              </div>
+            </form>
+            <div className="mt-5 h-3 rounded-b-2xl bg-[#c7f7f1]" />
+          </div>
+
+          <div id="services" className="overflow-hidden rounded-2xl bg-white p-6 shadow-sm">
+            <h3 className="text-xl font-semibold">Services</h3>
+
+            <form onSubmit={handleAddService} className="mt-5 grid max-w-[370px] gap-2">
               <input
                 type="text"
-                value={socialForm.facebook}
+                value={serviceForm.title}
                 onChange={(event) =>
-                  setSocialForm((current) => ({
+                  setServiceForm((current) => ({
                     ...current,
-                    facebook: event.target.value,
+                    title: event.target.value,
                   }))
                 }
-                placeholder="Facebook"
+                placeholder="Service title"
                 className="h-11 w-full max-w-[345px] rounded-[24px] border-0 bg-[#e8f9f2] px-4 text-sm font-medium outline-none focus:ring-2 focus:ring-[#23a7f1]"
+                required
+              />
+
+              <textarea
+                value={serviceForm.description}
+                onChange={(event) =>
+                  setServiceForm((current) => ({
+                    ...current,
+                    description: event.target.value,
+                  }))
+                }
+                placeholder="Service description"
+                rows={1}
+                className="min-h-11 w-full max-w-[345px] resize-none rounded-[24px] border-0 bg-[#e8f9f2] px-4 py-3 text-sm font-medium outline-none [field-sizing:content] focus:ring-2 focus:ring-[#23a7f1]"
               />
 
               <input
                 type="text"
-                value={socialForm.instagram}
+                value={serviceForm.price}
                 onChange={(event) =>
-                  setSocialForm((current) => ({
+                  setServiceForm((current) => ({
                     ...current,
-                    instagram: event.target.value,
+                    price: event.target.value,
                   }))
                 }
-                placeholder="Instagram"
-                className="h-11 w-full max-w-[345px] rounded-[24px] border-0 bg-[#e8f9f2] px-4 text-sm font-medium outline-none focus:ring-2 focus:ring-[#23a7f1]"
-              />
-
-              <input
-                type="text"
-                value={socialForm.linkedin}
-                onChange={(event) =>
-                  setSocialForm((current) => ({
-                    ...current,
-                    linkedin: event.target.value,
-                  }))
-                }
-                placeholder="LinkedIn"
-                className="h-11 w-full max-w-[345px] rounded-[24px] border-0 bg-[#e8f9f2] px-4 text-sm font-medium outline-none focus:ring-2 focus:ring-[#23a7f1]"
-              />
-
-              <input
-                type="text"
-                value={socialForm.x}
-                onChange={(event) =>
-                  setSocialForm((current) => ({
-                    ...current,
-                    x: event.target.value,
-                  }))
-                }
-                placeholder="X"
-                className="h-11 w-full max-w-[345px] rounded-[24px] border-0 bg-[#e8f9f2] px-4 text-sm font-medium outline-none focus:ring-2 focus:ring-[#23a7f1]"
-              />
-
-              <input
-                type="text"
-                value={socialForm.website}
-                onChange={(event) =>
-                  setSocialForm((current) => ({
-                    ...current,
-                    website: event.target.value,
-                  }))
-                }
-                placeholder="Website"
+                placeholder="Price"
                 className="h-11 w-full max-w-[345px] rounded-[24px] border-0 bg-[#e8f9f2] px-4 text-sm font-medium outline-none focus:ring-2 focus:ring-[#23a7f1]"
               />
 
               <button
                 type="submit"
-                disabled={savingSocial}
+                disabled={savingService}
                 className="h-11 w-fit rounded-[24px] bg-[#23a7f1] px-5 text-sm font-bold text-white hover:bg-[#168ed1] disabled:cursor-not-allowed disabled:opacity-60"
               >
-                {savingSocial ? 'Saving...' : 'Save Social Links'}
+                {savingService ? 'Adding...' : 'Add Service'}
               </button>
             </form>
+            <div className="mt-5 h-3 rounded-b-2xl bg-[#c7f7f1]" />
+          </div>
+        </div>
 
-            {socialLinks ? (
-              <p className="mt-4 text-sm text-gray-500">
-                Social links are saved for this worker profile.
-              </p>
-            ) : null}
+        <div className="grid gap-4">
+          <div id="contact" className="overflow-hidden rounded-2xl bg-white p-6 shadow-sm">
+            <h3 className="text-xl font-semibold">Contact</h3>
+
+            <div className="mt-5 flex flex-wrap gap-2">
+              {contactActions.map((action) => {
+                const Icon = action.icon;
+
+                return (
+                  <a
+                    key={action.label}
+                    href={action.href ?? '#'}
+                    title={action.label}
+                    aria-label={action.label}
+                    target={action.href?.startsWith('http') ? '_blank' : undefined}
+                    rel={action.href?.startsWith('http') ? 'noreferrer' : undefined}
+                    className="flex h-11 w-11 items-center justify-center rounded-full bg-[#23a7f1] text-white shadow-sm hover:bg-[#168ed1]"
+                  >
+                    <Icon aria-hidden="true" />
+                  </a>
+                );
+              })}
+            </div>
+
+            <form onSubmit={handleSaveSocialLinks} className="mt-5 grid gap-3">
+              <div className="flex flex-wrap gap-2">
+                <details className="group relative">
+                  <summary
+                    title="Facebook"
+                    aria-label="Facebook"
+                    className="flex h-11 w-11 cursor-pointer list-none items-center justify-center rounded-full bg-[#e8f9f2] text-gray-800 shadow-sm hover:ring-2 hover:ring-[#23a7f1] [&::-webkit-details-marker]:hidden"
+                  >
+                    <FaFacebookF aria-hidden="true" />
+                  </summary>
+                  <div className="mt-2 flex w-[260px] max-w-full items-center gap-2 rounded-[24px] bg-[#e8f9f2] p-2">
+                    <input
+                      type="text"
+                      value={socialForm.facebook}
+                      onChange={(event) =>
+                        setSocialForm((current) => ({
+                          ...current,
+                          facebook: event.target.value,
+                        }))
+                      }
+                      aria-label="Facebook link"
+                      placeholder="Paste link"
+                      className="h-10 min-w-0 flex-1 rounded-[20px] border-0 bg-white px-3 text-sm font-medium outline-none focus:ring-2 focus:ring-[#23a7f1]"
+                    />
+                    <button
+                      type="submit"
+                      title="Save"
+                      aria-label="Save"
+                      disabled={savingSocial}
+                      className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#23a7f1] text-sm font-bold text-white hover:bg-[#168ed1] disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      ✓
+                    </button>
+                  </div>
+                </details>
+
+                <details className="group relative">
+                  <summary
+                    title="Instagram"
+                    aria-label="Instagram"
+                    className="flex h-11 w-11 cursor-pointer list-none items-center justify-center rounded-full bg-[#e8f9f2] text-gray-800 shadow-sm hover:ring-2 hover:ring-[#23a7f1] [&::-webkit-details-marker]:hidden"
+                  >
+                    <FaInstagram aria-hidden="true" />
+                  </summary>
+                  <div className="mt-2 flex w-[260px] max-w-full items-center gap-2 rounded-[24px] bg-[#e8f9f2] p-2">
+                    <input
+                      type="text"
+                      value={socialForm.instagram}
+                      onChange={(event) =>
+                        setSocialForm((current) => ({
+                          ...current,
+                          instagram: event.target.value,
+                        }))
+                      }
+                      aria-label="Instagram link"
+                      placeholder="Paste link"
+                      className="h-10 min-w-0 flex-1 rounded-[20px] border-0 bg-white px-3 text-sm font-medium outline-none focus:ring-2 focus:ring-[#23a7f1]"
+                    />
+                    <button
+                      type="submit"
+                      title="Save"
+                      aria-label="Save"
+                      disabled={savingSocial}
+                      className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#23a7f1] text-sm font-bold text-white hover:bg-[#168ed1] disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      ✓
+                    </button>
+                  </div>
+                </details>
+
+                <details className="group relative">
+                  <summary
+                    title="LinkedIn"
+                    aria-label="LinkedIn"
+                    className="flex h-11 w-11 cursor-pointer list-none items-center justify-center rounded-full bg-[#e8f9f2] text-gray-800 shadow-sm hover:ring-2 hover:ring-[#23a7f1] [&::-webkit-details-marker]:hidden"
+                  >
+                    <FaLinkedinIn aria-hidden="true" />
+                  </summary>
+                  <div className="mt-2 flex w-[260px] max-w-full items-center gap-2 rounded-[24px] bg-[#e8f9f2] p-2">
+                    <input
+                      type="text"
+                      value={socialForm.linkedin}
+                      onChange={(event) =>
+                        setSocialForm((current) => ({
+                          ...current,
+                          linkedin: event.target.value,
+                        }))
+                      }
+                      aria-label="LinkedIn link"
+                      placeholder="Paste link"
+                      className="h-10 min-w-0 flex-1 rounded-[20px] border-0 bg-white px-3 text-sm font-medium outline-none focus:ring-2 focus:ring-[#23a7f1]"
+                    />
+                    <button
+                      type="submit"
+                      title="Save"
+                      aria-label="Save"
+                      disabled={savingSocial}
+                      className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#23a7f1] text-sm font-bold text-white hover:bg-[#168ed1] disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      ✓
+                    </button>
+                  </div>
+                </details>
+
+                <details className="group relative">
+                  <summary
+                    title="X"
+                    aria-label="X"
+                    className="flex h-11 w-11 cursor-pointer list-none items-center justify-center rounded-full bg-[#e8f9f2] text-gray-800 shadow-sm hover:ring-2 hover:ring-[#23a7f1] [&::-webkit-details-marker]:hidden"
+                  >
+                    <FaXTwitter aria-hidden="true" />
+                  </summary>
+                  <div className="mt-2 flex w-[260px] max-w-full items-center gap-2 rounded-[24px] bg-[#e8f9f2] p-2">
+                    <input
+                      type="text"
+                      value={socialForm.x}
+                      onChange={(event) =>
+                        setSocialForm((current) => ({
+                          ...current,
+                          x: event.target.value,
+                        }))
+                      }
+                      aria-label="X link"
+                      placeholder="Paste link"
+                      className="h-10 min-w-0 flex-1 rounded-[20px] border-0 bg-white px-3 text-sm font-medium outline-none focus:ring-2 focus:ring-[#23a7f1]"
+                    />
+                    <button
+                      type="submit"
+                      title="Save"
+                      aria-label="Save"
+                      disabled={savingSocial}
+                      className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#23a7f1] text-sm font-bold text-white hover:bg-[#168ed1] disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      ✓
+                    </button>
+                  </div>
+                </details>
+
+                <details className="group relative">
+                  <summary
+                    title="Website"
+                    aria-label="Website"
+                    className="flex h-11 w-11 cursor-pointer list-none items-center justify-center rounded-full bg-[#e8f9f2] text-gray-800 shadow-sm hover:ring-2 hover:ring-[#23a7f1] [&::-webkit-details-marker]:hidden"
+                  >
+                    <FaGlobe aria-hidden="true" />
+                  </summary>
+                  <div className="mt-2 flex w-[260px] max-w-full items-center gap-2 rounded-[24px] bg-[#e8f9f2] p-2">
+                    <input
+                      type="text"
+                      value={socialForm.website}
+                      onChange={(event) =>
+                        setSocialForm((current) => ({
+                          ...current,
+                          website: event.target.value,
+                        }))
+                      }
+                      aria-label="Website link"
+                      placeholder="Paste link"
+                      className="h-10 min-w-0 flex-1 rounded-[20px] border-0 bg-white px-3 text-sm font-medium outline-none focus:ring-2 focus:ring-[#23a7f1]"
+                    />
+                    <button
+                      type="submit"
+                      title="Save"
+                      aria-label="Save"
+                      disabled={savingSocial}
+                      className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#23a7f1] text-sm font-bold text-white hover:bg-[#168ed1] disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      ✓
+                    </button>
+                  </div>
+                </details>
+              </div>
+            </form>
             <div className="mt-5 h-3 rounded-b-2xl bg-[#c7f7f1]" />
           </div>
 
@@ -1989,320 +2159,51 @@ export default function WorkerDashboardPage() {
             </div>
             <div className="mt-5 h-3 rounded-b-2xl bg-[#c7f7f1]" />
           </div>
-        </div>
-      </section>
 
-      <section className="grid items-start gap-6 lg:grid-cols-2">
-        <div id="services" className="overflow-hidden rounded-2xl bg-white p-6 shadow-sm">
-          <h3 className="text-xl font-semibold">Services</h3>
+          <div id="services-list" className="overflow-hidden rounded-2xl bg-white p-6 shadow-sm">
+            <h3 className="text-xl font-semibold">Services List</h3>
 
-          <form onSubmit={handleAddService} className="mt-5 grid max-w-[370px] gap-2">
-            <input
-              type="text"
-              value={serviceForm.title}
-              onChange={(event) =>
-                setServiceForm((current) => ({
-                  ...current,
-                  title: event.target.value,
-                }))
-              }
-              placeholder="Service title"
-              className="w-full rounded-xl border px-4 py-3 outline-none focus:border-green-600"
-              required
-            />
-
-            <textarea
-              value={serviceForm.description}
-              onChange={(event) =>
-                setServiceForm((current) => ({
-                  ...current,
-                  description: event.target.value,
-                }))
-              }
-              placeholder="Service description"
-              rows={1}
-              className="min-h-11 w-full max-w-[345px] resize-none rounded-[24px] border-0 bg-[#e8f9f2] px-4 py-3 text-sm font-medium outline-none [field-sizing:content] focus:ring-2 focus:ring-[#23a7f1]"
-            />
-
-            <input
-              type="text"
-              value={serviceForm.price}
-              onChange={(event) =>
-                setServiceForm((current) => ({
-                  ...current,
-                  price: event.target.value,
-                }))
-              }
-              placeholder="Price"
-              className="h-11 w-full max-w-[345px] rounded-[24px] border-0 bg-[#e8f9f2] px-4 text-sm font-medium outline-none focus:ring-2 focus:ring-[#23a7f1]"
-            />
-
-            <button
-              type="submit"
-              disabled={savingService}
-              className="h-11 w-fit rounded-[24px] bg-[#23a7f1] px-5 text-sm font-bold text-white hover:bg-[#168ed1] disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              {savingService ? 'Adding...' : 'Add Service'}
-            </button>
-          </form>
-
-          <div className="mt-5 grid max-w-[370px] gap-2">
-            {services.map((service) => (
-              <div
-                key={service.id}
-                className="rounded-[24px] bg-[#e8f9f2] px-4 py-3"
-              >
-                <div className="flex items-start justify-between gap-2">
-                  <div className="min-w-0">
-                    <h4 className="font-semibold">{service.title}</h4>
-
-                    {service.description ? (
-                      <p className="mt-1 break-words text-sm text-gray-600">
-                        {service.description}
-                      </p>
-                    ) : null}
-
-                    {service.price ? (
-                      <p className="mt-2 text-sm font-medium text-green-700">
-                        {service.price}
-                      </p>
-                    ) : null}
-                  </div>
-
-                  <button
-                    type="button"
-                    onClick={() => handleDeleteService(service.id)}
-                    className="shrink-0 rounded-full bg-white px-3 py-1 text-xs font-semibold text-red-600 hover:bg-red-50"
-                  >
-                    Delete
-                  </button>
-                </div>
-              </div>
-            ))}
-
-            {services.length === 0 ? (
-              <p className="text-sm text-gray-500">
-                No services added yet.
-              </p>
-            ) : null}
-          </div>
-          <div className="mt-5 h-3 rounded-b-2xl bg-[#c7f7f1]" />
-        </div>
-
-        <div className="hidden overflow-hidden rounded-2xl bg-white p-6 shadow-sm">
-          <h3 className="text-xl font-semibold">Skills</h3>
-
-          <form onSubmit={handleAddSkill} className="mt-5 flex max-w-[370px] gap-2">
-            <input
-              type="text"
-              value={skillForm.title}
-              onChange={(event) =>
-                setSkillForm({
-                  title: event.target.value,
-                })
-              }
-              placeholder="Skill title"
-              className="h-11 w-full max-w-[345px] rounded-[24px] border-0 bg-[#e8f9f2] px-4 text-sm font-medium outline-none focus:ring-2 focus:ring-[#23a7f1]"
-              required
-            />
-
-            <button
-              type="submit"
-              disabled={savingSkill}
-              className="h-11 rounded-[24px] bg-[#23a7f1] px-5 text-sm font-bold text-white hover:bg-[#168ed1] disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              {savingSkill ? 'Adding...' : 'Add'}
-            </button>
-          </form>
-
-          <div className="mt-5 flex flex-wrap gap-2">
-            {skills.map((skill) => (
-              <div
-                key={skill.id}
-                className="flex h-10 items-center gap-2 rounded-[22px] bg-[#e8f9f2] px-4 text-sm font-medium text-gray-800"
-              >
-                <span>{skill.title}</span>
-
-                <button
-                  type="button"
-                  onClick={() => handleDeleteSkill(skill.id)}
-                  className="font-bold text-red-600"
+            <div className="mt-5 grid max-h-[430px] gap-2 overflow-y-auto pr-1">
+              {services.map((service) => (
+                <div
+                  key={service.id}
+                  className="rounded-[24px] bg-[#e8f9f2] px-4 py-3"
                 >
-                  ×
-                </button>
-              </div>
-            ))}
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <h4 className="font-semibold">{service.title}</h4>
 
-            {skills.length === 0 ? (
-              <p className="text-sm text-gray-500">
-                No skills added yet.
-              </p>
-            ) : null}
-          </div>
-          <div className="mt-5 h-3 rounded-b-2xl bg-[#c7f7f1]" />
-        </div>
-      </section>
+                      {service.description ? (
+                        <p className="mt-1 break-words text-sm text-gray-600">
+                          {service.description}
+                        </p>
+                      ) : null}
 
-      <section className="hidden items-start gap-6 lg:grid-cols-2">
-        <div className="overflow-hidden rounded-2xl bg-white p-6 shadow-sm">
-          <h3 className="text-xl font-semibold">Contact</h3>
+                      {service.price ? (
+                        <p className="mt-2 text-sm font-medium text-green-700">
+                          {service.price}
+                        </p>
+                      ) : null}
+                    </div>
 
-          {contactActions.length > 0 ? (
-            <div className="mt-5 grid gap-2">
-              {contactActions.map((action) => {
-                const Icon = action.icon;
-
-                return (
-                  <div key={action.label} className="flex items-center gap-2">
-                    <a
-                      href={action.href ?? '#'}
-                      title={action.label}
-                      aria-label={action.label}
-                      target={action.href?.startsWith('http') ? '_blank' : undefined}
-                      rel={action.href?.startsWith('http') ? 'noreferrer' : undefined}
-                      className="flex h-9 w-9 items-center justify-center rounded-full bg-[#23a7f1] text-white shadow-sm hover:bg-[#168ed1]"
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteService(service.id)}
+                      className="shrink-0 rounded-full bg-white px-3 py-1 text-xs font-semibold text-red-600 hover:bg-red-50"
                     >
-                      <Icon aria-hidden="true" />
-                    </a>
-                    <a
-                      href={action.href ?? '#'}
-                      title={action.label}
-                      aria-label={action.label}
-                      target={action.href?.startsWith('http') ? '_blank' : undefined}
-                      rel={action.href?.startsWith('http') ? 'noreferrer' : undefined}
-                      className="h-[39px] w-full max-w-[240px] rounded-[22px] bg-[#e8f9f2] hover:ring-2 hover:ring-[#23a7f1]"
-                    />
+                      Delete
+                    </button>
                   </div>
-                );
-              })}
-            </div>
-          ) : null}
-
-          <form onSubmit={handleSaveSocialLinks} className="mt-5 grid max-w-[370px] gap-2">
-            <input
-              type="text"
-              value={socialForm.facebook}
-              onChange={(event) =>
-                setSocialForm((current) => ({
-                  ...current,
-                  facebook: event.target.value,
-                }))
-              }
-              placeholder="Facebook"
-              className="h-11 w-full max-w-[345px] rounded-[24px] border-0 bg-[#e8f9f2] px-4 text-sm font-medium outline-none focus:ring-2 focus:ring-[#23a7f1]"
-            />
-
-            <input
-              type="text"
-              value={socialForm.instagram}
-              onChange={(event) =>
-                setSocialForm((current) => ({
-                  ...current,
-                  instagram: event.target.value,
-                }))
-              }
-              placeholder="Instagram"
-              className="h-11 w-full max-w-[345px] rounded-[24px] border-0 bg-[#e8f9f2] px-4 text-sm font-medium outline-none focus:ring-2 focus:ring-[#23a7f1]"
-            />
-
-            <input
-              type="text"
-              value={socialForm.linkedin}
-              onChange={(event) =>
-                setSocialForm((current) => ({
-                  ...current,
-                  linkedin: event.target.value,
-                }))
-              }
-              placeholder="LinkedIn"
-              className="h-11 w-full max-w-[345px] rounded-[24px] border-0 bg-[#e8f9f2] px-4 text-sm font-medium outline-none focus:ring-2 focus:ring-[#23a7f1]"
-            />
-
-            <input
-              type="text"
-              value={socialForm.x}
-              onChange={(event) =>
-                setSocialForm((current) => ({
-                  ...current,
-                  x: event.target.value,
-                }))
-              }
-              placeholder="X"
-              className="h-11 w-full max-w-[345px] rounded-[24px] border-0 bg-[#e8f9f2] px-4 text-sm font-medium outline-none focus:ring-2 focus:ring-[#23a7f1]"
-            />
-
-            <input
-              type="text"
-              value={socialForm.website}
-              onChange={(event) =>
-                setSocialForm((current) => ({
-                  ...current,
-                  website: event.target.value,
-                }))
-              }
-              placeholder="Website"
-              className="h-11 w-full max-w-[345px] rounded-[24px] border-0 bg-[#e8f9f2] px-4 text-sm font-medium outline-none focus:ring-2 focus:ring-[#23a7f1]"
-            />
-
-            <button
-              type="submit"
-              disabled={savingSocial}
-              className="h-11 w-fit rounded-[24px] bg-[#23a7f1] px-5 text-sm font-bold text-white hover:bg-[#168ed1] disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              {savingSocial ? 'Saving...' : 'Save Social Links'}
-            </button>
-          </form>
-
-          {socialLinks ? (
-            <p className="mt-4 text-sm text-gray-500">
-              Social links are saved for this worker profile.
-            </p>
-          ) : null}
-          <div className="mt-5 h-3 rounded-b-2xl bg-[#c7f7f1]" />
-        </div>
-
-        <div className="rounded-2xl bg-white p-6 shadow-sm">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <h3 className="text-xl font-semibold">Latest Requests</h3>
-            <Link
-              href="/dashboard/worker/requests"
-              className="rounded-full bg-[#23a7f1] px-4 py-2 text-sm font-bold text-white hover:bg-[#168ed1]"
-            >
-              Open All Requests
-            </Link>
-          </div>
-
-          <div className="mt-5 grid max-w-[370px] gap-2">
-            {latestRequests.map((request) => (
-              <div
-                key={request.id}
-                className="rounded-[24px] bg-[#e8f9f2] px-4 py-3"
-              >
-                <div className="flex items-start justify-between gap-2">
-                  <div className="min-w-0">
-                    <h4 className="font-semibold">{request.name}</h4>
-
-                    <p className="mt-3 text-sm text-gray-700">
-                      {request.message}
-                    </p>
-
-                    <p className="mt-3 text-xs text-gray-500">
-                      {formatDate(request.created_at)}
-                    </p>
-                  </div>
-
-                  <span className="rounded-full bg-green-100 px-3 py-1 text-xs font-semibold text-green-800">
-                    {request.status || 'new'}
-                  </span>
                 </div>
-              </div>
-            ))}
+              ))}
 
-            {latestRequests.length === 0 ? (
-              <p className="text-sm text-gray-500">
-                Requests sent to this worker will appear here.
-              </p>
-            ) : null}
+              {services.length === 0 ? (
+                <p className="text-sm text-gray-500">
+                  No services added yet.
+                </p>
+              ) : null}
+            </div>
+            <div className="mt-5 h-3 rounded-b-2xl bg-[#c7f7f1]" />
           </div>
         </div>
       </section>
