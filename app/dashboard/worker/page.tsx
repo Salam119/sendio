@@ -1,8 +1,20 @@
 'use client';
 
 import Image from 'next/image';
+import Link from 'next/link';
 import { FormEvent, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import {
+  FaEnvelope,
+  FaFacebookF,
+  FaGlobe,
+  FaInstagram,
+  FaLinkedinIn,
+  FaLock,
+  FaPhone,
+  FaWhatsapp,
+  FaXTwitter,
+} from 'react-icons/fa6';
 import { supabase } from '@/lib/supabase';
 import { getWorkerId } from '@/lib/getWorkerId';
 
@@ -62,6 +74,8 @@ type WorkerRequest = {
   message: string;
   status: string | null;
   created_at: string | null;
+  worker_seen?: boolean | null;
+  is_archived?: boolean | null;
 };
 
 type WorkerSocialLinks = {
@@ -72,6 +86,16 @@ type WorkerSocialLinks = {
   linkedin: string | null;
   x: string | null;
   website: string | null;
+};
+
+type WorkerReview = {
+  id: string;
+  worker_id: string | null;
+  user_id: string | null;
+  user_name: string;
+  rating: number;
+  comment: string | null;
+  created_at: string | null;
 };
 
 type CreateWorkerForm = {
@@ -131,6 +155,75 @@ function formatDate(value: string | null) {
     month: 'long',
     day: 'numeric',
   });
+}
+
+function formatStatus(value: string | null) {
+  if (!value) return 'Available';
+  if (value === 'available') return 'Available';
+  if (value === 'busy') return 'Busy';
+  if (value === 'unavailable') return 'Unavailable';
+
+  return value
+    .split('_')
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(' ');
+}
+
+function getStars(rating: number | null) {
+  const safeRating = Math.max(0, Math.min(5, Math.round(rating ?? 0)));
+  return '★'.repeat(safeRating) + '☆'.repeat(5 - safeRating);
+}
+
+function normalizeUrl(value: string | null) {
+  if (!value) return null;
+
+  const cleanValue = value.trim();
+
+  if (!cleanValue) return null;
+
+  if (cleanValue.startsWith('http://') || cleanValue.startsWith('https://')) {
+    return cleanValue;
+  }
+
+  return `https://${cleanValue}`;
+}
+
+function getWhatsappUrl(value: string | null) {
+  if (!value) return null;
+
+  const cleanValue = value.trim();
+
+  if (!cleanValue) return null;
+
+  if (cleanValue.startsWith('http://') || cleanValue.startsWith('https://')) {
+    return cleanValue;
+  }
+
+  const number = cleanValue.replace(/[^\d+]/g, '').replace(/^\+/, '');
+
+  if (!number) return null;
+
+  return `https://wa.me/${number}`;
+}
+
+function getPhoneUrl(value: string | null) {
+  if (!value) return null;
+
+  const phone = value.trim().replace(/\s/g, '');
+
+  if (!phone) return null;
+
+  return `tel:${phone}`;
+}
+
+function getMailUrl(value: string | null) {
+  if (!value) return null;
+
+  const email = value.trim();
+
+  if (!email) return null;
+
+  return `mailto:${email}`;
 }
 
 function getFileExtension(file: File) {
@@ -220,6 +313,7 @@ export default function WorkerDashboardPage() {
   const [skills, setSkills] = useState<WorkerSkill[]>([]);
   const [gallery, setGallery] = useState<WorkerGalleryItem[]>([]);
   const [requests, setRequests] = useState<WorkerRequest[]>([]);
+  const [reviews, setReviews] = useState<WorkerReview[]>([]);
   const [socialLinks, setSocialLinks] = useState<WorkerSocialLinks | null>(
     null
   );
@@ -272,7 +366,6 @@ export default function WorkerDashboardPage() {
   const [savingSkill, setSavingSkill] = useState(false);
   const [savingSocial, setSavingSocial] = useState(false);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
-  const [uploadingCover, setUploadingCover] = useState(false);
   const [uploadingGallery, setUploadingGallery] = useState(false);
 
   const [error, setError] = useState<string | null>(null);
@@ -285,6 +378,74 @@ export default function WorkerDashboardPage() {
   const videoGalleryCount = gallery.filter(
     (item) => item.type === 'video'
   ).length;
+
+  const imageItems = gallery.filter((item) => item.type === 'image');
+  const videoItems = gallery.filter((item) => item.type === 'video');
+  const latestRequests = requests.slice(0, 3);
+  const profileCompletionItems = worker
+    ? [
+        { label: 'Profile Photo', complete: Boolean(worker.avatar) },
+        { label: 'Name', complete: Boolean(worker.name?.trim()) },
+        { label: 'Profession', complete: Boolean(worker.profession?.trim()) },
+        { label: 'City', complete: Boolean(worker.city?.trim()) },
+        { label: 'Status', complete: Boolean(worker.status?.trim()) },
+        {
+          label: 'Contact',
+          complete: Boolean(
+            worker.phone?.trim() ||
+              worker.email?.trim() ||
+              worker.website?.trim() ||
+              worker.whatsapp?.trim()
+          ),
+        },
+        { label: 'About', complete: Boolean(worker.description?.trim()) },
+        { label: 'Services', complete: services.length > 0 },
+        { label: 'Skills', complete: skills.length > 0 },
+        { label: 'Gallery', complete: gallery.length > 0 },
+      ]
+    : [];
+  const completedProfileItems = profileCompletionItems.filter(
+    (item) => item.complete
+  ).length;
+  const profileCompletionPercent = profileCompletionItems.length
+    ? Math.round((completedProfileItems / profileCompletionItems.length) * 100)
+    : 0;
+  const missingProfileItems = profileCompletionItems
+    .filter((item) => !item.complete)
+    .map((item) => item.label);
+
+  const contactActions = worker
+    ? [
+        { label: 'Phone', href: getPhoneUrl(worker.phone), icon: FaPhone },
+        { label: 'Email', href: getMailUrl(worker.email), icon: FaEnvelope },
+        {
+          label: 'WhatsApp',
+          href: getWhatsappUrl(worker.whatsapp),
+          icon: FaWhatsapp,
+        },
+        { label: 'Website', href: normalizeUrl(worker.website), icon: FaGlobe },
+        {
+          label: 'Facebook',
+          href: normalizeUrl(socialLinks?.facebook ?? null),
+          icon: FaFacebookF,
+        },
+        {
+          label: 'Instagram',
+          href: normalizeUrl(socialLinks?.instagram ?? null),
+          icon: FaInstagram,
+        },
+        {
+          label: 'LinkedIn',
+          href: normalizeUrl(socialLinks?.linkedin ?? null),
+          icon: FaLinkedinIn,
+        },
+        {
+          label: 'X',
+          href: normalizeUrl(socialLinks?.x ?? null),
+          icon: FaXTwitter,
+        },
+      ].filter((action) => action.href)
+    : [];
 
   function fillEditForm(workerData: WorkerProfile) {
     setEditForm({
@@ -387,6 +548,7 @@ export default function WorkerDashboardPage() {
       setSkills([]);
       setGallery([]);
       setRequests([]);
+      setReviews([]);
       setSocialLinks(null);
       fillSocialForm(null);
       setLoading(false);
@@ -410,6 +572,7 @@ export default function WorkerDashboardPage() {
       skillsResult,
       galleryResult,
       requestsResult,
+      reviewsResult,
       socialLinksResult,
     ] = await Promise.all([
       supabase
@@ -437,6 +600,12 @@ export default function WorkerDashboardPage() {
         .order('created_at', { ascending: false }),
 
       supabase
+        .from('worker_reviews')
+        .select('*')
+        .eq('worker_id', workerId)
+        .order('created_at', { ascending: false }),
+
+      supabase
         .from('worker_social_links')
         .select('*')
         .eq('worker_id', workerId)
@@ -454,6 +623,7 @@ export default function WorkerDashboardPage() {
     setSkills((skillsResult.data ?? []) as WorkerSkill[]);
     setGallery((galleryResult.data ?? []) as WorkerGalleryItem[]);
     setRequests((requestsResult.data ?? []) as WorkerRequest[]);
+    setReviews((reviewsResult.data ?? []) as WorkerReview[]);
     setSocialLinks(typedSocialLinks);
     fillSocialForm(typedSocialLinks);
 
@@ -623,56 +793,6 @@ export default function WorkerDashboardPage() {
     }
 
     setUploadingAvatar(false);
-  }
-
-  async function handleCoverUpload(file: File | undefined) {
-    if (!worker || !file) return;
-
-    const validationError = validateImageFile(file);
-
-    if (validationError) {
-      setError(validationError);
-      return;
-    }
-
-    setUploadingCover(true);
-    setError(null);
-    setNotice(null);
-
-    try {
-      const oldCover = worker.cover;
-      const uploaded = await uploadFileToWorkerStorage(worker.id, 'cover', file);
-
-      const { data, error: updateError } = await supabase
-        .from('workers')
-        .update({
-          cover: uploaded.publicUrl,
-        })
-        .eq('id', worker.id)
-        .select('*')
-        .single();
-
-      if (updateError) {
-        await supabase.storage.from(WORKER_MEDIA_BUCKET).remove([uploaded.path]);
-        throw new Error(updateError.message);
-      }
-
-      await removeStorageFileByUrl(oldCover);
-
-      const updatedWorker = data as WorkerProfile;
-
-      setWorker(updatedWorker);
-      fillEditForm(updatedWorker);
-      setNotice('Cover image uploaded successfully.');
-    } catch (uploadError) {
-      setError(
-        uploadError instanceof Error
-          ? uploadError.message
-          : 'Cover image could not be uploaded.'
-      );
-    }
-
-    setUploadingCover(false);
   }
 
   async function handleGalleryUpload(
@@ -939,29 +1059,6 @@ export default function WorkerDashboardPage() {
     setSavingSocial(false);
   }
 
-  async function handleUpdateRequestStatus(requestId: string, status: string) {
-    setError(null);
-    setNotice(null);
-
-    const { error: updateError } = await supabase
-      .from('worker_requests')
-      .update({ status })
-      .eq('id', requestId);
-
-    if (updateError) {
-      setError(updateError.message);
-      return;
-    }
-
-    setRequests((current) =>
-      current.map((request) =>
-        request.id === requestId ? { ...request, status } : request
-      )
-    );
-
-    setNotice('Request status updated.');
-  }
-
   if (loading) {
     return (
       <div className="rounded-2xl bg-white p-6 shadow-sm">
@@ -1013,7 +1110,7 @@ export default function WorkerDashboardPage() {
                   name: event.target.value,
                 }))
               }
-              className="w-full rounded-xl border px-4 py-3 outline-none focus:border-green-600"
+              className="h-11 w-full max-w-[345px] rounded-[24px] border-0 bg-[#e8f9f2] px-4 text-sm font-medium outline-none focus:ring-2 focus:ring-[#23a7f1]"
               required
             />
           </div>
@@ -1031,7 +1128,7 @@ export default function WorkerDashboardPage() {
                   profession: event.target.value,
                 }))
               }
-              className="w-full rounded-xl border px-4 py-3 outline-none focus:border-green-600"
+              className="h-11 w-full max-w-[345px] rounded-[24px] border-0 bg-[#e8f9f2] px-4 text-sm font-medium outline-none focus:ring-2 focus:ring-[#23a7f1]"
             />
           </div>
 
@@ -1076,82 +1173,119 @@ export default function WorkerDashboardPage() {
         </div>
       ) : null}
 
-      <section className="overflow-hidden rounded-2xl bg-white shadow-sm">
-        <div className="relative h-40 bg-green-800">
-          {worker.cover ? (
-            <Image
-            src={worker.cover}
-            alt={worker.name}
-            fill
-            className="object-cover"
-            sizes="100vw"
-          />
-          ) : null}
-        </div>
+      <section className="flex min-h-80 w-full max-w-[1502px] flex-col justify-center rounded-2xl bg-[#c7f7f1] p-6 shadow-sm md:p-8">
+        <div className="flex flex-col items-start gap-5">
+          <div className="relative flex h-28 w-28 items-center justify-center overflow-hidden rounded-full border-4 border-white bg-white text-4xl font-bold text-gray-700 shadow-sm">
+            {worker.avatar ? (
+              <Image
+                src={worker.avatar}
+                alt={worker.name}
+                fill
+                className="object-cover"
+                sizes="112px"
+              />
+            ) : (
+              worker.name.charAt(0).toUpperCase()
+            )}
+          </div>
 
-        <div className="flex flex-col gap-4 px-6 pb-6 pt-0 md:flex-row md:items-end md:justify-between">
-          <div className="-mt-12 flex items-end gap-4">
-            <div className="relative flex h-24 w-24 items-center justify-center overflow-hidden rounded-full border-4 border-white bg-gray-200 text-3xl font-bold text-gray-700">
-              {worker.avatar ? (
-                <Image
-                  src={worker.avatar}
-                  alt={worker.name}
-                  fill
-                  className="object-cover"
-                  sizes="96px"
-                />
-              ) : (
-                worker.name.charAt(0).toUpperCase()
-              )}
-            </div>
-
-            <div className="pb-2">
-              <h2 className="text-2xl font-bold">{worker.name}</h2>
-              <p className="text-sm text-gray-600">
-                {worker.profession || 'Profession not added yet'}
-              </p>
-              <p className="text-sm text-gray-500">
+          <div className="space-y-2">
+            <h2 className="text-3xl font-bold">{worker.name}</h2>
+            <p className="text-base font-semibold text-gray-700">
+              {worker.profession || 'Profession not added yet'}
+            </p>
+            <div className="flex flex-wrap gap-2">
+              <span className="rounded-full bg-[#e8f9f2] px-4 py-2 text-sm font-bold text-gray-800">
                 {worker.city || 'City not added yet'}
-              </p>
+              </span>
+              <span className="rounded-full bg-[#e8f9f2] px-4 py-2 text-sm font-bold text-gray-800">
+                {formatStatus(worker.status)}
+              </span>
             </div>
           </div>
 
-          <div className="rounded-full bg-green-100 px-4 py-2 text-sm font-medium text-green-800">
-            {worker.status || 'available'}
+          <div className="flex flex-wrap gap-2">
+            <a
+              href="#basic-info"
+              className="rounded-full bg-[#23a7f1] px-5 py-2 text-sm font-bold text-white hover:bg-[#168ed1]"
+            >
+              Edit Profile
+            </a>
+            <a
+              href="#media-management"
+              className="rounded-full bg-[#23a7f1] px-5 py-2 text-sm font-bold text-white hover:bg-[#168ed1]"
+            >
+              Upload Media
+            </a>
           </div>
         </div>
       </section>
 
-      <section className="grid gap-4 md:grid-cols-4">
-        <div className="rounded-2xl bg-white p-5 shadow-sm">
+      <section id="profile-completion" className="grid gap-4 lg:grid-cols-[1fr_1.2fr]">
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+        <div className="rounded-2xl bg-[#e8f9f2] p-4 shadow-sm">
           <p className="text-sm text-gray-500">Views</p>
           <p className="mt-2 text-2xl font-bold">{worker.views ?? 0}</p>
         </div>
 
-        <div className="rounded-2xl bg-white p-5 shadow-sm">
+        <div className="rounded-2xl bg-[#e8f9f2] p-4 shadow-sm">
           <p className="text-sm text-gray-500">Requests</p>
           <p className="mt-2 text-2xl font-bold">{requests.length}</p>
         </div>
 
-        <div className="rounded-2xl bg-white p-5 shadow-sm">
+        <div className="rounded-2xl bg-[#e8f9f2] p-4 shadow-sm">
           <p className="text-sm text-gray-500">Rating</p>
-          <p className="mt-2 text-2xl font-bold">{worker.rating ?? 0}</p>
+          <p className="mt-2 text-2xl font-bold">
+            {(worker.rating ?? 0).toFixed(1)}
+          </p>
+        </div>
+
+        <div className="rounded-2xl bg-[#e8f9f2] p-4 shadow-sm">
+          <p className="text-sm text-gray-500">Reviews Count</p>
+          <p className="mt-2 text-2xl font-bold">
+            {worker.reviews_count ?? reviews.length}
+          </p>
+        </div>
+
+        <div className="rounded-2xl bg-[#e8f9f2] p-4 shadow-sm">
+          <p className="text-sm text-gray-500">Reviews</p>
+          <p className="mt-2 text-lg font-bold text-[#23a7f1]">
+            {getStars(worker.rating)}
+          </p>
+        </div>
         </div>
 
         <div className="rounded-2xl bg-white p-5 shadow-sm">
-          <p className="text-sm text-gray-500">Reviews</p>
-          <p className="mt-2 text-2xl font-bold">
-            {worker.reviews_count ?? 0}
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h3 className="text-lg font-bold">Profile Completion</h3>
+              <p className="text-sm font-semibold text-gray-600">
+                {profileCompletionPercent}% complete
+              </p>
+            </div>
+            <div className="h-2 w-40 overflow-hidden rounded-full bg-gray-100">
+              <div
+                className="h-full rounded-full bg-[#23a7f1]"
+                style={{ width: `${profileCompletionPercent}%` }}
+              />
+            </div>
+          </div>
+          <p className="mt-3 text-sm text-gray-600">
+            Missing:{' '}
+            {missingProfileItems.length
+              ? missingProfileItems.join(', ')
+              : 'Nothing'}
           </p>
         </div>
       </section>
 
-      <section className="grid gap-6 lg:grid-cols-2">
-        <div className="rounded-2xl bg-white p-6 shadow-sm">
-          <h3 className="text-xl font-semibold">Profile Media</h3>
+      <section className="grid items-start gap-6 lg:grid-cols-2">
+        <div id="profile-photo" className="overflow-hidden rounded-2xl bg-white p-5 shadow-sm">
+        <div>
+          <h3 className="text-xl font-bold">Profile Photo</h3>
 
-          <div className="mt-5 grid gap-4 md:grid-cols-2">
-            <div className="rounded-xl border bg-gray-50 p-4">
+          <div className="mt-5 grid gap-4">
+            <div className="max-w-[370px] rounded-[24px] bg-[#e8f9f2] p-4">
               <p className="text-sm font-semibold">Profile Image</p>
               <p className="mt-1 text-xs text-gray-500">
                 Image only, max {MAX_IMAGE_SIZE_MB}MB.
@@ -1163,7 +1297,7 @@ export default function WorkerDashboardPage() {
                 onChange={(event) =>
                   handleAvatarUpload(event.target.files?.[0])
                 }
-                className="mt-4 w-full text-sm"
+                className="mt-4 w-full max-w-[345px] text-sm"
                 disabled={uploadingAvatar}
               />
 
@@ -1172,28 +1306,11 @@ export default function WorkerDashboardPage() {
               </p>
             </div>
 
-            <div className="rounded-xl border bg-gray-50 p-4">
-              <p className="text-sm font-semibold">Cover Image</p>
-              <p className="mt-1 text-xs text-gray-500">
-                Image only, max {MAX_IMAGE_SIZE_MB}MB.
-              </p>
-
-              <input
-                type="file"
-                accept="image/*"
-                onChange={(event) => handleCoverUpload(event.target.files?.[0])}
-                className="mt-4 w-full text-sm"
-                disabled={uploadingCover}
-              />
-
-              <p className="mt-3 text-sm text-gray-600">
-                {uploadingCover ? 'Uploading cover image...' : 'Cover'}
-              </p>
-            </div>
           </div>
         </div>
+        <div className="mt-5 h-3 rounded-b-2xl bg-[#c7f7f1]" />
 
-        <div className="rounded-2xl bg-white p-6 shadow-sm">
+        <div className="hidden rounded-2xl bg-white p-6 shadow-sm">
           <h3 className="text-xl font-semibold">Achievement Uploads</h3>
 
           <p className="mt-2 text-sm text-gray-600">
@@ -1250,73 +1367,260 @@ export default function WorkerDashboardPage() {
             </p>
           ) : null}
         </div>
-      </section>
+        </div>
 
-      <section className="rounded-2xl bg-white p-6 shadow-sm">
-        <h3 className="text-xl font-semibold">Achievements Gallery</h3>
+        <div id="skills" className="overflow-hidden rounded-2xl bg-white p-6 shadow-sm">
+          <h3 className="text-xl font-semibold">Skills</h3>
 
-        <div className="mt-5 grid gap-4 md:grid-cols-3">
-          {gallery.map((item) => (
-            <div key={item.id} className="overflow-hidden rounded-xl border">
-              <div className="relative h-44 bg-gray-100">
-                {item.type === 'video' ? (
-                  <video
-                    src={item.url}
-                    controls
-                    className="h-full w-full object-cover"
-                  />
-                ) : (
-                  <Image
-                    src={item.url}
-                    alt="Worker achievement"
-                    fill
-                    className="object-cover"
-                    sizes="(max-width: 768px) 100vw, 33vw"
-                  />
-                )}
-              </div>
+          <form onSubmit={handleAddSkill} className="mt-5 flex max-w-[370px] gap-2">
+            <input
+              type="text"
+              value={skillForm.title}
+              onChange={(event) =>
+                setSkillForm({
+                  title: event.target.value,
+                })
+              }
+              placeholder="Skill title"
+              className="h-11 w-full max-w-[345px] rounded-[24px] border-0 bg-[#e8f9f2] px-4 text-sm font-medium outline-none focus:ring-2 focus:ring-[#23a7f1]"
+              required
+            />
 
-              <div className="flex flex-wrap items-center justify-between gap-2 p-3">
-                <span className="rounded-full bg-green-50 px-3 py-1 text-xs font-semibold text-green-800">
-                  {item.type === 'video' ? 'Video' : 'Image'}
-                </span>
+            <button
+              type="submit"
+              disabled={savingSkill}
+              className="h-11 rounded-[24px] bg-[#23a7f1] px-5 text-sm font-bold text-white hover:bg-[#168ed1] disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {savingSkill ? 'Adding...' : 'Add'}
+            </button>
+          </form>
 
-                {item.type === 'video' ? (
-                  <a
-                    href={item.url}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="rounded-full bg-green-50 px-3 py-1 text-xs font-semibold text-green-700 hover:bg-green-100"
-                  >
-                    Open Video
-                  </a>
-                ) : null}
+          <div className="mt-5 flex flex-wrap gap-2">
+            {skills.map((skill) => (
+              <div
+                key={skill.id}
+                className="flex h-10 items-center gap-2 rounded-[22px] bg-[#e8f9f2] px-4 text-sm font-medium text-gray-800"
+              >
+                <span>{skill.title}</span>
 
                 <button
                   type="button"
-                  onClick={() => handleDeleteGalleryItem(item)}
-                  className="rounded-full bg-red-50 px-3 py-1 text-xs font-semibold text-red-600 hover:bg-red-100"
+                  onClick={() => handleDeleteSkill(skill.id)}
+                  className="font-bold text-red-600"
                 >
-                  Delete
+                  x
                 </button>
               </div>
-            </div>
-          ))}
+            ))}
 
-          {gallery.length === 0 ? (
-            <p className="text-sm text-gray-500">
-              Uploaded achievements will appear here.
-            </p>
-          ) : null}
+            {skills.length === 0 ? (
+              <p className="text-sm text-gray-500">No skills added yet.</p>
+            ) : null}
+          </div>
+          <div className="mt-5 h-3 rounded-b-2xl bg-[#c7f7f1]" />
         </div>
       </section>
+      <section className="grid gap-3">
+      <section id="media-management" className="grid items-start gap-3 xl:grid-cols-3">
+        <div className="w-full max-w-[486px] justify-self-center rounded-2xl bg-white p-4 shadow-sm xl:justify-self-stretch">
+          <div className="flex items-center justify-between gap-2">
+            <h3 className="text-lg font-bold">Videos</h3>
+            <span className="rounded-full bg-[#e8f9f2] px-3 py-1 text-xs font-bold text-gray-700">
+              {videoGalleryCount}/{MAX_ACHIEVEMENT_VIDEOS} free
+            </span>
+          </div>
 
-      <section className="rounded-2xl bg-white p-6 shadow-sm">
-        <h3 className="text-xl font-semibold">Edit Worker Profile</h3>
+          <div className="mt-4 grid grid-cols-4 gap-2">
+            {Array.from({ length: 12 }).map((_, index) => {
+              const item = videoItems[index];
+              const locked = index >= MAX_ACHIEVEMENT_VIDEOS;
+
+              return (
+                <div
+                  key={item?.id ?? `video-slot-${index}`}
+                  className="aspect-square max-h-28 max-w-28 overflow-hidden rounded-xl border bg-gray-50"
+                >
+                  {item ? (
+                    <div className="flex h-full flex-col">
+                      <video
+                        src={item.url}
+                        controls
+                        className="min-h-0 flex-1 object-cover"
+                      />
+                      <div className="flex shrink-0 items-center justify-center gap-1 p-1">
+                        <a
+                          href={item.url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="text-[11px] font-bold text-[#23a7f1]"
+                        >
+                          Open
+                        </a>
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteGalleryItem(item)}
+                          className="text-[11px] font-bold text-red-600"
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    </div>
+                  ) : locked ? (
+                    <div className="flex h-full flex-col items-center justify-center gap-2 bg-gray-100 text-gray-400">
+                      <FaLock />
+                      <span className="text-[11px] font-bold">Paid</span>
+                    </div>
+                  ) : (
+                    <label className="flex h-full cursor-pointer flex-col items-center justify-center px-2 text-center text-[11px] font-bold text-gray-600">
+                      Add Video
+                      <input
+                        type="file"
+                        accept="video/*"
+                        onChange={(event) =>
+                          handleGalleryUpload(event.target.files?.[0], 'video')
+                        }
+                        className="sr-only"
+                        disabled={
+                          uploadingGallery ||
+                          videoGalleryCount >= MAX_ACHIEVEMENT_VIDEOS
+                        }
+                      />
+                    </label>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+          <div className="mt-4 h-3 rounded-b-2xl bg-[#c7f7f1]" />
+        </div>
+
+        <div id="reviews" className="w-full max-w-[486px] justify-self-center overflow-hidden rounded-2xl bg-white p-4 shadow-sm xl:justify-self-stretch">
+          <div className="flex items-center justify-between gap-2">
+            <h3 className="text-lg font-bold">Reviews</h3>
+            <span className="text-sm font-bold text-[#23a7f1]">
+              {getStars(worker.rating)}
+            </span>
+          </div>
+
+          <div className="mt-4 max-h-[360px] space-y-3 overflow-y-auto pr-1">
+            {reviews.map((review) => (
+              <article key={review.id} className="rounded-xl border bg-gray-50 p-3">
+                <div className="flex items-start justify-between gap-2">
+                  <strong className="text-sm">{review.user_name}</strong>
+                  <span className="text-xs font-bold text-[#23a7f1]">
+                    {getStars(review.rating)}
+                  </span>
+                </div>
+                {review.created_at ? (
+                  <p className="mt-1 text-xs font-bold text-green-700">
+                    {formatDate(review.created_at)}
+                  </p>
+                ) : null}
+                {review.comment ? (
+                  <p className="mt-2 text-sm text-gray-700">{review.comment}</p>
+                ) : null}
+              </article>
+            ))}
+
+            {reviews.length === 0 ? (
+              <p className="text-sm text-gray-500">No reviews yet.</p>
+            ) : null}
+          </div>
+          <div className="mt-4 h-3 rounded-b-2xl bg-[#c7f7f1]" />
+        </div>
+
+        <div className="w-full max-w-[486px] justify-self-center rounded-2xl bg-white p-4 shadow-sm xl:justify-self-stretch">
+          <div className="flex items-center justify-between gap-2">
+            <h3 className="text-lg font-bold">Images</h3>
+            <span className="rounded-full bg-[#e8f9f2] px-3 py-1 text-xs font-bold text-gray-700">
+              {imageGalleryCount}/{MAX_ACHIEVEMENT_IMAGES} free
+            </span>
+          </div>
+
+          <div className="mt-4 grid grid-cols-4 gap-2">
+            {Array.from({ length: 12 }).map((_, index) => {
+              const item = imageItems[index];
+              const locked = index >= MAX_ACHIEVEMENT_IMAGES;
+
+              return (
+                <div
+                  key={item?.id ?? `image-slot-${index}`}
+                  className="aspect-square max-h-28 max-w-28 overflow-hidden rounded-xl border bg-gray-50"
+                >
+                  {item ? (
+                    <div className="flex h-full flex-col">
+                      <div className="relative min-h-0 flex-1">
+                        <Image
+                          src={item.url}
+                          alt="Worker achievement"
+                          fill
+                          className="object-cover"
+                          sizes="112px"
+                        />
+                      </div>
+                      <div className="flex shrink-0 items-center justify-center gap-1 p-1">
+                        <a
+                          href={item.url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="text-[11px] font-bold text-[#23a7f1]"
+                        >
+                          Open
+                        </a>
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteGalleryItem(item)}
+                          className="text-[11px] font-bold text-red-600"
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    </div>
+                  ) : locked ? (
+                    <div className="flex h-full flex-col items-center justify-center gap-2 bg-gray-100 text-gray-400">
+                      <FaLock />
+                      <span className="text-[11px] font-bold">Paid</span>
+                    </div>
+                  ) : (
+                    <label className="flex h-full cursor-pointer flex-col items-center justify-center px-2 text-center text-[11px] font-bold text-gray-600">
+                      Add Image
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={(event) =>
+                          handleGalleryUpload(event.target.files?.[0], 'image')
+                        }
+                        className="sr-only"
+                        disabled={
+                          uploadingGallery ||
+                          imageGalleryCount >= MAX_ACHIEVEMENT_IMAGES
+                        }
+                      />
+                    </label>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+
+          {uploadingGallery ? (
+            <p className="mt-4 text-sm text-gray-600">
+              Uploading achievement media...
+            </p>
+          ) : null}
+          <div className="mt-4 h-3 rounded-b-2xl bg-[#c7f7f1]" />
+        </div>
+        </section>
+      </section>
+
+
+      <section className="grid items-start gap-6 lg:grid-cols-2">
+        <div id="basic-info" className="overflow-hidden rounded-2xl bg-white p-6 shadow-sm">
+        <h3 className="text-xl font-semibold">Basic Information</h3>
 
         <form
           onSubmit={handleUpdateProfile}
-          className="mt-5 grid gap-4 md:grid-cols-2"
+          className="mt-5 grid max-w-[370px] gap-2"
         >
           <div>
             <label className="mb-1 block text-sm font-medium">Name</label>
@@ -1329,7 +1633,7 @@ export default function WorkerDashboardPage() {
                   name: event.target.value,
                 }))
               }
-              className="w-full rounded-xl border px-4 py-3 outline-none focus:border-green-600"
+              className="h-11 w-full max-w-[345px] rounded-[24px] border-0 bg-[#e8f9f2] px-4 text-sm font-medium outline-none focus:ring-2 focus:ring-[#23a7f1]"
               required
             />
           </div>
@@ -1347,7 +1651,7 @@ export default function WorkerDashboardPage() {
                   profession: event.target.value,
                 }))
               }
-              className="w-full rounded-xl border px-4 py-3 outline-none focus:border-green-600"
+              className="h-11 w-full max-w-[345px] rounded-[24px] border-0 bg-[#e8f9f2] px-4 text-sm font-medium outline-none focus:ring-2 focus:ring-[#23a7f1]"
             />
           </div>
 
@@ -1362,7 +1666,7 @@ export default function WorkerDashboardPage() {
                   city: event.target.value,
                 }))
               }
-              className="w-full rounded-xl border px-4 py-3 outline-none focus:border-green-600"
+              className="h-11 w-full max-w-[345px] rounded-[24px] border-0 bg-[#e8f9f2] px-4 text-sm font-medium outline-none focus:ring-2 focus:ring-[#23a7f1]"
             />
           </div>
 
@@ -1377,7 +1681,7 @@ export default function WorkerDashboardPage() {
                   address: event.target.value,
                 }))
               }
-              className="w-full rounded-xl border px-4 py-3 outline-none focus:border-green-600"
+              className="h-11 w-full max-w-[345px] rounded-[24px] border-0 bg-[#e8f9f2] px-4 text-sm font-medium outline-none focus:ring-2 focus:ring-[#23a7f1]"
             />
           </div>
 
@@ -1392,7 +1696,7 @@ export default function WorkerDashboardPage() {
                   phone: event.target.value,
                 }))
               }
-              className="w-full rounded-xl border px-4 py-3 outline-none focus:border-green-600"
+              className="h-11 w-full max-w-[345px] rounded-[24px] border-0 bg-[#e8f9f2] px-4 text-sm font-medium outline-none focus:ring-2 focus:ring-[#23a7f1]"
             />
           </div>
 
@@ -1407,7 +1711,7 @@ export default function WorkerDashboardPage() {
                   email: event.target.value,
                 }))
               }
-              className="w-full rounded-xl border px-4 py-3 outline-none focus:border-green-600"
+              className="h-11 w-full max-w-[345px] rounded-[24px] border-0 bg-[#e8f9f2] px-4 text-sm font-medium outline-none focus:ring-2 focus:ring-[#23a7f1]"
             />
           </div>
 
@@ -1422,7 +1726,7 @@ export default function WorkerDashboardPage() {
                   website: event.target.value,
                 }))
               }
-              className="w-full rounded-xl border px-4 py-3 outline-none focus:border-green-600"
+              className="h-11 w-full max-w-[345px] rounded-[24px] border-0 bg-[#e8f9f2] px-4 text-sm font-medium outline-none focus:ring-2 focus:ring-[#23a7f1]"
             />
           </div>
 
@@ -1437,7 +1741,7 @@ export default function WorkerDashboardPage() {
                   whatsapp: event.target.value,
                 }))
               }
-              className="w-full rounded-xl border px-4 py-3 outline-none focus:border-green-600"
+              className="h-11 w-full max-w-[345px] rounded-[24px] border-0 bg-[#e8f9f2] px-4 text-sm font-medium outline-none focus:ring-2 focus:ring-[#23a7f1]"
             />
           </div>
 
@@ -1451,7 +1755,7 @@ export default function WorkerDashboardPage() {
                   status: event.target.value,
                 }))
               }
-              className="w-full rounded-xl border px-4 py-3 outline-none focus:border-green-600"
+              className="h-11 w-full max-w-[345px] rounded-[24px] border-0 bg-[#e8f9f2] px-4 text-sm font-medium outline-none focus:ring-2 focus:ring-[#23a7f1]"
             >
               <option value="available">Available</option>
               <option value="busy">Busy</option>
@@ -1473,16 +1777,15 @@ export default function WorkerDashboardPage() {
                   experience_years: event.target.value,
                 }))
               }
-              className="w-full rounded-xl border px-4 py-3 outline-none focus:border-green-600"
+              className="h-11 w-full max-w-[345px] rounded-[24px] border-0 bg-[#e8f9f2] px-4 text-sm font-medium outline-none focus:ring-2 focus:ring-[#23a7f1]"
             />
           </div>
 
-          <div className="md:col-span-2">
+          <div>
             <label className="mb-1 block text-sm font-medium">
               Working Hours
             </label>
-            <input
-              type="text"
+            <textarea
               value={editForm.working_hours}
               onChange={(event) =>
                 setEditForm((current) => ({
@@ -1490,11 +1793,12 @@ export default function WorkerDashboardPage() {
                   working_hours: event.target.value,
                 }))
               }
-              className="w-full rounded-xl border px-4 py-3 outline-none focus:border-green-600"
+              rows={1}
+              className="min-h-11 w-full max-w-[345px] resize-none rounded-[24px] border-0 bg-[#e8f9f2] px-4 py-3 text-sm font-medium outline-none [field-sizing:content] focus:ring-2 focus:ring-[#23a7f1]"
             />
           </div>
 
-          <div className="md:col-span-2">
+          <div>
             <label className="mb-1 block text-sm font-medium">About</label>
             <textarea
               value={editForm.description}
@@ -1504,28 +1808,195 @@ export default function WorkerDashboardPage() {
                   description: event.target.value,
                 }))
               }
-              rows={5}
-              className="w-full rounded-xl border px-4 py-3 outline-none focus:border-green-600"
+              rows={1}
+              className="min-h-11 w-full max-w-[345px] resize-none rounded-[24px] border-0 bg-[#e8f9f2] px-4 py-3 text-sm font-medium outline-none [field-sizing:content] focus:ring-2 focus:ring-[#23a7f1]"
             />
           </div>
 
-          <div className="md:col-span-2">
+          <div>
             <button
               type="submit"
               disabled={savingProfile}
-              className="rounded-xl bg-green-700 px-5 py-3 font-medium text-white hover:bg-green-800 disabled:cursor-not-allowed disabled:opacity-60"
+              className="h-11 rounded-[24px] bg-[#23a7f1] px-5 text-sm font-bold text-white hover:bg-[#168ed1] disabled:cursor-not-allowed disabled:opacity-60"
             >
               {savingProfile ? 'Saving...' : 'Save Profile'}
             </button>
           </div>
         </form>
+        <div className="mt-5 h-3 rounded-b-2xl bg-[#c7f7f1]" />
+        </div>
+
+        <div className="grid gap-6">
+          <div id="contact" className="overflow-hidden rounded-2xl bg-white p-6 shadow-sm">
+            <h3 className="text-xl font-semibold">Contact</h3>
+
+            {contactActions.length > 0 ? (
+              <div className="mt-5 grid gap-2">
+                {contactActions.map((action) => {
+                  const Icon = action.icon;
+
+                  return (
+                    <div key={action.label} className="flex items-center gap-2">
+                      <a
+                        href={action.href ?? '#'}
+                        title={action.label}
+                        aria-label={action.label}
+                        target={action.href?.startsWith('http') ? '_blank' : undefined}
+                        rel={action.href?.startsWith('http') ? 'noreferrer' : undefined}
+                        className="flex h-9 w-9 items-center justify-center rounded-full bg-[#23a7f1] text-white shadow-sm hover:bg-[#168ed1]"
+                      >
+                        <Icon aria-hidden="true" />
+                      </a>
+                      <a
+                        href={action.href ?? '#'}
+                        title={action.label}
+                        aria-label={action.label}
+                        target={action.href?.startsWith('http') ? '_blank' : undefined}
+                        rel={action.href?.startsWith('http') ? 'noreferrer' : undefined}
+                        className="h-[39px] w-full max-w-[240px] rounded-[22px] bg-[#e8f9f2] hover:ring-2 hover:ring-[#23a7f1]"
+                      />
+                    </div>
+                  );
+                })}
+              </div>
+            ) : null}
+
+            <form onSubmit={handleSaveSocialLinks} className="mt-5 grid max-w-[370px] gap-2">
+              <input
+                type="text"
+                value={socialForm.facebook}
+                onChange={(event) =>
+                  setSocialForm((current) => ({
+                    ...current,
+                    facebook: event.target.value,
+                  }))
+                }
+                placeholder="Facebook"
+                className="h-11 w-full max-w-[345px] rounded-[24px] border-0 bg-[#e8f9f2] px-4 text-sm font-medium outline-none focus:ring-2 focus:ring-[#23a7f1]"
+              />
+
+              <input
+                type="text"
+                value={socialForm.instagram}
+                onChange={(event) =>
+                  setSocialForm((current) => ({
+                    ...current,
+                    instagram: event.target.value,
+                  }))
+                }
+                placeholder="Instagram"
+                className="h-11 w-full max-w-[345px] rounded-[24px] border-0 bg-[#e8f9f2] px-4 text-sm font-medium outline-none focus:ring-2 focus:ring-[#23a7f1]"
+              />
+
+              <input
+                type="text"
+                value={socialForm.linkedin}
+                onChange={(event) =>
+                  setSocialForm((current) => ({
+                    ...current,
+                    linkedin: event.target.value,
+                  }))
+                }
+                placeholder="LinkedIn"
+                className="h-11 w-full max-w-[345px] rounded-[24px] border-0 bg-[#e8f9f2] px-4 text-sm font-medium outline-none focus:ring-2 focus:ring-[#23a7f1]"
+              />
+
+              <input
+                type="text"
+                value={socialForm.x}
+                onChange={(event) =>
+                  setSocialForm((current) => ({
+                    ...current,
+                    x: event.target.value,
+                  }))
+                }
+                placeholder="X"
+                className="h-11 w-full max-w-[345px] rounded-[24px] border-0 bg-[#e8f9f2] px-4 text-sm font-medium outline-none focus:ring-2 focus:ring-[#23a7f1]"
+              />
+
+              <input
+                type="text"
+                value={socialForm.website}
+                onChange={(event) =>
+                  setSocialForm((current) => ({
+                    ...current,
+                    website: event.target.value,
+                  }))
+                }
+                placeholder="Website"
+                className="h-11 w-full max-w-[345px] rounded-[24px] border-0 bg-[#e8f9f2] px-4 text-sm font-medium outline-none focus:ring-2 focus:ring-[#23a7f1]"
+              />
+
+              <button
+                type="submit"
+                disabled={savingSocial}
+                className="h-11 w-fit rounded-[24px] bg-[#23a7f1] px-5 text-sm font-bold text-white hover:bg-[#168ed1] disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {savingSocial ? 'Saving...' : 'Save Social Links'}
+              </button>
+            </form>
+
+            {socialLinks ? (
+              <p className="mt-4 text-sm text-gray-500">
+                Social links are saved for this worker profile.
+              </p>
+            ) : null}
+            <div className="mt-5 h-3 rounded-b-2xl bg-[#c7f7f1]" />
+          </div>
+
+          <div id="latest-requests" className="overflow-hidden rounded-2xl bg-white p-6 shadow-sm">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <h3 className="text-xl font-semibold">Latest Requests</h3>
+              <Link
+                href="/dashboard/worker/requests"
+                className="rounded-full bg-[#23a7f1] px-4 py-2 text-sm font-bold text-white hover:bg-[#168ed1]"
+              >
+                Open All Requests
+              </Link>
+            </div>
+
+            <div className="mt-5 grid max-w-[370px] gap-2">
+              {latestRequests.map((request) => (
+                <div
+                  key={request.id}
+                  className="rounded-[24px] bg-[#e8f9f2] px-4 py-3"
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <h4 className="font-semibold">{request.name}</h4>
+
+                      <p className="mt-3 text-sm text-gray-700">
+                        {request.message}
+                      </p>
+
+                      <p className="mt-3 text-xs text-gray-500">
+                        {formatDate(request.created_at)}
+                      </p>
+                    </div>
+
+                    <span className="rounded-full bg-green-100 px-3 py-1 text-xs font-semibold text-green-800">
+                      {request.status || 'new'}
+                    </span>
+                  </div>
+                </div>
+              ))}
+
+              {latestRequests.length === 0 ? (
+                <p className="text-sm text-gray-500">
+                  Requests sent to this worker will appear here.
+                </p>
+              ) : null}
+            </div>
+            <div className="mt-5 h-3 rounded-b-2xl bg-[#c7f7f1]" />
+          </div>
+        </div>
       </section>
 
-      <section className="grid gap-6 lg:grid-cols-2">
-        <div className="rounded-2xl bg-white p-6 shadow-sm">
+      <section className="grid items-start gap-6 lg:grid-cols-2">
+        <div id="services" className="overflow-hidden rounded-2xl bg-white p-6 shadow-sm">
           <h3 className="text-xl font-semibold">Services</h3>
 
-          <form onSubmit={handleAddService} className="mt-5 space-y-3">
+          <form onSubmit={handleAddService} className="mt-5 grid max-w-[370px] gap-2">
             <input
               type="text"
               value={serviceForm.title}
@@ -1549,8 +2020,8 @@ export default function WorkerDashboardPage() {
                 }))
               }
               placeholder="Service description"
-              rows={3}
-              className="w-full rounded-xl border px-4 py-3 outline-none focus:border-green-600"
+              rows={1}
+              className="min-h-11 w-full max-w-[345px] resize-none rounded-[24px] border-0 bg-[#e8f9f2] px-4 py-3 text-sm font-medium outline-none [field-sizing:content] focus:ring-2 focus:ring-[#23a7f1]"
             />
 
             <input
@@ -1563,30 +2034,30 @@ export default function WorkerDashboardPage() {
                 }))
               }
               placeholder="Price"
-              className="w-full rounded-xl border px-4 py-3 outline-none focus:border-green-600"
+              className="h-11 w-full max-w-[345px] rounded-[24px] border-0 bg-[#e8f9f2] px-4 text-sm font-medium outline-none focus:ring-2 focus:ring-[#23a7f1]"
             />
 
             <button
               type="submit"
               disabled={savingService}
-              className="rounded-xl bg-green-700 px-5 py-3 font-medium text-white hover:bg-green-800 disabled:cursor-not-allowed disabled:opacity-60"
+              className="h-11 w-fit rounded-[24px] bg-[#23a7f1] px-5 text-sm font-bold text-white hover:bg-[#168ed1] disabled:cursor-not-allowed disabled:opacity-60"
             >
               {savingService ? 'Adding...' : 'Add Service'}
             </button>
           </form>
 
-          <div className="mt-5 space-y-3">
+          <div className="mt-5 grid max-w-[370px] gap-2">
             {services.map((service) => (
               <div
                 key={service.id}
-                className="rounded-xl border bg-gray-50 p-4"
+                className="rounded-[24px] bg-[#e8f9f2] px-4 py-3"
               >
-                <div className="flex items-start justify-between gap-3">
-                  <div>
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
                     <h4 className="font-semibold">{service.title}</h4>
 
                     {service.description ? (
-                      <p className="mt-1 text-sm text-gray-600">
+                      <p className="mt-1 break-words text-sm text-gray-600">
                         {service.description}
                       </p>
                     ) : null}
@@ -1601,7 +2072,7 @@ export default function WorkerDashboardPage() {
                   <button
                     type="button"
                     onClick={() => handleDeleteService(service.id)}
-                    className="rounded-full bg-red-50 px-3 py-1 text-xs font-semibold text-red-600 hover:bg-red-100"
+                    className="shrink-0 rounded-full bg-white px-3 py-1 text-xs font-semibold text-red-600 hover:bg-red-50"
                   >
                     Delete
                   </button>
@@ -1611,16 +2082,17 @@ export default function WorkerDashboardPage() {
 
             {services.length === 0 ? (
               <p className="text-sm text-gray-500">
-                Worker services will appear here.
+                No services added yet.
               </p>
             ) : null}
           </div>
+          <div className="mt-5 h-3 rounded-b-2xl bg-[#c7f7f1]" />
         </div>
 
-        <div className="rounded-2xl bg-white p-6 shadow-sm">
+        <div className="hidden overflow-hidden rounded-2xl bg-white p-6 shadow-sm">
           <h3 className="text-xl font-semibold">Skills</h3>
 
-          <form onSubmit={handleAddSkill} className="mt-5 flex gap-3">
+          <form onSubmit={handleAddSkill} className="mt-5 flex max-w-[370px] gap-2">
             <input
               type="text"
               value={skillForm.title}
@@ -1630,14 +2102,14 @@ export default function WorkerDashboardPage() {
                 })
               }
               placeholder="Skill title"
-              className="w-full rounded-xl border px-4 py-3 outline-none focus:border-green-600"
+              className="h-11 w-full max-w-[345px] rounded-[24px] border-0 bg-[#e8f9f2] px-4 text-sm font-medium outline-none focus:ring-2 focus:ring-[#23a7f1]"
               required
             />
 
             <button
               type="submit"
               disabled={savingSkill}
-              className="rounded-xl bg-green-700 px-5 py-3 font-medium text-white hover:bg-green-800 disabled:cursor-not-allowed disabled:opacity-60"
+              className="h-11 rounded-[24px] bg-[#23a7f1] px-5 text-sm font-bold text-white hover:bg-[#168ed1] disabled:cursor-not-allowed disabled:opacity-60"
             >
               {savingSkill ? 'Adding...' : 'Add'}
             </button>
@@ -1647,14 +2119,14 @@ export default function WorkerDashboardPage() {
             {skills.map((skill) => (
               <div
                 key={skill.id}
-                className="flex items-center gap-2 rounded-full bg-green-50 px-4 py-2 text-sm font-medium text-green-800"
+                className="flex h-10 items-center gap-2 rounded-[22px] bg-[#e8f9f2] px-4 text-sm font-medium text-gray-800"
               >
                 <span>{skill.title}</span>
 
                 <button
                   type="button"
                   onClick={() => handleDeleteSkill(skill.id)}
-                  className="text-red-600"
+                  className="font-bold text-red-600"
                 >
                   ×
                 </button>
@@ -1663,18 +2135,50 @@ export default function WorkerDashboardPage() {
 
             {skills.length === 0 ? (
               <p className="text-sm text-gray-500">
-                Worker skills will appear here.
+                No skills added yet.
               </p>
             ) : null}
           </div>
+          <div className="mt-5 h-3 rounded-b-2xl bg-[#c7f7f1]" />
         </div>
       </section>
 
-      <section className="grid gap-6 lg:grid-cols-2">
-        <div className="rounded-2xl bg-white p-6 shadow-sm">
-          <h3 className="text-xl font-semibold">Social Links</h3>
+      <section className="hidden items-start gap-6 lg:grid-cols-2">
+        <div className="overflow-hidden rounded-2xl bg-white p-6 shadow-sm">
+          <h3 className="text-xl font-semibold">Contact</h3>
 
-          <form onSubmit={handleSaveSocialLinks} className="mt-5 space-y-3">
+          {contactActions.length > 0 ? (
+            <div className="mt-5 grid gap-2">
+              {contactActions.map((action) => {
+                const Icon = action.icon;
+
+                return (
+                  <div key={action.label} className="flex items-center gap-2">
+                    <a
+                      href={action.href ?? '#'}
+                      title={action.label}
+                      aria-label={action.label}
+                      target={action.href?.startsWith('http') ? '_blank' : undefined}
+                      rel={action.href?.startsWith('http') ? 'noreferrer' : undefined}
+                      className="flex h-9 w-9 items-center justify-center rounded-full bg-[#23a7f1] text-white shadow-sm hover:bg-[#168ed1]"
+                    >
+                      <Icon aria-hidden="true" />
+                    </a>
+                    <a
+                      href={action.href ?? '#'}
+                      title={action.label}
+                      aria-label={action.label}
+                      target={action.href?.startsWith('http') ? '_blank' : undefined}
+                      rel={action.href?.startsWith('http') ? 'noreferrer' : undefined}
+                      className="h-[39px] w-full max-w-[240px] rounded-[22px] bg-[#e8f9f2] hover:ring-2 hover:ring-[#23a7f1]"
+                    />
+                  </div>
+                );
+              })}
+            </div>
+          ) : null}
+
+          <form onSubmit={handleSaveSocialLinks} className="mt-5 grid max-w-[370px] gap-2">
             <input
               type="text"
               value={socialForm.facebook}
@@ -1685,7 +2189,7 @@ export default function WorkerDashboardPage() {
                 }))
               }
               placeholder="Facebook"
-              className="w-full rounded-xl border px-4 py-3 outline-none focus:border-green-600"
+              className="h-11 w-full max-w-[345px] rounded-[24px] border-0 bg-[#e8f9f2] px-4 text-sm font-medium outline-none focus:ring-2 focus:ring-[#23a7f1]"
             />
 
             <input
@@ -1698,7 +2202,7 @@ export default function WorkerDashboardPage() {
                 }))
               }
               placeholder="Instagram"
-              className="w-full rounded-xl border px-4 py-3 outline-none focus:border-green-600"
+              className="h-11 w-full max-w-[345px] rounded-[24px] border-0 bg-[#e8f9f2] px-4 text-sm font-medium outline-none focus:ring-2 focus:ring-[#23a7f1]"
             />
 
             <input
@@ -1711,7 +2215,7 @@ export default function WorkerDashboardPage() {
                 }))
               }
               placeholder="LinkedIn"
-              className="w-full rounded-xl border px-4 py-3 outline-none focus:border-green-600"
+              className="h-11 w-full max-w-[345px] rounded-[24px] border-0 bg-[#e8f9f2] px-4 text-sm font-medium outline-none focus:ring-2 focus:ring-[#23a7f1]"
             />
 
             <input
@@ -1724,7 +2228,7 @@ export default function WorkerDashboardPage() {
                 }))
               }
               placeholder="X"
-              className="w-full rounded-xl border px-4 py-3 outline-none focus:border-green-600"
+              className="h-11 w-full max-w-[345px] rounded-[24px] border-0 bg-[#e8f9f2] px-4 text-sm font-medium outline-none focus:ring-2 focus:ring-[#23a7f1]"
             />
 
             <input
@@ -1737,13 +2241,13 @@ export default function WorkerDashboardPage() {
                 }))
               }
               placeholder="Website"
-              className="w-full rounded-xl border px-4 py-3 outline-none focus:border-green-600"
+              className="h-11 w-full max-w-[345px] rounded-[24px] border-0 bg-[#e8f9f2] px-4 text-sm font-medium outline-none focus:ring-2 focus:ring-[#23a7f1]"
             />
 
             <button
               type="submit"
               disabled={savingSocial}
-              className="rounded-xl bg-green-700 px-5 py-3 font-medium text-white hover:bg-green-800 disabled:cursor-not-allowed disabled:opacity-60"
+              className="h-11 w-fit rounded-[24px] bg-[#23a7f1] px-5 text-sm font-bold text-white hover:bg-[#168ed1] disabled:cursor-not-allowed disabled:opacity-60"
             >
               {savingSocial ? 'Saving...' : 'Save Social Links'}
             </button>
@@ -1754,25 +2258,29 @@ export default function WorkerDashboardPage() {
               Social links are saved for this worker profile.
             </p>
           ) : null}
+          <div className="mt-5 h-3 rounded-b-2xl bg-[#c7f7f1]" />
         </div>
 
         <div className="rounded-2xl bg-white p-6 shadow-sm">
-          <h3 className="text-xl font-semibold">Requests</h3>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <h3 className="text-xl font-semibold">Latest Requests</h3>
+            <Link
+              href="/dashboard/worker/requests"
+              className="rounded-full bg-[#23a7f1] px-4 py-2 text-sm font-bold text-white hover:bg-[#168ed1]"
+            >
+              Open All Requests
+            </Link>
+          </div>
 
-          <div className="mt-5 space-y-3">
-            {requests.map((request) => (
+          <div className="mt-5 grid max-w-[370px] gap-2">
+            {latestRequests.map((request) => (
               <div
                 key={request.id}
-                className="rounded-xl border bg-gray-50 p-4"
+                className="rounded-[24px] bg-[#e8f9f2] px-4 py-3"
               >
-                <div className="flex items-start justify-between gap-3">
-                  <div>
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
                     <h4 className="font-semibold">{request.name}</h4>
-                    <p className="text-sm text-gray-600">{request.email}</p>
-
-                    {request.phone ? (
-                      <p className="text-sm text-gray-600">{request.phone}</p>
-                    ) : null}
 
                     <p className="mt-3 text-sm text-gray-700">
                       {request.message}
@@ -1787,27 +2295,10 @@ export default function WorkerDashboardPage() {
                     {request.status || 'new'}
                   </span>
                 </div>
-
-                <div className="mt-4 flex flex-wrap gap-2">
-                  {['seen', 'accepted', 'rejected', 'completed'].map(
-                    (status) => (
-                      <button
-                        key={status}
-                        type="button"
-                        onClick={() =>
-                          handleUpdateRequestStatus(request.id, status)
-                        }
-                        className="rounded-full border px-3 py-1 text-xs font-semibold hover:bg-white"
-                      >
-                        {status}
-                      </button>
-                    )
-                  )}
-                </div>
               </div>
             ))}
 
-            {requests.length === 0 ? (
+            {latestRequests.length === 0 ? (
               <p className="text-sm text-gray-500">
                 Requests sent to this worker will appear here.
               </p>
@@ -1815,6 +2306,28 @@ export default function WorkerDashboardPage() {
           </div>
         </div>
       </section>
+
+      <footer className="flex items-center justify-between gap-4 rounded-2xl bg-[#c7f7f1] px-5 py-4 shadow-sm">
+        <div>
+          <p className="text-xs font-bold uppercase text-gray-600">SENDIO</p>
+          <h2 className="text-xl font-bold text-gray-900">
+            Built to connect opportunity
+          </h2>
+          <p className="mt-1 max-w-2xl text-sm text-gray-700">
+            All Sendio services are free. Keep your worker profile ready for
+            better opportunities and stronger client connections.
+          </p>
+        </div>
+
+        <Image
+          src="/logo.png"
+          alt="Sendio logo"
+          width={92}
+          height={92}
+          className="h-20 w-20 shrink-0 object-contain"
+          sizes="92px"
+        />
+      </footer>
     </div>
   );
 }
