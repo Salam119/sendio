@@ -3573,7 +3573,14 @@ export default function HomePage() {
       <div className="container">
         <div className="navbar">
           <div className="logo-area">
-            <img src="/logo.png" alt="Sendio logo" className="logo-img" />
+            <Image
+  src="/logo.png"
+  alt="Sendio logo"
+  width={74}
+  height={74}
+  className="logo-img"
+  priority
+/>
             <span className="logo-text">Send<span className="logo-dot">i</span>o</span>
           </div>
 

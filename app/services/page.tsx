@@ -68,12 +68,12 @@ export default function ServicesPage() {
             ← Home
           </Link>
 
-          <Link href="/clients" className="topLink">
-            Client Guide
+          <Link href="/pricing" className="topLink">
+            Pricing
           </Link>
 
-          <Link href="/get-quote" className="topLink">
-            Get Quote
+          <Link href="/contact" className="topLink">
+            Contact
           </Link>
         </div>
 
@@ -199,12 +199,24 @@ export default function ServicesPage() {
       </section>
 
       <style>{`
+        :root {
+          --sendio-page-bg: #ffffff;
+          --sendio-hero-bg: #e8e1f1;
+          --sendio-button-bg: #eef6ff;
+          --sendio-button-bg-hover: #e3efff;
+          --sendio-border: #dbeafe;
+          --sendio-text: #111827;
+          --sendio-muted: #374151;
+          --sendio-radius: 12px;
+          --sendio-search-pill-width: 320px;
+          --sendio-search-pill-height: 44px;
+          --sendio-search-pill-radius: 22px;
+        }
+
         .servicesPage {
           min-height: 100vh;
-          background:
-            radial-gradient(circle at top left, rgba(196, 151, 103, 0.18), transparent 34%),
-            linear-gradient(180deg, #fffaf1 0%, #f7efe2 100%);
-          color: #102b24;
+          background: var(--sendio-page-bg);
+          color: var(--sendio-text);
           padding: 44px 20px 70px;
         }
 
@@ -219,56 +231,58 @@ export default function ServicesPage() {
         }
 
         .hero {
-          background: linear-gradient(135deg, #0c2f28, #105640);
-          color: #ffffff;
-          border-radius: 34px;
-          padding: 52px;
-          box-shadow: 0 24px 70px rgba(16, 43, 36, 0.22);
+          min-height: 167px;
+          background: var(--sendio-hero-bg);
+          color: var(--sendio-text);
+          border: 1px solid var(--sendio-border);
+          border-radius: 30px;
+          padding: 18px 28px;
+          box-shadow: 0 18px 44px rgba(17, 24, 39, 0.08);
         }
 
         .topLinks {
           display: flex;
           flex-wrap: wrap;
           gap: 10px;
-          margin-bottom: 28px;
+          margin-bottom: 14px;
         }
 
         .topLink {
           display: inline-flex;
           align-items: center;
           justify-content: center;
-          min-height: 38px;
-          padding: 9px 15px;
-          border-radius: 999px;
-          color: #e9c896;
-          background: rgba(255, 255, 255, 0.12);
-          border: 1px solid rgba(233, 200, 150, 0.4);
+          min-height: 32px;
+          padding: 7px 12px;
+          border-radius: var(--sendio-radius);
+          color: var(--sendio-text);
+          background: var(--sendio-button-bg);
+          border: 1px solid var(--sendio-border);
           text-decoration: none;
-          font-size: 13px;
+          font-size: 12px;
           font-weight: 900;
           transition: transform 0.2s ease, background 0.2s ease;
         }
 
         .topLink:hover {
           transform: translateY(-2px);
-          background: rgba(255, 255, 255, 0.18);
+          background: var(--sendio-button-bg-hover);
         }
 
         .primaryTopLink {
-          color: #102b24;
-          background: #e9c896;
-          border-color: #e9c896;
+          color: var(--sendio-text);
+          background: var(--sendio-button-bg);
+          border-color: var(--sendio-border);
         }
 
         .primaryTopLink:hover {
-          background: #f1d6a7;
+          background: var(--sendio-button-bg-hover);
         }
 
         .eyebrow {
-          margin: 0 0 14px;
-          color: #e9c896;
-          font-size: 12px;
-          letter-spacing: 0.22em;
+          margin: 0 0 8px;
+          color: var(--sendio-muted);
+          font-size: 10px;
+          letter-spacing: 0.18em;
           font-weight: 900;
           text-transform: uppercase;
         }
@@ -276,54 +290,68 @@ export default function ServicesPage() {
         h1 {
           max-width: 780px;
           margin: 0;
-          font-size: clamp(38px, 6vw, 70px);
-          line-height: 0.96;
-          letter-spacing: -0.055em;
+          font-size: clamp(24px, 3.4vw, 36px);
+          line-height: 1.05;
+          letter-spacing: -0.035em;
         }
 
         .intro {
           max-width: 700px;
-          margin: 22px 0 0;
-          color: rgba(255, 255, 255, 0.82);
-          font-size: 18px;
-          line-height: 1.75;
+          margin: 10px 0 0;
+          color: var(--sendio-muted);
+          font-size: 14px;
+          line-height: 1.45;
         }
 
         .statusBar {
           display: grid;
-          grid-template-columns: repeat(3, minmax(0, 1fr));
-          gap: 14px;
-          margin-top: 24px;
+          grid-template-columns: repeat(3, var(--sendio-search-pill-width));
+          justify-content: space-between;
+          align-items: center;
+          gap: 18px;
+          margin-top: 18px;
+          padding: 0 34px;
         }
 
         .statusBar div {
-          background: rgba(255, 255, 255, 0.76);
-          border: 1px solid rgba(196, 151, 103, 0.18);
-          border-radius: 22px;
-          padding: 18px 20px;
-          box-shadow: 0 14px 34px rgba(16, 43, 36, 0.07);
+          width: var(--sendio-search-pill-width);
+          max-width: 100%;
+          height: var(--sendio-search-pill-height);
+          background: #ffffff;
+          border: 1px solid var(--sendio-border);
+          border-radius: var(--sendio-search-pill-radius);
+          padding: 0 18px;
+          box-shadow: 0 12px 28px rgba(17, 24, 39, 0.06);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 9px;
+          text-align: center;
         }
 
         .statusBar strong {
-          display: block;
-          font-size: 24px;
+          display: inline-flex;
+          align-items: center;
+          font-size: 16px;
           line-height: 1;
+          white-space: nowrap;
         }
 
         .statusBar span {
-          display: block;
-          margin-top: 8px;
-          color: #6d7b76;
-          font-size: 13px;
+          display: inline-flex;
+          align-items: center;
+          color: var(--sendio-muted);
+          font-size: 11px;
           font-weight: 750;
+          white-space: nowrap;
         }
 
         .warning {
           margin-top: 16px;
-          background: #fff5d8;
-          border: 1px solid rgba(196, 151, 103, 0.28);
-          color: #74512c;
-          border-radius: 18px;
+          background: #ffffff;
+          border: 1px solid var(--sendio-border);
+          color: var(--sendio-muted);
+          border-radius: var(--sendio-radius);
           padding: 14px 18px;
           font-weight: 750;
         }
@@ -339,20 +367,20 @@ export default function ServicesPage() {
           position: relative;
           min-height: 232px;
           text-decoration: none;
-          background: rgba(255, 255, 255, 0.82);
-          border: 1px solid rgba(196, 151, 103, 0.2);
-          border-radius: 26px;
+          background: #ffffff;
+          border: 1px solid var(--sendio-border);
+          border-radius: var(--sendio-radius);
           padding: 18px;
-          color: #102b24;
-          box-shadow: 0 16px 40px rgba(16, 43, 36, 0.08);
+          color: var(--sendio-text);
+          box-shadow: 0 14px 34px rgba(17, 24, 39, 0.06);
           overflow: hidden;
           transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
         }
 
         .activeCard:hover {
           transform: translateY(-4px);
-          box-shadow: 0 22px 54px rgba(16, 43, 36, 0.14);
-          border-color: rgba(16, 86, 64, 0.32);
+          box-shadow: 0 18px 42px rgba(17, 24, 39, 0.09);
+          border-color: var(--sendio-border);
         }
 
         .waitingCard {
@@ -376,15 +404,15 @@ export default function ServicesPage() {
         }
 
         .waitingDot {
-          background: #d7c7b0;
+          background: #cbd5e1;
         }
 
         .mediaBox {
           width: 74px;
           height: 74px;
-          border-radius: 22px;
-          background: #fffaf1;
-          border: 1px solid rgba(196, 151, 103, 0.18);
+          border-radius: var(--sendio-radius);
+          background: #ffffff;
+          border: 1px solid var(--sendio-border);
           display: flex;
           align-items: center;
           justify-content: center;
@@ -425,22 +453,22 @@ export default function ServicesPage() {
         .waitingText,
         .previewName {
           margin: 10px 0 0;
-          font-size: 13px;
+          font-size: 12px;
           line-height: 1.45;
         }
 
         .activeText {
-          color: #128752;
+          color: #2563eb;
           font-weight: 900;
         }
 
         .waitingText {
-          color: #8b7b66;
+          color: var(--sendio-muted);
           font-weight: 850;
         }
 
         .previewName {
-          color: #6d7b76;
+          color: var(--sendio-muted);
           display: -webkit-box;
           -webkit-line-clamp: 2;
           -webkit-box-orient: vertical;
@@ -449,20 +477,21 @@ export default function ServicesPage() {
 
         .bottomNavigation {
           margin-top: 30px;
-          background: #102b24;
-          color: #ffffff;
+          background: #ffffff;
+          color: var(--sendio-text);
+          border: 1px solid var(--sendio-border);
           border-radius: 30px;
           padding: 30px;
           display: flex;
           align-items: center;
           justify-content: space-between;
           gap: 24px;
-          box-shadow: 0 22px 58px rgba(16, 43, 36, 0.18);
+          box-shadow: 0 18px 42px rgba(17, 24, 39, 0.08);
         }
 
         .bottomLabel {
           margin: 0 0 10px;
-          color: #e9c896;
+          color: var(--sendio-muted);
           font-size: 12px;
           letter-spacing: 0.2em;
           font-weight: 900;
@@ -478,7 +507,7 @@ export default function ServicesPage() {
         .bottomNavigation p {
           max-width: 680px;
           margin: 14px 0 0;
-          color: rgba(255, 255, 255, 0.78);
+          color: var(--sendio-muted);
           line-height: 1.7;
           font-weight: 650;
         }
@@ -496,11 +525,12 @@ export default function ServicesPage() {
           justify-content: center;
           min-height: 42px;
           padding: 11px 17px;
-          border-radius: 999px;
+          border-radius: var(--sendio-radius);
           text-decoration: none;
-          background: #c49767;
-          color: #ffffff;
-          font-size: 13px;
+          background: var(--sendio-button-bg);
+          color: var(--sendio-text);
+          border: 1px solid var(--sendio-border);
+          font-size: 12px;
           font-weight: 900;
           white-space: nowrap;
           transition: transform 0.2s ease, background 0.2s ease;
@@ -508,25 +538,25 @@ export default function ServicesPage() {
 
         .bottomButton:hover {
           transform: translateY(-2px);
-          background: #a97946;
+          background: var(--sendio-button-bg-hover);
         }
 
         .darkButton {
-          background: #ffffff;
-          color: #102b24;
+          background: var(--sendio-button-bg);
+          color: var(--sendio-text);
         }
 
         .darkButton:hover {
-          background: #f2e4d2;
+          background: var(--sendio-button-bg-hover);
         }
 
         .lightButton {
-          background: rgba(255, 255, 255, 0.12);
-          border: 1px solid rgba(255, 255, 255, 0.22);
+          background: var(--sendio-button-bg);
+          border: 1px solid var(--sendio-border);
         }
 
         .lightButton:hover {
-          background: rgba(255, 255, 255, 0.18);
+          background: var(--sendio-button-bg-hover);
         }
 
         @media (max-width: 1120px) {
@@ -537,11 +567,18 @@ export default function ServicesPage() {
 
         @media (max-width: 850px) {
           .hero {
-            padding: 36px 24px;
+            min-height: auto;
+            padding: 22px 18px;
           }
 
           .statusBar {
-            grid-template-columns: 1fr;
+            grid-template-columns: repeat(2, minmax(0, var(--sendio-search-pill-width)));
+            justify-content: center;
+            padding: 0;
+          }
+
+          .statusBar div {
+            width: 100%;
           }
 
           .serviceGrid {
@@ -559,6 +596,18 @@ export default function ServicesPage() {
         }
 
         @media (max-width: 520px) {
+          .statusBar {
+            grid-template-columns: 1fr;
+            justify-content: center;
+            gap: 10px;
+          }
+
+          .statusBar div {
+            width: 100%;
+            max-width: var(--sendio-search-pill-width);
+            margin: 0 auto;
+          }
+
           .serviceGrid {
             grid-template-columns: 1fr;
           }
