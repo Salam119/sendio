@@ -1,4 +1,5 @@
 import "./globals.css";
+import SendioThemeController from "@/components/sendio/SendioThemeController";
 import { CompanyProvider } from "@/context/CompanyContext";
 
 export default function RootLayout({
@@ -9,9 +10,8 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body>
-        <CompanyProvider>
-          {children}
-        </CompanyProvider>
+        <SendioThemeController />
+        <CompanyProvider>{children}</CompanyProvider>
       </body>
     </html>
   );

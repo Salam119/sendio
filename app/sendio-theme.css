@@ -1,0 +1,280 @@
+/* =========================================================
+   SENDIO DESIGN SYSTEM
+   Central colors, sizes, cards, fields, buttons, and theme rotation.
+   ========================================================= */
+
+:root {
+  /* Fixed text colors */
+  --sendio-text: #111827;
+  --sendio-muted: #374151;
+  --sendio-white: #ffffff;
+
+  /* Soft color wheel */
+  --sendio-soft-1: #ccedf0;
+  --sendio-soft-2: #d4e6ef;
+  --sendio-soft-3: #f9f0f0;
+  --sendio-soft-4: #ccdae7;
+  --sendio-soft-5: #f2f3f4;
+  --sendio-soft-6: #ecf6f9;
+  --sendio-soft-7: #f0f0f0;
+  --sendio-soft-8: #f9f1ef;
+  --sendio-soft-9: #e9d4ff;
+
+  /* Strong action colors: buttons only */
+  --sendio-action-1: #45cfe7;
+  --sendio-action-2: #29b9f3;
+
+  /* Active theme roles */
+  --sendio-page-bg: #ecf6f9;
+  --sendio-hero-bg: #ccedf0;
+  --sendio-card-bg: #ffffff;
+  --sendio-rectangle-bg: #f9f0f0;
+  --sendio-border: #ccedf0;
+  --sendio-button-bg: #29b9f3;
+  --sendio-button-hover: #45cfe7;
+
+  /* Layout */
+  --sendio-container-max: 1180px;
+  --sendio-container-padding-mobile: 16px;
+  --sendio-container-padding-tablet: 24px;
+  --sendio-container-padding-desktop: 32px;
+
+  /* Radius */
+  --sendio-radius-sm: 10px;
+  --sendio-radius-md: 16px;
+  --sendio-radius-lg: 22px;
+  --sendio-radius-xl: 30px;
+  --sendio-radius-pill: 999px;
+
+  /* Shadows */
+  --sendio-shadow-soft: 0 10px 30px rgba(17, 24, 39, 0.08);
+  --sendio-shadow-card: 0 12px 32px rgba(17, 24, 39, 0.1);
+  --sendio-shadow-button: 0 8px 18px rgba(41, 185, 243, 0.25);
+
+  /* Buttons */
+  --sendio-button-height-sm: 34px;
+  --sendio-button-height-md: 42px;
+  --sendio-button-height-lg: 50px;
+  --sendio-button-padding-x: 18px;
+  --sendio-button-font-size: 14px;
+  --sendio-button-font-weight: 800;
+
+  /* Fields */
+  --sendio-field-height-sm: 38px;
+  --sendio-field-height-md: 46px;
+  --sendio-field-height-lg: 54px;
+  --sendio-field-padding-x: 16px;
+  --sendio-field-font-size: 14px;
+
+  /* Cards */
+  --sendio-card-padding-mobile: 14px;
+  --sendio-card-padding-desktop: 18px;
+  --sendio-card-min-height: 116px;
+
+  --sendio-service-icon-size-mobile: 58px;
+  --sendio-service-icon-size-desktop: 72px;
+
+  --sendio-provider-card-width-mobile: 260px;
+  --sendio-provider-card-width-desktop: 320px;
+  --sendio-provider-card-height-mobile: 210px;
+  --sendio-provider-card-height-desktop: 250px;
+
+  /* Motion */
+  --sendio-theme-transition: 1000ms ease;
+  --sendio-hover-transition: 180ms ease;
+}
+
+/* Smooth theme behavior */
+html,
+body {
+  background: var(--sendio-page-bg);
+  color: var(--sendio-text);
+  transition:
+    background-color var(--sendio-theme-transition),
+    border-color var(--sendio-theme-transition),
+    color var(--sendio-theme-transition);
+}
+
+/* Shared transition classes */
+.sendio-theme-surface,
+.sendio-theme-card,
+.sendio-theme-rectangle,
+.sendio-theme-button,
+.sendio-theme-field,
+.sendio-theme-border,
+.sendio-theme-hero {
+  transition:
+    background-color var(--sendio-theme-transition),
+    border-color var(--sendio-theme-transition),
+    box-shadow var(--sendio-hover-transition),
+    color var(--sendio-theme-transition);
+}
+
+/* Page shell */
+.sendio-page {
+  min-height: 100vh;
+  background: var(--sendio-page-bg);
+  color: var(--sendio-text);
+}
+
+.sendio-container {
+  width: 100%;
+  max-width: var(--sendio-container-max);
+  margin: 0 auto;
+  padding-left: var(--sendio-container-padding-mobile);
+  padding-right: var(--sendio-container-padding-mobile);
+}
+
+@media (min-width: 768px) {
+  .sendio-container {
+    padding-left: var(--sendio-container-padding-tablet);
+    padding-right: var(--sendio-container-padding-tablet);
+  }
+}
+
+@media (min-width: 1024px) {
+  .sendio-container {
+    padding-left: var(--sendio-container-padding-desktop);
+    padding-right: var(--sendio-container-padding-desktop);
+  }
+}
+
+/* Reusable components */
+.sendio-hero {
+  background: var(--sendio-hero-bg);
+  border: 1px solid var(--sendio-border);
+  border-radius: var(--sendio-radius-xl);
+  box-shadow: var(--sendio-shadow-soft);
+}
+
+.sendio-card {
+  background: var(--sendio-card-bg);
+  border: 1px solid var(--sendio-border);
+  border-radius: var(--sendio-radius-lg);
+  box-shadow: var(--sendio-shadow-soft);
+  color: var(--sendio-text);
+}
+
+.sendio-rectangle {
+  background: var(--sendio-rectangle-bg);
+  border: 1px solid var(--sendio-border);
+  border-radius: var(--sendio-radius-lg);
+  box-shadow: var(--sendio-shadow-soft);
+  color: var(--sendio-text);
+}
+
+.sendio-button {
+  min-height: var(--sendio-button-height-md);
+  padding: 0 var(--sendio-button-padding-x);
+  border-radius: var(--sendio-radius-pill);
+  border: 1px solid transparent;
+  background: var(--sendio-button-bg);
+  color: var(--sendio-text);
+  font-size: var(--sendio-button-font-size);
+  font-weight: var(--sendio-button-font-weight);
+  box-shadow: var(--sendio-shadow-button);
+  cursor: pointer;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.sendio-button:hover {
+  background: var(--sendio-button-hover);
+  transform: translateY(-1px);
+}
+
+.sendio-button:active {
+  transform: translateY(0);
+}
+
+.sendio-button-secondary {
+  min-height: var(--sendio-button-height-sm);
+  padding: 0 14px;
+  border-radius: var(--sendio-radius-pill);
+  border: 1px solid var(--sendio-border);
+  background: var(--sendio-card-bg);
+  color: var(--sendio-text);
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.sendio-field {
+  min-height: var(--sendio-field-height-md);
+  width: 100%;
+  border-radius: var(--sendio-radius-pill);
+  border: 1px solid var(--sendio-border);
+  background: var(--sendio-card-bg);
+  color: var(--sendio-text);
+  padding: 0 var(--sendio-field-padding-x);
+  font-size: var(--sendio-field-font-size);
+  outline: none;
+}
+
+.sendio-field:focus {
+  border-color: var(--sendio-button-bg);
+  box-shadow: 0 0 0 3px rgba(41, 185, 243, 0.16);
+}
+
+.sendio-small-nav {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border-radius: var(--sendio-radius-pill);
+  border: 1px solid var(--sendio-border);
+  background: var(--sendio-card-bg);
+  padding: 6px;
+  box-shadow: var(--sendio-shadow-soft);
+}
+
+.sendio-small-nav a,
+.sendio-small-nav button {
+  min-height: 30px;
+  border-radius: var(--sendio-radius-pill);
+  border: 0;
+  background: transparent;
+  color: var(--sendio-text);
+  padding: 0 12px;
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+  text-decoration: none;
+}
+
+.sendio-small-nav a:hover,
+.sendio-small-nav button:hover {
+  background: var(--sendio-rectangle-bg);
+}
+
+/* Horizontal sliders */
+.sendio-horizontal-scroll {
+  display: flex;
+  gap: 14px;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scroll-snap-type: x proximity;
+  scrollbar-width: thin;
+  padding-bottom: 8px;
+}
+
+.sendio-horizontal-scroll > * {
+  flex: 0 0 auto;
+  scroll-snap-align: start;
+}
+
+/* Reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
