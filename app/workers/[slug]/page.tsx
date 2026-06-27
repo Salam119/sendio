@@ -83,6 +83,15 @@ type ContactChannel =
   | 'linkedin'
   | 'x';
 
+type ContactItem = {
+  channel: ContactChannel;
+  label: string;
+  icon: string;
+  url: string | null;
+  displayValue: string | null;
+  lockedMessage: string;
+};
+
 function isUuid(value: string) {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
     value
@@ -163,7 +172,7 @@ function formatDate(value: string | null) {
 
   return date.toLocaleDateString('en', {
     year: 'numeric',
-    month: 'long',
+    month: 'short',
     day: 'numeric',
   });
 }
@@ -171,6 +180,15 @@ function formatDate(value: string | null) {
 function getStars(rating: number) {
   const safeRating = Math.max(0, Math.min(5, Math.round(rating)));
   return '★'.repeat(safeRating) + '☆'.repeat(5 - safeRating);
+}
+
+function formatProfileNumber(value: number | null | undefined) {
+  if (typeof value !== 'number' || Number.isNaN(value)) return '—';
+
+  return new Intl.NumberFormat('en', {
+    notation: 'compact',
+    maximumFractionDigits: 1,
+  }).format(value);
 }
 
 export default function PublicWorkerProfilePage() {
@@ -188,6 +206,13 @@ export default function PublicWorkerProfilePage() {
     null
   );
   const [reviews, setReviews] = useState<WorkerReview[]>([]);
+
+  const [contactClicksCount, setContactClicksCount] = useState<number | null>(
+    null
+  );
+  const [revealedContact, setRevealedContact] = useState<ContactChannel | null>(
+    null
+  );
 
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [currentUserName, setCurrentUserName] = useState('');
@@ -314,23 +339,67 @@ export default function PublicWorkerProfilePage() {
 
       setLoading(true);
       setNotFound(false);
+      setContactClicksCount(null);
+      setRevealedContact(null);
 
-      const workerQuery = supabase.from('workers').select('*');
+      let workerData: WorkerProfile | null = null;
 
-      const { data: workerData, error: workerError } = isUuid(slug)
-        ? await workerQuery.eq('id', slug).maybeSingle()
-        : await workerQuery.eq('slug', slug).maybeSingle();
+      if (isUuid(slug)) {
+        const { data: workerById } = await supabase
+          .from('workers')
+          .select('*')
+          .eq('id', slug)
+          .maybeSingle();
+
+        if (workerById) {
+          workerData = workerById as WorkerProfile;
+        }
+
+        if (!workerData) {
+          const { data: workerByUserId } = await supabase
+            .from('workers')
+            .select('*')
+            .eq('user_id', slug)
+            .maybeSingle();
+
+          if (workerByUserId) {
+            workerData = workerByUserId as WorkerProfile;
+          }
+        }
+
+        if (!workerData) {
+          const { data: workerBySlug } = await supabase
+            .from('workers')
+            .select('*')
+            .eq('slug', slug)
+            .maybeSingle();
+
+          if (workerBySlug) {
+            workerData = workerBySlug as WorkerProfile;
+          }
+        }
+      } else {
+        const { data: workerBySlug } = await supabase
+          .from('workers')
+          .select('*')
+          .eq('slug', slug)
+          .maybeSingle();
+
+        if (workerBySlug) {
+          workerData = workerBySlug as WorkerProfile;
+        }
+      }
 
       if (!isMounted) return;
 
-      if (workerError || !workerData) {
+      if (!workerData) {
         setWorker(null);
         setLoading(false);
         setNotFound(true);
         return;
       }
 
-      const selectedWorker = workerData as WorkerProfile;
+      const selectedWorker = workerData;
 
       setWorker(selectedWorker);
 
@@ -340,6 +409,7 @@ export default function PublicWorkerProfilePage() {
         galleryResult,
         socialLinksResult,
         reviewsResult,
+        contactClicksResult,
       ] = await Promise.all([
         supabase
           .from('worker_services')
@@ -370,6 +440,12 @@ export default function PublicWorkerProfilePage() {
           .select('*')
           .eq('worker_id', selectedWorker.id)
           .order('created_at', { ascending: false }),
+
+        supabase
+          .from('worker_requests')
+          .select('id', { count: 'exact', head: true })
+          .eq('worker_id', selectedWorker.id)
+          .eq('event_type', 'contact_click'),
       ]);
 
       if (!isMounted) return;
@@ -381,6 +457,9 @@ export default function PublicWorkerProfilePage() {
         (socialLinksResult.data as WorkerSocialLinks | null) ?? null
       );
       setReviews((reviewsResult.data ?? []) as WorkerReview[]);
+      setContactClicksCount(
+        contactClicksResult.error ? null : contactClicksResult.count ?? 0
+      );
       setLoading(false);
     }
 
@@ -405,6 +484,7 @@ export default function PublicWorkerProfilePage() {
   }, [currentUserReview]);
 
   function showLockedMessage(message = 'Sign in to unlock this feature.') {
+    setRevealedContact(null);
     setUnlockNotice(message);
   }
 
@@ -474,7 +554,7 @@ export default function PublicWorkerProfilePage() {
 
     await ensureClientRecord(user.id, clientName, clientEmail);
 
-    await supabase.from('worker_requests').insert({
+    const { error } = await supabase.from('worker_requests').insert({
       worker_id: worker.id,
       client_id: user.id,
       name: clientName,
@@ -491,37 +571,14 @@ export default function PublicWorkerProfilePage() {
       event_type: 'contact_click',
     });
 
-    openContactUrl(url);
-  }
-
-  function renderProtectedLink(
-    label: string,
-    url: string | null,
-    message: string,
-    channel: ContactChannel
-  ) {
-    if (!url) return null;
-
-    if (!isLoggedIn) {
-      return (
-        <button
-          type="button"
-          className="locked-action"
-          onClick={() => showLockedMessage(message)}
-        >
-          {label}
-        </button>
+    if (!error) {
+      setContactClicksCount((currentCount) =>
+        typeof currentCount === 'number' ? currentCount + 1 : currentCount
       );
     }
 
-    return (
-      <button
-        type="button"
-        onClick={() => handleContactClick(label, url, channel)}
-      >
-        {label}
-      </button>
-    );
+    setRevealedContact(channel);
+    openContactUrl(url);
   }
 
   async function refreshWorkerReviews(workerId: string) {
@@ -595,6 +652,18 @@ export default function PublicWorkerProfilePage() {
       );
       return;
     }
+
+    setWorker((currentWorker) =>
+      currentWorker
+        ? {
+            ...currentWorker,
+            requests_count:
+              typeof currentWorker.requests_count === 'number'
+                ? currentWorker.requests_count + 1
+                : 1,
+          }
+        : currentWorker
+    );
 
     setRequestName('');
     setRequestEmail('');
@@ -708,6 +777,113 @@ export default function PublicWorkerProfilePage() {
 
   const statusLabel = formatStatus(worker?.status ?? null);
   const createdDate = formatDate(worker?.created_at ?? null);
+  const featuredMedia = gallery[0] ?? null;
+  const compactServices = services.slice(0, 4);
+  const visibleSkills = skills.slice(0, 6);
+  const ratingValue =
+    typeof worker?.rating === 'number' && !Number.isNaN(worker.rating)
+      ? worker.rating
+      : 0;
+  const isAvailable = worker?.status === 'available';
+
+  const contactItems: ContactItem[] = [
+    {
+      channel: 'phone',
+      label: 'Phone',
+      icon: '☎',
+      url: phoneUrl,
+      displayValue: worker?.phone ?? null,
+      lockedMessage: 'Sign in to unlock calls.',
+    },
+    {
+      channel: 'email',
+      label: 'Email',
+      icon: '✉',
+      url: emailUrl,
+      displayValue: worker?.email ?? null,
+      lockedMessage: 'Sign in to unlock email.',
+    },
+    {
+      channel: 'whatsapp',
+      label: 'WhatsApp',
+      icon: '◉',
+      url: whatsappUrl,
+      displayValue: worker?.whatsapp ?? null,
+      lockedMessage: 'Sign in to unlock WhatsApp.',
+    },
+    {
+      channel: 'website',
+      label: 'Website',
+      icon: '⌂',
+      url: websiteUrl,
+      displayValue: websiteUrl,
+      lockedMessage: 'Sign in to unlock this website link.',
+    },
+    {
+      channel: 'facebook',
+      label: 'Facebook',
+      icon: 'f',
+      url: facebookUrl,
+      displayValue: facebookUrl,
+      lockedMessage: 'Sign in to unlock Facebook.',
+    },
+    {
+      channel: 'instagram',
+      label: 'Instagram',
+      icon: '◎',
+      url: instagramUrl,
+      displayValue: instagramUrl,
+      lockedMessage: 'Sign in to unlock Instagram.',
+    },
+    {
+      channel: 'linkedin',
+      label: 'LinkedIn',
+      icon: 'in',
+      url: linkedinUrl,
+      displayValue: linkedinUrl,
+      lockedMessage: 'Sign in to unlock LinkedIn.',
+    },
+    {
+      channel: 'x',
+      label: 'X',
+      icon: '𝕏',
+      url: xUrl,
+      displayValue: xUrl,
+      lockedMessage: 'Sign in to unlock X.',
+    },
+  ];
+
+  const activeContactItems = contactItems.filter((item) => item.url);
+  const selectedContactItem =
+    contactItems.find((item) => item.channel === revealedContact) ?? null;
+
+  function renderContactIcon(item: ContactItem) {
+    if (!item.url) return null;
+
+    return (
+      <button
+        key={item.channel}
+        type="button"
+        className={`contact-icon-button ${
+          !isLoggedIn ? 'contact-icon-locked' : ''
+        }`}
+        aria-label={item.label}
+        title={item.label}
+        onClick={() => {
+          if (!item.url) return;
+
+          if (!isLoggedIn) {
+            showLockedMessage(item.lockedMessage);
+            return;
+          }
+
+          handleContactClick(item.label, item.url, item.channel);
+        }}
+      >
+        <span>{item.icon}</span>
+      </button>
+    );
+  }
 
   if (loading) {
     return (
@@ -723,8 +899,8 @@ export default function PublicWorkerProfilePage() {
         <style jsx>{`
           .public-worker-page {
             min-height: 100vh;
-            background: #f6f3ef;
-            color: #173321;
+            background: #ffffff;
+            color: #111827;
             padding: 24px 18px 30px;
             font-family: Arial, sans-serif;
           }
@@ -738,8 +914,9 @@ export default function PublicWorkerProfilePage() {
             display: inline-flex;
             align-items: center;
             text-decoration: none;
-            color: white;
-            background: #0b5b2f;
+            color: #1d4ed8;
+            background: #eef6ff;
+            border: 1px solid #dbeafe;
             padding: 10px 16px;
             border-radius: 999px;
             font-weight: 800;
@@ -748,12 +925,12 @@ export default function PublicWorkerProfilePage() {
           .state-box {
             max-width: 760px;
             margin: 70px auto;
-            background: white;
-            border: 1px solid #d8c3a5;
+            background: #ffffff;
+            border: 1px solid #dbeafe;
             border-radius: 18px;
             padding: 28px;
             text-align: center;
-            color: #4f3b25;
+            color: #374151;
           }
         `}</style>
       </main>
@@ -779,8 +956,8 @@ export default function PublicWorkerProfilePage() {
         <style jsx>{`
           .public-worker-page {
             min-height: 100vh;
-            background: #f6f3ef;
-            color: #173321;
+            background: #ffffff;
+            color: #111827;
             padding: 24px 18px 30px;
             font-family: Arial, sans-serif;
           }
@@ -795,8 +972,9 @@ export default function PublicWorkerProfilePage() {
             display: inline-flex;
             align-items: center;
             text-decoration: none;
-            color: white;
-            background: #0b5b2f;
+            color: #1d4ed8;
+            background: #eef6ff;
+            border: 1px solid #dbeafe;
             padding: 10px 16px;
             border-radius: 999px;
             font-weight: 800;
@@ -805,12 +983,12 @@ export default function PublicWorkerProfilePage() {
           .state-box {
             max-width: 760px;
             margin: 70px auto;
-            background: white;
-            border: 1px solid #d8c3a5;
+            background: #ffffff;
+            border: 1px solid #dbeafe;
             border-radius: 18px;
             padding: 28px;
             text-align: center;
-            color: #4f3b25;
+            color: #374151;
           }
 
           .back-link {
@@ -829,192 +1007,173 @@ export default function PublicWorkerProfilePage() {
         </Link>
       </div>
 
-      <section className="hero">
-        <div className="cover">
-          {worker.cover ? (
-            <Image
-            src={worker.cover}
-            alt={`${worker.name} cover`}
-            width={1600}
-            height={420}
-            style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-            sizes="100vw"
-          />
-          ) : null}
-        </div>
+      <section className="worker-hero">
+        <div className="hero-left">
+          <div className="avatar-zone">
+            <div className="avatar-box">
+              {worker.avatar ? (
+                <Image
+                  src={worker.avatar}
+                  alt={`${worker.name} avatar`}
+                  width={170}
+                  height={170}
+                  style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                  sizes="170px"
+                  priority
+                />
+              ) : (
+                <span>{worker.name.charAt(0).toUpperCase()}</span>
+              )}
+            </div>
 
-        <div className="hero-content">
-          <div className="avatar-box">
-            {worker.avatar ? (
-              <Image
-              src={worker.avatar}
-              alt={`${worker.name} avatar`}
-              width={160}
-              height={160}
-              style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-              sizes="160px"
-            />
-            ) : (
-              <span>{worker.name.charAt(0).toUpperCase()}</span>
-            )}
+            <div
+              className={`availability-chip ${
+                isAvailable ? 'availability-on' : 'availability-off'
+              }`}
+            >
+              <span />
+              {isAvailable ? 'Available' : 'Unavailable'}
+            </div>
           </div>
 
-          <div className="worker-main-info">
+          <div className="hero-main-info">
+            <p className="city-line">{worker.city || 'Local worker'}</p>
             <h1>{worker.name}</h1>
 
-            <div className="meta-line">
+            <div className="profession-line">
               {worker.profession ? <span>{worker.profession}</span> : null}
-              {worker.city ? <span>{worker.city}</span> : null}
               {statusLabel ? <span>{statusLabel}</span> : null}
             </div>
 
-            <div className="rating-line">
-              {worker.rating !== null ? (
-                <span>{Number(worker.rating).toFixed(1)} Rating</span>
-              ) : null}
+            <div className="rating-strip" aria-label="Worker rating">
+              <span>{getStars(ratingValue)}</span>
+            </div>
 
-              {worker.reviews_count !== null ? (
-                <span>{worker.reviews_count} Reviews</span>
-              ) : null}
+            <div className="hero-stats">
+              <div className="hero-stat">
+                <span className="stat-icon">👁</span>
+                <small>Views</small>
+                <strong>{formatProfileNumber(worker.views)}</strong>
+              </div>
 
-              {isLoggedIn && worker.views !== null ? (
-                <span>{worker.views} Views</span>
-              ) : null}
+              <div className="hero-stat">
+                <span className="stat-icon">☎</span>
+                <small>Contacts</small>
+                <strong>{formatProfileNumber(contactClicksCount)}</strong>
+              </div>
+
+              <div className="hero-stat">
+                <span className="stat-icon">💼</span>
+                <small>Requests</small>
+                <strong>{formatProfileNumber(worker.requests_count)}</strong>
+              </div>
             </div>
           </div>
         </div>
+
+        <div className="hero-message">
+          <span className="hero-badge">Sendio Worker</span>
+          <h2>Ready to help you with trusted local service.</h2>
+          <p>
+            Review the profile, choose a contact icon, and connect when you are
+            ready.
+          </p>
+        </div>
       </section>
 
-      <section className="contact-actions">
-        {renderProtectedLink(
-          'WhatsApp',
-          whatsappUrl,
-          'Sign in to unlock WhatsApp.',
-          'whatsapp'
-        )}
+      {activeContactItems.length > 0 ? (
+        <section className="contact-zone">
+          <div className="contact-strip">
+            {activeContactItems.map((item) => renderContactIcon(item))}
+          </div>
 
-        {renderProtectedLink(
-          'Call',
-          phoneUrl,
-          'Sign in to unlock calls.',
-          'phone'
-        )}
-
-        {renderProtectedLink(
-          'Email',
-          emailUrl,
-          'Sign in to unlock email.',
-          'email'
-        )}
-
-        {renderProtectedLink(
-          'Website',
-          websiteUrl,
-          'Sign in to unlock this website link.',
-          'website'
-        )}
-      </section>
+          {selectedContactItem?.displayValue && isLoggedIn ? (
+            <div className="contact-reveal-panel">
+              <span>{selectedContactItem.label}</span>
+              <strong>{selectedContactItem.displayValue}</strong>
+              <button type="button" onClick={() => setRevealedContact(null)}>
+                Close
+              </button>
+            </div>
+          ) : null}
+        </section>
+      ) : null}
 
       <section className="content-grid">
         <div className="main-column">
-          {worker.description ? (
-            <section className="card">
-              <h2>About</h2>
-              <p>{worker.description}</p>
-            </section>
-          ) : null}
+          {featuredMedia ? (
+            <section className="card featured-card">
+              <div className="section-heading compact-heading">
+                <h2>Achievements</h2>
+              </div>
 
-          {gallery.length > 0 ? (
-            <section className="card">
-              <h2>Achievements</h2>
-
-              <div className="gallery-grid">
-                {gallery.map((item) => (
-                  <div key={item.id} className="gallery-item">
-                    <div className="gallery-media">
-                      {item.type === 'video' ? (
-                        <video src={item.url} controls />
-                      ) : (
-                        <Image
-                        src={item.url}
-                        alt={`${worker.name} achievement`}
-                        width={800}
-                        height={440}
-                        style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                        sizes="(max-width: 768px) 100vw, 33vw"
-                      />
-                      )}
-                    </div>
-
-                    {item.type === 'video' ? (
-                      <a
-                        href={item.url}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="open-video-link"
-                      >
-                        Open Video
-                      </a>
-                    ) : null}
-                  </div>
-                ))}
+              <div className="featured-media-frame">
+                {featuredMedia.type === 'video' ? (
+                  <video src={featuredMedia.url} controls />
+                ) : (
+                  <Image
+                    src={featuredMedia.url}
+                    alt={`${worker.name} achievement`}
+                    width={774}
+                    height={348}
+                    style={{ width: '100%', height: '100%', objectFit: 'contain' }}
+                    sizes="387px"
+                  />
+                )}
               </div>
             </section>
           ) : null}
 
-          {services.length > 0 ? (
-            <section className="card">
-              <h2>Services</h2>
+          {compactServices.length > 0 ? (
+            <section className="card services-card">
+              <div className="section-heading compact-heading">
+                <h2>Services</h2>
+              </div>
 
-              <div className="list-grid">
-                {services.map((service) => (
-                  <article key={service.id} className="item-card">
-                    <h3>{service.title}</h3>
-
-                    {service.description ? <p>{service.description}</p> : null}
-
-                    {service.price ? (
-                      <strong className="price-text">{service.price}</strong>
-                    ) : null}
+              <div className="compact-services-list">
+                {compactServices.map((service) => (
+                  <article key={service.id} className="service-pill">
+                    <span>{service.title}</span>
+                    {service.price ? <strong>{service.price}</strong> : null}
                   </article>
                 ))}
               </div>
             </section>
           ) : null}
 
-          {skills.length > 0 ? (
-            <section className="card">
-              <h2>Skills</h2>
+          {visibleSkills.length > 0 ? (
+            <section className="card skills-card">
+              <div className="section-heading compact-heading">
+                <h2>Skills</h2>
+              </div>
 
-              <div className="skills-list">
-                {skills.map((skill) => (
+              <div className="compact-skills-list">
+                {visibleSkills.map((skill) => (
                   <span key={skill.id}>{skill.title}</span>
                 ))}
               </div>
             </section>
           ) : null}
 
-          <section className="card">
-            <h2>Reviews</h2>
+          <section className="card compact-reviews-card">
+            <div className="section-heading compact-heading">
+              <h2>Reviews</h2>
+            </div>
 
             {isLoggedIn ? (
-              <form onSubmit={handleSubmitReview} className="review-form compact-review-form">
-                <div className="star-rating" aria-label="Review rating">
+              <form onSubmit={handleSubmitReview} className="compact-review-form">
+                <div className="small-star-picker" aria-label="Review rating">
                   {[1, 2, 3, 4, 5].map((star) => (
                     <button
                       key={star}
                       type="button"
                       onClick={() => setReviewRating(star)}
-                      className={`star-button ${
-                        reviewRating >= star ? 'star-button-active' : ''
-                      }`}
+                      className={reviewRating >= star ? 'star-active' : ''}
                       aria-label={`${star} star${star > 1 ? 's' : ''}`}
                     >
                       ★
                     </button>
                   ))}
-
-                  <span className="rating-value">{reviewRating}/5</span>
                 </div>
 
                 <textarea
@@ -1024,21 +1183,21 @@ export default function PublicWorkerProfilePage() {
                   rows={2}
                 />
 
-                <button type="submit" disabled={reviewSubmitting} className="review-submit-button">
-                  {reviewSubmitting
-                    ? 'Saving...'
-                    : currentUserReview
-                      ? 'Update Review'
-                      : 'Add Review'}
-                </button>
+                <div className="review-form-footer">
+                  <button type="submit" disabled={reviewSubmitting}>
+                    {reviewSubmitting
+                      ? 'Saving...'
+                      : currentUserReview
+                        ? 'Update'
+                        : 'Add'}
+                  </button>
 
-                {reviewStatus ? (
-                  <p className="review-status">{reviewStatus}</p>
-                ) : null}
+                  {reviewStatus ? <p>{reviewStatus}</p> : null}
+                </div>
               </form>
             ) : (
               <div className="login-review-box">
-                <p>Sign in to add a rating and review for this worker.</p>
+                <p>Sign in to add a rating and review.</p>
 
                 <button
                   type="button"
@@ -1046,36 +1205,35 @@ export default function PublicWorkerProfilePage() {
                     showLockedMessage('Register to rate and review this worker.')
                   }
                 >
-                  Unlock Review
+                  Unlock
                 </button>
               </div>
             )}
 
-            <div className="reviews-list">
+            <div className="compact-reviews-list">
               {reviews.map((review) => (
-                <article key={review.id} className="review-card">
-                  <div className="review-header">
+                <article key={review.id} className="compact-review-card">
+                  <div className="compact-review-top">
                     <strong>{review.user_name}</strong>
+
                     <span>{getStars(review.rating)}</span>
+
+                    {review.created_at ? (
+                      <small>{formatDate(review.created_at)}</small>
+                    ) : null}
                   </div>
 
                   {review.comment ? <p>{review.comment}</p> : null}
 
-                  <div className="review-footer">
-                    {review.created_at ? (
-                      <small>{formatDate(review.created_at)}</small>
-                    ) : null}
-
-                    {review.user_id === currentUserId ? (
-                      <button
-                        type="button"
-                        onClick={() => handleDeleteReview(review.id)}
-                        className="delete-review-button"
-                      >
-                        Delete
-                      </button>
-                    ) : null}
-                  </div>
+                  {review.user_id === currentUserId ? (
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteReview(review.id)}
+                      className="delete-review-button"
+                    >
+                      Delete
+                    </button>
+                  ) : null}
                 </article>
               ))}
 
@@ -1088,7 +1246,9 @@ export default function PublicWorkerProfilePage() {
 
         <aside className="side-column">
           <section className="card request-card">
-            <h2>Request Service</h2>
+            <div className="section-heading">
+              <h2>Request Service</h2>
+            </div>
 
             {isLoggedIn ? (
               <form onSubmit={handleSendRequest} className="request-form">
@@ -1144,10 +1304,12 @@ export default function PublicWorkerProfilePage() {
             )}
           </section>
 
-          <section className="card">
-            <h2>Worker Details</h2>
+          <section className="card details-card">
+            <div className="section-heading">
+              <h2>Worker Details</h2>
+            </div>
 
-            <div className="details-list">
+            <div className="details-grid">
               {worker.profession ? (
                 <div>
                   <span>Profession</span>
@@ -1197,7 +1359,7 @@ export default function PublicWorkerProfilePage() {
                 </div>
               ) : null}
 
-              {isLoggedIn && worker.requests_count !== null ? (
+              {worker.requests_count !== null ? (
                 <div>
                   <span>Requests</span>
                   <strong>{worker.requests_count}</strong>
@@ -1205,51 +1367,27 @@ export default function PublicWorkerProfilePage() {
               ) : null}
             </div>
           </section>
-
-          {facebookUrl || instagramUrl || linkedinUrl || xUrl || websiteUrl ? (
-            <section className="card">
-              <h2>Social Links</h2>
-
-              <div className="social-list">
-                {renderProtectedLink(
-                  'Facebook',
-                  facebookUrl,
-                  'Sign in to unlock Facebook.',
-                  'facebook'
-                )}
-
-                {renderProtectedLink(
-                  'Instagram',
-                  instagramUrl,
-                  'Sign in to unlock Instagram.',
-                  'instagram'
-                )}
-
-                {renderProtectedLink(
-                  'LinkedIn',
-                  linkedinUrl,
-                  'Sign in to unlock LinkedIn.',
-                  'linkedin'
-                )}
-
-                {renderProtectedLink(
-                  'X',
-                  xUrl,
-                  'Sign in to unlock X.',
-                  'x'
-                )}
-
-                {renderProtectedLink(
-                  'Website',
-                  websiteUrl,
-                  'Sign in to unlock this website link.',
-                  'website'
-                )}
-              </div>
-            </section>
-          ) : null}
         </aside>
       </section>
+
+      <footer className="worker-footer">
+        <div className="footer-brand">
+          <Image
+            src="/logo.png"
+            alt="Sendio logo"
+            width={34}
+            height={34}
+            style={{ width: 34, height: 34, objectFit: 'contain' }}
+          />
+          <strong>Sendio</strong>
+        </div>
+
+        <p>
+          Sendio connects clients with independent workers. Each worker is
+          responsible for their own service, pricing, communication, and final
+          agreement with the client.
+        </p>
+      </footer>
 
       {unlockNotice ? (
         <div className="unlock-toast">
@@ -1267,533 +1405,593 @@ export default function PublicWorkerProfilePage() {
 
       <style jsx>{`
         .public-worker-page {
+          /*
+            SENDIO PUBLIC WORKER PROFILE CONTROL PANEL
+            عدّل الألوان والقياسات من هنا فقط عند الحاجة.
+          */
+
+          --shell-width: 1060px;
+          --page-side-padding: 18px;
+
+          --hero-min-height: 238px;
+          --hero-radius: 28px;
+          --avatar-size: 108px;
+          --contact-strip-height: 45px;
+
+          --featured-media-width: 100%;
+          --featured-media-height: 340px;
+
+          --service-card-width: 335px;
+          --service-card-height: 42px;
+
+          --footer-min-height: 86px;
+
+          --page-bg: #ffffff;
+          --hero-bg: #e8e1f1;
+          --soft-hero-bg: #f7f3ff;
+          --card-bg: #ffffff;
+          --soft-card-bg: #f8fafc;
+          --button-bg: #eef6ff;
+          --button-hover: #e3efff;
+          --primary-blue: #2563eb;
+          --primary-blue-dark: #1d4ed8;
+          --border: #dbeafe;
+          --text: #111827;
+          --muted: #374151;
+          --soft-muted: #6b7280;
+          --star: #f59e0b;
+
+          --available-bg: #dcfce7;
+          --available-text: #166534;
+          --available-dot: #22c55e;
+
+          --unavailable-bg: #fee2e2;
+          --unavailable-text: #991b1b;
+          --unavailable-dot: #ef4444;
+
           min-height: 100vh;
-          background: #f6f3ef;
-          color: #173321;
+          background: var(--page-bg);
+          color: var(--text);
           font-family: Arial, sans-serif;
-          padding: 20px 0 45px;
+          padding: 18px 0 26px;
+          overflow-x: hidden;
         }
 
         .top-navigation {
-          max-width: 1060px;
-          margin: 0 auto 14px;
-          padding: 0 18px;
+          max-width: var(--shell-width);
+          margin: 0 auto 12px;
+          padding: 0 var(--page-side-padding);
         }
 
         .back-home-button {
           display: inline-flex;
           align-items: center;
           text-decoration: none;
-          color: white;
-          background: #0b5b2f;
-          padding: 10px 16px;
+          color: var(--primary-blue-dark);
+          background: var(--button-bg);
+          border: 1px solid var(--border);
+          padding: 9px 14px;
           border-radius: 999px;
-          font-weight: 800;
-          box-shadow: 0 8px 18px rgba(11, 91, 47, 0.18);
-          transition: 0.2s;
+          font-size: 13px;
+          font-weight: 900;
+          box-shadow: 0 8px 18px rgba(37, 99, 235, 0.1);
+          transition: 0.2s ease;
         }
 
         .back-home-button:hover {
-          transform: translateY(-2px);
-          background: #084625;
+          background: var(--button-hover);
+          transform: translateY(-1px);
         }
 
-        .hero {
-          max-width: 1060px;
+        .worker-hero {
+          width: calc(100% - var(--page-side-padding) * 2);
+          max-width: var(--shell-width);
+          min-height: var(--hero-min-height);
           margin: 0 auto;
-          padding: 0 18px;
+          border-radius: var(--hero-radius);
+          border: 1px solid var(--border);
+          background: linear-gradient(
+            135deg,
+            var(--hero-bg),
+            var(--soft-hero-bg)
+          );
+          box-shadow: 0 18px 38px rgba(17, 24, 39, 0.08);
+          padding: 24px;
+          display: grid;
+          grid-template-columns: minmax(0, 1fr) 310px;
+          gap: 22px;
+          align-items: center;
         }
 
-        .cover {
-          height: 190px;
-          background: #fffaf2;
-          border-radius: 22px;
-          overflow: hidden;
-          border: 1px solid rgba(11, 91, 47, 0.2);
+        .hero-left {
           display: flex;
           align-items: center;
-          justify-content: center;
+          gap: 20px;
+          min-width: 0;
         }
 
-        .cover img {
-          width: 100%;
-          height: 100%;
-          object-fit: contain;
-          object-position: center;
-          display: block;
-          background: #fffaf2;
-        }
-
-        .hero-content {
+        .avatar-zone {
+          width: 128px;
           display: flex;
-          align-items: flex-end;
-          gap: 16px;
-          padding: 0 24px;
-          margin-top: -38px;
-        }
-
-        .avatar-box {
-          width: 88px;
-          height: 88px;
-          border-radius: 50%;
-          background: white;
-          border: 4px solid #f6f3ef;
-          box-shadow: 0 12px 24px rgba(0, 0, 0, 0.13);
-          overflow: hidden;
-          display: flex;
+          flex-direction: column;
           align-items: center;
-          justify-content: center;
-          color: #0b5b2f;
-          font-size: 34px;
-          font-weight: 800;
+          gap: 8px;
           flex-shrink: 0;
         }
 
-        .avatar-box img {
-          width: 100%;
-          height: 100%;
-          object-fit: cover;
-          display: block;
+        .avatar-box {
+          width: var(--avatar-size);
+          height: var(--avatar-size);
+          border-radius: 50%;
+          background: var(--card-bg);
+          border: 5px solid rgba(255, 255, 255, 0.86);
+          box-shadow: 0 16px 30px rgba(17, 24, 39, 0.16);
+          overflow: hidden;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          color: var(--primary-blue);
+          font-size: 38px;
+          font-weight: 900;
         }
 
-        .worker-main-info {
-          background: white;
-          border: 1px solid #e2d3bf;
-          border-radius: 20px;
-          padding: 15px 18px;
-          flex: 1;
-          box-shadow: 0 10px 24px rgba(0, 0, 0, 0.07);
+        .availability-chip {
+          min-width: 86px;
+          height: 24px;
+          border-radius: 999px;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          gap: 6px;
+          font-size: 11px;
+          font-weight: 900;
+          box-shadow: 0 8px 16px rgba(17, 24, 39, 0.08);
+        }
+
+        .availability-chip span {
+          width: 7px;
+          height: 7px;
+          border-radius: 50%;
+          box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.72);
+        }
+
+        .availability-on {
+          background: var(--available-bg);
+          color: var(--available-text);
+        }
+
+        .availability-on span {
+          background: var(--available-dot);
+        }
+
+        .availability-off {
+          background: var(--unavailable-bg);
+          color: var(--unavailable-text);
+        }
+
+        .availability-off span {
+          background: var(--unavailable-dot);
+        }
+
+        .hero-main-info {
+          min-width: 0;
+        }
+
+        .city-line {
+          margin: 0 0 5px;
+          color: var(--muted);
+          font-size: 13px;
+          font-weight: 900;
         }
 
         h1 {
-          margin: 0 0 8px;
-          font-size: 30px;
-          color: #0b5b2f;
+          margin: 0;
+          color: var(--text);
+          font-size: 34px;
+          line-height: 1.08;
+          letter-spacing: -0.8px;
         }
 
-        .meta-line,
-        .rating-line {
+        .profession-line {
           display: flex;
           flex-wrap: wrap;
-          gap: 8px;
+          gap: 7px;
           margin-top: 8px;
         }
 
-        .meta-line span,
-        .rating-line span {
-          background: #f1e6d8;
-          color: #4f3b25;
-          padding: 7px 11px;
+        .profession-line span {
+          background: rgba(255, 255, 255, 0.7);
+          color: var(--muted);
+          border: 1px solid var(--border);
           border-radius: 999px;
+          padding: 5px 9px;
+          font-size: 11px;
+          font-weight: 900;
+        }
+
+        .rating-strip {
+          width: fit-content;
+          min-height: 22px;
+          margin-top: 8px;
+          border-radius: 999px;
+          background: #fff7ed;
+          border: 1px solid #fed7aa;
+          padding: 3px 9px;
+          display: inline-flex;
+          align-items: center;
+        }
+
+        .rating-strip span {
+          color: var(--star);
           font-size: 13px;
+          letter-spacing: 1px;
+          line-height: 1;
+        }
+
+        .hero-stats {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 9px;
+          margin-top: 13px;
+        }
+
+        .hero-stat {
+          width: 68px;
+          min-height: 63px;
+          border-radius: 18px;
+          background: var(--button-bg);
+          border: 1px solid var(--border);
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          gap: 3px;
+          position: relative;
+        }
+
+        .stat-icon {
+          font-size: 17px;
+          line-height: 1;
+        }
+
+        .hero-stat small {
+          color: var(--soft-muted);
+          font-size: 9px;
+          font-weight: 900;
+        }
+
+        .hero-stat strong {
+          min-width: 24px;
+          height: 20px;
+          border-radius: 999px;
+          background: var(--card-bg);
+          border: 1px solid var(--border);
+          color: var(--text);
+          font-size: 10px;
+          font-weight: 900;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          padding: 0 5px;
+        }
+
+        .hero-message {
+          border-radius: 24px;
+          background: rgba(255, 255, 255, 0.74);
+          border: 1px solid var(--border);
+          padding: 18px;
+          min-height: 150px;
+          display: flex;
+          flex-direction: column;
+          justify-content: center;
+          box-shadow: 0 12px 24px rgba(17, 24, 39, 0.06);
+        }
+
+        .hero-badge {
+          width: fit-content;
+          border-radius: 999px;
+          background: var(--button-bg);
+          border: 1px solid var(--border);
+          color: var(--primary-blue-dark);
+          padding: 5px 9px;
+          font-size: 11px;
+          font-weight: 900;
+        }
+
+        .hero-message h2 {
+          margin: 11px 0 6px;
+          color: var(--text);
+          font-size: 21px;
+          line-height: 1.2;
+          letter-spacing: -0.3px;
+        }
+
+        .hero-message p {
+          margin: 0;
+          color: var(--muted);
+          font-size: 13px;
+          line-height: 1.5;
           font-weight: 700;
         }
 
-        .contact-actions {
-          max-width: 1060px;
-          margin: 18px auto 0;
-          padding: 0 18px;
-          display: flex;
-          flex-wrap: wrap;
-          gap: 10px;
+        .contact-zone {
+          width: calc(100% - var(--page-side-padding) * 2);
+          max-width: var(--shell-width);
+          margin: 12px auto 0;
         }
 
-        .contact-actions a,
-        .contact-actions button {
-          text-decoration: none;
-          background: #0b5b2f;
-          color: white;
-          padding: 10px 15px;
+        .contact-strip {
+          width: min(100%, 535px);
+          min-height: var(--contact-strip-height);
           border-radius: 999px;
-          font-size: 14px;
-          font-weight: 800;
-          box-shadow: 0 8px 18px rgba(11, 91, 47, 0.16);
+          background: var(--card-bg);
+          border: 1px solid var(--border);
+          box-shadow: 0 10px 22px rgba(37, 99, 235, 0.08);
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          padding: 6px 8px;
+          overflow-x: auto;
+        }
+
+        .contact-icon-button {
+          width: 34px;
+          height: 34px;
+          border-radius: 999px;
+          border: 1px solid var(--border);
+          background: var(--button-bg);
+          color: var(--primary-blue-dark);
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          cursor: pointer;
+          font-size: 13px;
+          font-weight: 900;
+          flex: 0 0 auto;
+          transition: 0.2s ease;
+        }
+
+        .contact-icon-button:hover {
+          background: var(--button-hover);
+          transform: translateY(-1px);
+        }
+
+        .contact-icon-button span {
+          line-height: 1;
+        }
+
+        .contact-icon-locked {
+          background: #f3f4f6;
+          color: #6b7280;
+        }
+
+        .contact-reveal-panel {
+          width: min(100%, 535px);
+          margin-top: 8px;
+          border-radius: 16px;
+          background: var(--card-bg);
+          border: 1px solid #bfdbfe;
+          box-shadow: 0 10px 20px rgba(37, 99, 235, 0.08);
+          padding: 9px 11px;
+          display: flex;
+          align-items: center;
+          gap: 9px;
+          overflow: hidden;
+        }
+
+        .contact-reveal-panel span {
+          color: var(--soft-muted);
+          font-size: 11px;
+          font-weight: 900;
+        }
+
+        .contact-reveal-panel strong {
+          color: var(--text);
+          font-size: 12px;
+          font-weight: 900;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          flex: 1;
+        }
+
+        .contact-reveal-panel button {
           border: 0;
+          border-radius: 999px;
+          background: var(--button-bg);
+          color: var(--primary-blue-dark);
+          padding: 6px 9px;
+          font-size: 11px;
+          font-weight: 900;
           cursor: pointer;
         }
 
-        .contact-actions button.locked-action {
-          background: #8b5a2b;
-        }
-
         .content-grid {
-          max-width: 1060px;
-          margin: 20px auto 0;
-          padding: 0 18px;
+          width: calc(100% - var(--page-side-padding) * 2);
+          max-width: var(--shell-width);
+          margin: 14px auto 0;
           display: grid;
           grid-template-columns: minmax(0, 1fr) 330px;
-          gap: 18px;
+          gap: 16px;
           align-items: start;
         }
 
         .main-column,
         .side-column {
+          min-width: 0;
           display: flex;
           flex-direction: column;
-          gap: 16px;
-        }
-
-        .card {
-          background: white;
-          border: 1px solid #e2d3bf;
-          border-radius: 22px;
-          padding: 20px;
-          box-shadow: 0 10px 22px rgba(0, 0, 0, 0.05);
-        }
-
-        .request-card {
-          position: sticky;
-          top: 18px;
-        }
-
-        .card h2 {
-          margin: 0 0 15px;
-          color: #0b5b2f;
-          font-size: 22px;
-        }
-
-        .card p {
-          margin: 0;
-          line-height: 1.7;
-          color: #4f3b25;
-        }
-
-        .list-grid {
-          display: grid;
-          grid-template-columns: repeat(2, minmax(0, 1fr));
           gap: 12px;
         }
 
-        .item-card,
-        .review-card {
-          border: 1px solid #eadcc9;
-          background: #fbf8f3;
-          border-radius: 18px;
+        .card {
+          background: var(--card-bg);
+          border: 1px solid var(--border);
+          border-radius: 22px;
           padding: 15px;
+          box-shadow: 0 10px 22px rgba(17, 24, 39, 0.045);
         }
 
-        .item-card h3 {
-          margin: 0 0 8px;
-          color: #173321;
-          font-size: 18px;
-        }
-
-        .item-card p {
-          font-size: 14px;
-        }
-
-        .price-text {
-          display: inline-block;
-          margin-top: 10px;
-          color: #0b5b2f;
-          font-size: 14px;
-        }
-
-        .skills-list {
+        .section-heading {
           display: flex;
-          flex-wrap: wrap;
+          align-items: center;
+          justify-content: space-between;
           gap: 10px;
+          margin-bottom: 11px;
         }
 
-        .skills-list span {
-          background: #f1e6d8;
-          color: #173321;
-          padding: 9px 12px;
-          border-radius: 999px;
-          font-weight: 800;
-          font-size: 14px;
+        .section-heading h2 {
+          margin: 0;
+          color: var(--text);
+          font-size: 19px;
+          letter-spacing: -0.3px;
         }
 
-        .gallery-grid {
-          display: grid;
-          grid-template-columns: repeat(4, minmax(0, 1fr));
-          gap: 10px;
-          align-items: start;
+        .compact-heading {
+          margin-bottom: 9px;
         }
 
-        .gallery-item {
-          border-radius: 14px;
+        .compact-heading h2 {
+          font-size: 17px;
+        }
+
+        .featured-card {
+          width: 100%;
+          max-width: 100%;
+        }
+
+        .featured-media-frame {
+          width: 100%;
+          max-width: 100%;
+          height: var(--featured-media-height);
+          border-radius: 18px;
+          background: var(--soft-card-bg);
+          border: 1px solid var(--border);
           overflow: hidden;
-          background: #fbf8f3;
-          border: 1px solid #eadcc9;
-        }
-
-        .gallery-media {
-          height: 118px;
-          background: #111;
           display: flex;
           align-items: center;
           justify-content: center;
         }
+.featured-media-frame img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  object-position: center;
+  display: block;
+  background: var(--soft-card-bg);
+}
 
-        .gallery-media img,
-        .gallery-media video {
+.featured-media-frame video {
+  width: auto;
+  max-width: 100%;
+  height: 100%;
+  object-fit: contain;
+  object-position: center;
+  display: block;
+  background: #ffffff;
+}
+        
+        }
+
+        .compact-services-list {
+          display: flex;
+          flex-direction: column;
+          gap: 8px;
+          width: min(100%, var(--service-card-width));
+        }
+
+        .service-pill {
           width: 100%;
-          height: 100%;
-          object-fit: contain;
-          object-position: center;
-          display: block;
-          background: #111;
-        }
-
-        .open-video-link {
-          display: block;
-          margin: 7px;
-          text-decoration: none;
-          color: #0b5b2f;
-          background: #f1e6d8;
-          border-radius: 999px;
-          padding: 6px 8px;
-          font-size: 11px;
-          font-weight: 800;
-          text-align: center;
-        }
-
-        .review-form {
-          border: 1px solid #eadcc9;
-          background: #fbf8f3;
-          border-radius: 16px;
-          padding: 12px;
-          display: flex;
-          flex-direction: column;
-          gap: 9px;
-          margin-bottom: 14px;
-        }
-
-        .star-rating {
-          display: flex;
-          align-items: center;
-          gap: 5px;
-        }
-
-        .review-form .star-button {
-          width: 30px;
-          height: 30px;
-          border: 1px solid #d8c3a5;
-          border-radius: 10px;
-          background: white;
-          color: #d8c3a5;
-          padding: 0;
-          font-size: 19px;
-          line-height: 1;
-          font-weight: 900;
-          cursor: pointer;
-          transition: 0.2s;
-          text-decoration: none;
-          text-align: center;
-        }
-
-        .review-form .star-button:hover,
-        .review-form .star-button-active {
-          color: #c49a6c;
-          border-color: #c49a6c;
-          background: #fff9ef;
-          transform: translateY(-1px);
-        }
-
-        .rating-value {
-          margin-left: 6px;
-          color: #4f3b25;
-          font-size: 12px;
-          font-weight: 900;
-        }
-
-        .review-form textarea {
-          width: 100%;
-          min-height: 72px;
-          border: 1px solid #d8c3a5;
-          border-radius: 14px;
-          padding: 10px 12px;
-          font-size: 14px;
-          outline: none;
-          color: #173321;
-          background: white;
-          resize: vertical;
-        }
-
-        .review-form textarea:focus {
-          border-color: #0b5b2f;
-        }
-
-        .review-submit-button,
-        .login-review-box button {
-          border: 0;
-          background: #0b5b2f;
-          color: white;
-          border-radius: 999px;
-          padding: 10px 16px;
-          font-size: 14px;
-          font-weight: 800;
-          cursor: pointer;
-          text-decoration: none;
-          text-align: center;
-        }
-
-        .review-submit-button {
-          align-self: flex-start;
-        }
-
-        .review-submit-button:disabled {
-          opacity: 0.65;
-          cursor: not-allowed;
-        }
-
-        .review-status {
-          color: #4f3b25;
-          font-size: 14px;
-        }
-
-        .login-review-box {
-          border: 1px solid #eadcc9;
-          background: #fbf8f3;
-          border-radius: 18px;
-          padding: 15px;
-          margin-bottom: 16px;
-          display: flex;
-          flex-direction: column;
-          gap: 12px;
-        }
-
-        .reviews-list {
-          display: flex;
-          flex-direction: column;
-          gap: 13px;
-        }
-
-        .review-header {
-          display: flex;
-          justify-content: space-between;
-          gap: 10px;
-          margin-bottom: 8px;
-        }
-
-        .review-header strong {
-          color: #173321;
-        }
-
-        .review-header span {
-          color: #8b5a2b;
-          letter-spacing: 1px;
-        }
-
-        .review-footer {
-          margin-top: 10px;
+          min-height: var(--service-card-height);
+          border-radius: 15px;
+          background: var(--button-bg);
+          border: 1px solid var(--border);
           display: flex;
           align-items: center;
           justify-content: space-between;
           gap: 10px;
+          padding: 8px 11px;
+          overflow: hidden;
         }
 
-        .review-card small {
-          display: block;
-          color: #8b5a2b;
-          font-weight: 700;
-        }
-
-        .delete-review-button {
-          border: 0;
-          background: #fff0f1;
-          color: #c62828;
-          border-radius: 999px;
-          padding: 7px 11px;
-          font-size: 12px;
-          font-weight: 800;
-          cursor: pointer;
-        }
-
-        .empty-review-text {
-          color: #8b5a2b;
-          font-size: 14px;
-        }
-
-        .details-list {
-          display: flex;
-          flex-direction: column;
-          gap: 12px;
-        }
-
-        .details-list div {
-          border-bottom: 1px solid #eadcc9;
-          padding-bottom: 11px;
-        }
-
-        .details-list div:last-child {
-          border-bottom: 0;
-          padding-bottom: 0;
-        }
-
-        .details-list span {
-          display: block;
+        .service-pill span {
+          color: var(--text);
           font-size: 13px;
-          color: #8b5a2b;
-          margin-bottom: 5px;
-          font-weight: 700;
+          font-weight: 900;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
         }
 
-        .details-list strong {
-          color: #173321;
-          font-size: 15px;
-          line-height: 1.5;
+        .service-pill strong {
+          color: var(--primary-blue);
+          font-size: 12px;
+          font-weight: 900;
+          white-space: nowrap;
         }
 
-        .social-list {
+        .compact-skills-list {
           display: flex;
           flex-wrap: wrap;
-          gap: 10px;
+          gap: 7px;
         }
 
-        .social-list a,
-        .social-list button {
-          text-decoration: none;
-          color: #0b5b2f;
-          background: #f1e6d8;
+        .compact-skills-list span {
           border-radius: 999px;
-          padding: 9px 13px;
-          font-weight: 800;
-          border: 0;
-          cursor: pointer;
-          font-size: 14px;
+          background: var(--soft-card-bg);
+          border: 1px solid #e5e7eb;
+          color: var(--muted);
+          padding: 6px 9px;
+          font-size: 11px;
+          font-weight: 900;
         }
 
-        .social-list button.locked-action {
-          color: #8b5a2b;
-          background: #f5eadc;
+        .request-card {
+          position: sticky;
+          top: 14px;
         }
 
         .request-form {
           display: flex;
           flex-direction: column;
-          gap: 11px;
+          gap: 9px;
         }
 
         .request-form input,
         .request-form textarea {
           width: 100%;
-          border: 1px solid #d8c3a5;
+          border: 1px solid var(--border);
           border-radius: 14px;
-          padding: 12px 13px;
-          font-size: 14px;
+          padding: 10px 11px;
+          font-size: 13px;
           outline: none;
-          color: #173321;
-          background: #fbf8f3;
+          color: var(--text);
+          background: var(--soft-card-bg);
           resize: vertical;
         }
 
         .request-form input:focus,
         .request-form textarea:focus {
-          border-color: #0b5b2f;
+          border-color: var(--primary-blue);
+          background: var(--card-bg);
         }
 
         .request-form button,
         .locked-request-box button {
           border: 0;
-          background: #0b5b2f;
+          background: var(--primary-blue);
           color: white;
           border-radius: 999px;
-          padding: 12px 15px;
-          font-size: 15px;
-          font-weight: 800;
+          padding: 11px 14px;
+          font-size: 14px;
+          font-weight: 900;
           cursor: pointer;
+          transition: 0.2s ease;
+        }
+
+        .request-form button:hover,
+        .locked-request-box button:hover {
+          background: var(--primary-blue-dark);
         }
 
         .request-form button:disabled {
@@ -1802,23 +2000,259 @@ export default function PublicWorkerProfilePage() {
         }
 
         .request-status {
-          font-size: 14px;
-          color: #4f3b25;
+          margin: 0;
+          font-size: 12px;
+          color: var(--muted);
+          font-weight: 800;
         }
 
         .locked-request-box {
-          border: 1px dashed #d8c3a5;
-          background: #fbf8f3;
+          border: 1px dashed var(--border);
+          background: var(--soft-card-bg);
           border-radius: 18px;
-          padding: 16px;
+          padding: 14px;
           display: flex;
           flex-direction: column;
-          gap: 12px;
+          gap: 11px;
         }
 
         .locked-request-box p {
-          color: #4f3b25;
+          margin: 0;
+          color: var(--muted);
+          font-size: 13px;
+          font-weight: 800;
+        }
+
+        .details-grid {
+          display: grid;
+          grid-template-columns: 1fr;
+          gap: 8px;
+        }
+
+        .details-grid div {
+          min-height: 47px;
+          border-radius: 15px;
+          background: var(--soft-card-bg);
+          border: 1px solid #e5e7eb;
+          padding: 8px 10px;
+          display: flex;
+          flex-direction: column;
+          justify-content: center;
+          gap: 3px;
+        }
+
+        .details-grid span {
+          color: var(--soft-muted);
+          font-size: 10px;
+          font-weight: 900;
+        }
+
+        .details-grid strong {
+          color: var(--text);
+          font-size: 12px;
+          line-height: 1.35;
+          font-weight: 900;
+        }
+
+        .compact-review-form {
+          border: 1px solid var(--border);
+          background: var(--soft-card-bg);
+          border-radius: 16px;
+          padding: 10px;
+          display: flex;
+          flex-direction: column;
+          gap: 8px;
+          margin-bottom: 10px;
+        }
+
+        .small-star-picker {
+          display: flex;
+          align-items: center;
+          gap: 3px;
+        }
+
+        .small-star-picker button {
+          width: 21px;
+          height: 21px;
+          border: 1px solid #fed7aa;
+          border-radius: 8px;
+          background: #fff7ed;
+          color: #d1d5db;
+          padding: 0;
+          font-size: 13px;
+          line-height: 1;
+          cursor: pointer;
+        }
+
+        .small-star-picker button.star-active {
+          color: var(--star);
+        }
+
+        .compact-review-form textarea {
+          width: 100%;
+          min-height: 50px;
+          border: 1px solid var(--border);
+          border-radius: 13px;
+          padding: 9px 10px;
+          font-size: 12px;
+          outline: none;
+          color: var(--text);
+          background: var(--card-bg);
+          resize: vertical;
+        }
+
+        .review-form-footer {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          flex-wrap: wrap;
+        }
+
+        .review-form-footer button,
+        .login-review-box button {
+          border: 0;
+          background: var(--primary-blue);
+          color: white;
+          border-radius: 999px;
+          padding: 7px 12px;
+          font-size: 12px;
+          font-weight: 900;
+          cursor: pointer;
+        }
+
+        .review-form-footer button:disabled {
+          opacity: 0.65;
+          cursor: not-allowed;
+        }
+
+        .review-form-footer p {
+          margin: 0;
+          color: var(--muted);
+          font-size: 11px;
+          font-weight: 800;
+        }
+
+        .login-review-box {
+          border: 1px solid var(--border);
+          background: var(--soft-card-bg);
+          border-radius: 15px;
+          padding: 10px;
+          margin-bottom: 10px;
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 10px;
+        }
+
+        .login-review-box p {
+          margin: 0;
+          color: var(--muted);
+          font-size: 12px;
+          font-weight: 800;
+        }
+
+        .compact-reviews-list {
+          display: flex;
+          flex-direction: column;
+          gap: 8px;
+        }
+
+        .compact-review-card {
+          position: relative;
+          border: 1px solid #e5e7eb;
+          background: var(--soft-card-bg);
+          border-radius: 15px;
+          padding: 9px 10px;
+        }
+
+        .compact-review-top {
+          display: flex;
+          align-items: center;
+          flex-wrap: wrap;
+          gap: 8px;
+          margin-bottom: 5px;
+        }
+
+        .compact-review-top strong {
+          color: var(--text);
+          font-size: 12px;
+          font-weight: 900;
+        }
+
+        .compact-review-top span {
+          color: var(--star);
+          font-size: 10px;
+          letter-spacing: 0.5px;
+        }
+
+        .compact-review-top small {
+          color: var(--soft-muted);
+          font-size: 10px;
+          font-weight: 800;
+        }
+
+        .compact-review-card p {
+          margin: 0;
+          color: var(--muted);
+          font-size: 12px;
+          line-height: 1.45;
+        }
+
+        .delete-review-button {
+          margin-top: 7px;
+          border: 0;
+          background: var(--unavailable-bg);
+          color: #b91c1c;
+          border-radius: 999px;
+          padding: 5px 9px;
+          font-size: 10px;
+          font-weight: 900;
+          cursor: pointer;
+        }
+
+        .empty-review-text {
+          margin: 0;
+          color: var(--soft-muted);
+          font-size: 12px;
+          font-weight: 800;
+        }
+
+        .worker-footer {
+          width: calc(100% - var(--page-side-padding) * 2);
+          max-width: var(--shell-width);
+          min-height: var(--footer-min-height);
+          margin: 14px auto 0;
+          border-radius: 22px;
+          border: 1px solid var(--border);
+          background: var(--soft-card-bg);
+          padding: 14px 16px;
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 16px;
+        }
+
+        .footer-brand {
+          display: inline-flex;
+          align-items: center;
+          gap: 9px;
+          flex-shrink: 0;
+        }
+
+        .footer-brand strong {
+          color: var(--text);
+          font-size: 18px;
+          font-weight: 900;
+        }
+
+        .worker-footer p {
+          margin: 0;
+          max-width: 690px;
+          color: var(--muted);
+          font-size: 12px;
+          line-height: 1.5;
           font-weight: 700;
+          text-align: right;
         }
 
         .unlock-toast {
@@ -1827,17 +2261,17 @@ export default function PublicWorkerProfilePage() {
           bottom: 22px;
           z-index: 50;
           max-width: 360px;
-          background: white;
-          border: 1px solid #d8c3a5;
+          background: var(--card-bg);
+          border: 1px solid var(--border);
           border-radius: 18px;
           padding: 16px;
-          box-shadow: 0 18px 40px rgba(0, 0, 0, 0.18);
+          box-shadow: 0 18px 40px rgba(17, 24, 39, 0.16);
         }
 
         .unlock-toast p {
           margin: 0 0 12px;
-          color: #4f3b25;
-          font-weight: 800;
+          color: var(--muted);
+          font-weight: 900;
           line-height: 1.5;
         }
 
@@ -1851,20 +2285,29 @@ export default function PublicWorkerProfilePage() {
         .unlock-toast button {
           border: 0;
           text-decoration: none;
-          background: #0b5b2f;
+          background: var(--primary-blue);
           color: white;
           border-radius: 999px;
           padding: 9px 12px;
           font-size: 13px;
-          font-weight: 800;
+          font-weight: 900;
           cursor: pointer;
         }
 
         .unlock-toast button {
-          background: #8b5a2b;
+          background: var(--soft-muted);
         }
 
         @media (max-width: 900px) {
+          .worker-hero {
+            grid-template-columns: 1fr;
+            padding: 20px;
+          }
+
+          .hero-message {
+            min-height: auto;
+          }
+
           .content-grid {
             grid-template-columns: 1fr;
           }
@@ -1873,35 +2316,66 @@ export default function PublicWorkerProfilePage() {
             position: static;
           }
 
-          .hero-content {
-            align-items: flex-start;
-            flex-direction: column;
-            margin-top: -36px;
-            padding: 0 18px;
-          }
-
-          .worker-main-info {
+          .contact-strip,
+          .contact-reveal-panel {
             width: 100%;
           }
 
-          .list-grid {
-            grid-template-columns: 1fr;
+          .featured-card,
+          .services-card {
+            width: 100%;
           }
 
-          .gallery-grid {
-            grid-template-columns: repeat(4, minmax(0, 1fr));
+          .featured-media-frame,
+          .compact-services-list {
+            width: 100%;
+            max-width: none;
           }
 
-          .gallery-media {
-            height: 110px;
+          .worker-footer {
+            align-items: flex-start;
+            flex-direction: column;
+          }
+
+          .worker-footer p {
+            text-align: left;
+          }
+        }
+
+        @media (max-width: 620px) {
+          .public-worker-page {
+            --avatar-size: 92px;
+            --hero-min-height: 220px;
+            --featured-media-height: 164px;
+          }
+
+          .worker-hero {
+            padding: 16px;
+            border-radius: 22px;
+          }
+
+          .hero-left {
+            align-items: flex-start;
+            flex-direction: column;
+            gap: 13px;
+          }
+
+          .avatar-zone {
+            width: auto;
+            align-items: flex-start;
           }
 
           h1 {
-            font-size: 27px;
+            font-size: 28px;
           }
 
-          .cover {
-            height: 170px;
+          .hero-stats {
+            width: 100%;
+          }
+
+          .hero-stat {
+            flex: 1;
+            min-width: 72px;
           }
 
           .unlock-toast {
@@ -1909,16 +2383,6 @@ export default function PublicWorkerProfilePage() {
             left: 14px;
             bottom: 14px;
             max-width: none;
-          }
-        }
-
-        @media (max-width: 620px) {
-          .gallery-grid {
-            grid-template-columns: repeat(2, minmax(0, 1fr));
-          }
-
-          .gallery-media {
-            height: 125px;
           }
         }
       `}</style>
