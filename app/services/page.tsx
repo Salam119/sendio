@@ -239,6 +239,9 @@ export default function ServicesPage() {
   const [locationText, setLocationText] = useState('');
   const [allServicesOpen, setAllServicesOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [subscriberEmail, setSubscriberEmail] = useState('');
+  const [subscriberLocation, setSubscriberLocation] = useState('');
+  const [subscribeStatus, setSubscribeStatus] = useState('');
 
   useEffect(() => {
     let active = true;
@@ -418,9 +421,116 @@ export default function ServicesPage() {
   const cvImages = providers.filter((provider) => provider.image).slice(0, 3);
   const serviceMarqueeItems = services.length > 0 ? services : visibleServices;
 
+  function findBestServiceSlugForProvider(provider: FeaturedProvider) {
+    const directService = services.find((service) => {
+      const serviceName = normalizeText(service.name);
+      const providerSpecialty = normalizeText(provider.specialty);
+
+      return (
+        provider.searchText.includes(serviceName) ||
+        providerSpecialty.includes(serviceName) ||
+        serviceName.includes(providerSpecialty)
+      );
+    });
+
+    if (directService) {
+      return directService.slug;
+    }
+
+    const searchedService = visibleServices[0];
+
+    if (searchedService) {
+      return searchedService.slug;
+    }
+
+    return services[0]?.slug ?? '';
+  }
+
+  function getProviderRequestHref(provider: FeaturedProvider) {
+    const serviceSlug = findBestServiceSlugForProvider(provider);
+
+    if (!serviceSlug) {
+      return getProviderHref(provider);
+    }
+
+    const params = new URLSearchParams({
+      providerType: provider.kind,
+      providerId: provider.id,
+    });
+
+    if (locationText.trim()) {
+      params.set('city', locationText.trim());
+    }
+
+    return `/services/${serviceSlug}?${params.toString()}`;
+  }
+
   function handleSearch(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+
+    const searchValue = normalizeText(searchText);
+
+    if (!searchValue) {
+      setAllServicesOpen(true);
+      return;
+    }
+
+    const exactService = services.find(
+      (service) => normalizeText(service.name) === searchValue
+    );
+
+    const partialService =
+      exactService ??
+      services.find((service) => normalizeText(service.name).includes(searchValue));
+
+    if (partialService) {
+      const params = new URLSearchParams();
+
+      if (locationText.trim()) {
+        params.set('city', locationText.trim());
+      }
+
+      const queryString = params.toString();
+
+      router.push(
+        queryString
+          ? `/services/${partialService.slug}?${queryString}`
+          : `/services/${partialService.slug}`
+      );
+      return;
+    }
+
     setAllServicesOpen(true);
+    setWarning('No exact service found. Please choose one from the list below.');
+  }
+
+  function handleSubscribe(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    setSubscribeStatus('');
+
+    if (!subscriberEmail.trim() || !subscriberEmail.includes('@')) {
+      setSubscribeStatus('Please enter a valid email address.');
+      return;
+    }
+
+    if (!subscriberLocation.trim()) {
+      setSubscribeStatus('Please enter your city or postal code.');
+      return;
+    }
+
+    localStorage.setItem(
+      'sendio-service-subscribe',
+      JSON.stringify({
+        email: subscriberEmail.trim(),
+        location: subscriberLocation.trim(),
+        createdAt: new Date().toISOString(),
+      })
+    );
+
+    setSubscribeStatus('Subscribed successfully. Email alerts will be activated soon.');
+    setSubscriberEmail('');
+    setSubscriberLocation('');
   }
 
   async function handleLogout() {
@@ -611,11 +721,25 @@ export default function ServicesPage() {
       <section className="subscribeBox">
         <p>Subscribe to receive free project cost information by email.</p>
 
-        <form className="subscribeForm">
-          <input type="email" placeholder="Email address" />
-          <input type="text" placeholder="City or postal code" />
-          <button type="button">Subscribe</button>
+        <form className="subscribeForm" onSubmit={handleSubscribe}>
+          <input
+            type="email"
+            placeholder="Email address"
+            value={subscriberEmail}
+            onChange={(event) => setSubscriberEmail(event.target.value)}
+          />
+
+          <input
+            type="text"
+            placeholder="City or postal code"
+            value={subscriberLocation}
+            onChange={(event) => setSubscriberLocation(event.target.value)}
+          />
+
+          <button type="submit">Subscribe</button>
         </form>
+
+        {subscribeStatus ? <span className="subscribeStatus">{subscribeStatus}</span> : null}
       </section>
 
       {warning ? <p className="warningBox">{warning}</p> : null}
@@ -652,7 +776,7 @@ export default function ServicesPage() {
                   return (
                     <article className="floatingProviderCard" key={`${layer.key}-${item.kind}-${item.id}-${index}`}>
                       <Link
-                        href={getProviderHref(item)}
+                        href={getProviderRequestHref(item)}
                         className="floatingProviderImage"
                         style={
                           item.image
@@ -666,7 +790,7 @@ export default function ServicesPage() {
                       </Link>
 
                       <div className="floatingProviderInfo">
-                        <Link href={getProviderHref(item)} className="providerNameLink">
+                        <Link href={getProviderRequestHref(item)} className="providerNameLink">
                           {item.name}
                         </Link>
 
@@ -1178,6 +1302,14 @@ export default function ServicesPage() {
           font-size: 13px;
           font-weight: 900;
           cursor: pointer;
+        }
+
+        .subscribeStatus {
+          display: block;
+          margin-top: 10px;
+          color: var(--sendio-muted);
+          font-size: 12px;
+          font-weight: 800;
         }
 
         .warningBox {
