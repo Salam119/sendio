@@ -2486,23 +2486,16 @@ const pageStyles = `
     padding: 12px;
     box-shadow: 0 22px 80px rgba(0, 0, 0, 0.28);
   }
-.media-lightbox-content video {
-  width: 100%;
-  max-height: 80vh;
-  object-fit: contain;
-  border-radius: 18px;
-  background: #000000;
-}
 
-.media-lightbox-content :global(.lightbox-image) {
-  width: 100%;
-  height: auto;
-  max-height: 80vh;
-  object-fit: contain;
-  border-radius: 18px;
-  background: #000000;
-}
-  
+  .media-lightbox-content video,
+  .media-lightbox-content :global(.lightbox-image) {
+    width: 100%;
+    max-height: 80vh;
+    object-fit: contain;
+    border-radius: 18px;
+    background: #000000;
+  }
+
   .lightbox-close {
     position: absolute;
     right: 10px;
