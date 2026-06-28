@@ -23,6 +23,12 @@ type SocialLinks = {
   website: string | null;
 };
 
+function getWhatsappUrl(value: string) {
+  const cleanNumber = value.replace(/\D/g, '');
+
+  return cleanNumber ? `https://wa.me/${cleanNumber}` : null;
+}
+
 export default function CompanySocialLinks() {
   const [companyId, setCompanyId] = useState<string | null>(null);
   const [rowId, setRowId] = useState('');
@@ -83,7 +89,7 @@ export default function CompanySocialLinks() {
         const id = await getCompanyId();
 
         setCompanyId(id);
-      await loadSocialLinks(id ?? undefined);
+        await loadSocialLinks(id ?? undefined);
       } catch (error) {
         clearSocialLinks();
         alert(
@@ -94,7 +100,7 @@ export default function CompanySocialLinks() {
       }
     }
 
-    initSocialLinks();
+    void initSocialLinks();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -121,9 +127,7 @@ export default function CompanySocialLinks() {
           .from('company_social_links')
           .update(payload)
           .eq('id', rowId)
-      : await supabase
-          .from('company_social_links')
-          .insert([payload]);
+      : await supabase.from('company_social_links').insert([payload]);
 
     if (error) {
       alert(error.message);
@@ -138,66 +142,94 @@ export default function CompanySocialLinks() {
   const links = [
     {
       key: 'whatsapp',
+      label: 'WhatsApp',
       icon: <FaWhatsapp />,
-      color: 'bg-green-500',
-      url: whatsapp ? `https://wa.me/${whatsapp}` : null,
+      url: whatsapp ? getWhatsappUrl(whatsapp) : null,
     },
     {
       key: 'instagram',
+      label: 'Instagram',
       icon: <FaInstagram />,
-      color: 'bg-pink-500',
       url: instagram || null,
     },
     {
       key: 'facebook',
+      label: 'Facebook',
       icon: <FaFacebook />,
-      color: 'bg-blue-600',
       url: facebook || null,
     },
     {
       key: 'linkedin',
+      label: 'LinkedIn',
       icon: <FaLinkedin />,
-      color: 'bg-blue-700',
       url: linkedin || null,
     },
     {
       key: 'x',
+      label: 'X',
       icon: <FaXTwitter />,
-      color: 'bg-black',
       url: x || null,
     },
     {
       key: 'website',
+      label: 'Website',
       icon: <FaGlobe />,
-      color: 'bg-gray-600',
       url: website || null,
     },
   ];
 
   return (
-    <div className="bg-white rounded-2xl border border-[#e2cfbc] p-6">
-      <h2 className="text-2xl font-bold text-[#2c3e2f] mb-6">
-        Social Links
-      </h2>
+    <section className="rounded-[22px] border border-[var(--sendio-border)] bg-white p-4 shadow-sm">
+      <div className="mb-3 flex items-center justify-between gap-3">
+        <div>
+          <p className="text-[10px] font-black uppercase tracking-[0.18em] text-[var(--sendio-muted)]">
+            Social links
+          </p>
+          <h2 className="mt-1 text-base font-black text-[var(--sendio-text)]">
+            Public contact channels
+          </h2>
+        </div>
 
-      <div className="grid md:grid-cols-2 gap-3 mb-6">
-        <input value={whatsapp} onChange={(e) => setWhatsapp(e.target.value)} placeholder="WhatsApp number" className="border border-[#e2cfbc] rounded-xl px-4 py-3" />
-        <input value={facebook} onChange={(e) => setFacebook(e.target.value)} placeholder="Facebook URL" className="border border-[#e2cfbc] rounded-xl px-4 py-3" />
-        <input value={instagram} onChange={(e) => setInstagram(e.target.value)} placeholder="Instagram URL" className="border border-[#e2cfbc] rounded-xl px-4 py-3" />
-        <input value={linkedin} onChange={(e) => setLinkedin(e.target.value)} placeholder="LinkedIn URL" className="border border-[#e2cfbc] rounded-xl px-4 py-3" />
-        <input value={x} onChange={(e) => setX(e.target.value)} placeholder="X URL" className="border border-[#e2cfbc] rounded-xl px-4 py-3" />
-        <input value={website} onChange={(e) => setWebsite(e.target.value)} placeholder="Website URL" className="border border-[#e2cfbc] rounded-xl px-4 py-3" />
+        <button
+          type="button"
+          onClick={() => void saveSocialLinks()}
+          disabled={loading}
+          className="rounded-full bg-[var(--sendio-accent)] px-4 py-2 text-xs font-black text-[var(--sendio-accent-text)] disabled:opacity-60"
+        >
+          {loading ? 'Saving...' : 'Save'}
+        </button>
       </div>
 
-      <button
-        onClick={saveSocialLinks}
-        disabled={loading}
-        className="bg-[#c49a6c] text-white px-5 py-3 rounded-xl mb-6"
-      >
-        {loading ? 'Saving...' : 'Save Social Links'}
-      </button>
+      <div className="grid gap-2 md:grid-cols-2">
+        <SocialInput
+          value={whatsapp}
+          onChange={setWhatsapp}
+          placeholder="WhatsApp number"
+        />
+        <SocialInput
+          value={website}
+          onChange={setWebsite}
+          placeholder="Website URL"
+        />
+        <SocialInput
+          value={facebook}
+          onChange={setFacebook}
+          placeholder="Facebook URL"
+        />
+        <SocialInput
+          value={instagram}
+          onChange={setInstagram}
+          placeholder="Instagram URL"
+        />
+        <SocialInput
+          value={linkedin}
+          onChange={setLinkedin}
+          placeholder="LinkedIn URL"
+        />
+        <SocialInput value={x} onChange={setX} placeholder="X URL" />
+      </div>
 
-      <div className="flex flex-wrap gap-3">
+      <div className="mt-4 flex flex-wrap gap-2">
         {links.map((item) =>
           item.url ? (
             <a
@@ -205,19 +237,39 @@ export default function CompanySocialLinks() {
               href={item.url}
               target="_blank"
               rel="noopener noreferrer"
-              className={`w-12 h-12 flex items-center justify-center rounded-xl text-white text-xl ${item.color}`}
+              title={item.label}
+              className="flex h-9 w-9 items-center justify-center rounded-full border border-[var(--sendio-border)] bg-[var(--sendio-soft)] text-sm font-black text-[var(--sendio-text)] transition hover:bg-[var(--sendio-soft-hover)]"
             >
               {item.icon}
             </a>
           ) : null
         )}
 
-        {!links.some((item) => item.url) && (
-          <div className="text-gray-400 text-sm">
+        {!links.some((item) => item.url) ? (
+          <p className="rounded-2xl border border-dashed border-[var(--sendio-border)] bg-[var(--sendio-soft)] px-3 py-2 text-xs font-bold text-[var(--sendio-muted)]">
             No social links added yet.
-          </div>
-        )}
+          </p>
+        ) : null}
       </div>
-    </div>
+    </section>
+  );
+}
+
+function SocialInput({
+  value,
+  onChange,
+  placeholder,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  placeholder: string;
+}) {
+  return (
+    <input
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      placeholder={placeholder}
+      className="w-full rounded-2xl border border-[var(--sendio-border)] bg-white px-3 py-2.5 text-sm font-semibold text-[var(--sendio-text)] outline-none placeholder:text-gray-400 focus:border-[var(--sendio-accent)]"
+    />
   );
 }

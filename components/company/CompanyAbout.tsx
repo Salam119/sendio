@@ -4,6 +4,8 @@ import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { getCompanyId } from '@/lib/getCompanyId';
 
+const DESCRIPTION_LIMIT = 1200;
+
 export default function CompanyAbout() {
   const [companyId, setCompanyId] = useState<string | null>(null);
   const [description, setDescription] = useState('');
@@ -83,25 +85,38 @@ export default function CompanyAbout() {
   }
 
   return (
-    <div className="bg-white rounded-2xl border border-[#e2cfbc] p-6">
-      <h2 className="text-2xl font-bold text-[#2c3e2f] mb-6">
-        About Company
-      </h2>
+    <section className="rounded-[22px] border border-[var(--sendio-border)] bg-white p-4 shadow-sm">
+      <div className="mb-3 flex items-center justify-between gap-3">
+        <div>
+          <p className="text-[10px] font-black uppercase tracking-[0.18em] text-[var(--sendio-muted)]">
+            About
+          </p>
+          <h2 className="mt-1 text-base font-black text-[var(--sendio-text)]">
+            Company description
+          </h2>
+        </div>
+
+        <span className="text-[11px] font-bold text-[var(--sendio-muted)]">
+          {description.length}/{DESCRIPTION_LIMIT}
+        </span>
+      </div>
 
       <textarea
         value={description}
+        maxLength={DESCRIPTION_LIMIT}
         onChange={(e) => setDescription(e.target.value)}
-        placeholder="Write company description"
-        className="w-full border border-[#e2cfbc] rounded-xl p-4 min-h-[140px] resize-none"
+        placeholder="Write a clear short description about your company."
+        className="min-h-[112px] w-full resize-none rounded-2xl border border-[var(--sendio-border)] bg-white p-3 text-sm font-semibold leading-6 text-[var(--sendio-text)] outline-none placeholder:text-gray-400 focus:border-[var(--sendio-accent)]"
       />
 
       <button
+        type="button"
         onClick={saveDescription}
         disabled={loading}
-        className="mt-4 bg-[#c49a6c] text-white px-5 py-3 rounded-xl"
+        className="mt-3 rounded-full bg-[var(--sendio-accent)] px-4 py-2 text-xs font-black text-[var(--sendio-accent-text)] disabled:opacity-60"
       >
-        {loading ? 'Saving...' : 'Save Description'}
+        {loading ? 'Saving...' : 'Save description'}
       </button>
-    </div>
+    </section>
   );
 }

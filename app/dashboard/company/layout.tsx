@@ -1,8 +1,8 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useEffect, useMemo, useState } from 'react';
+import { usePathname, useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import { CompanyProvider } from '@/context/CompanyContext';
 
@@ -10,11 +10,78 @@ type CompanyDashboardLayoutProps = {
   children: React.ReactNode;
 };
 
+type ThemePalette = {
+  name: string;
+  page: string;
+  card: string;
+  soft: string;
+  softHover: string;
+  border: string;
+  text: string;
+  muted: string;
+  accent: string;
+  accentText: string;
+};
+
+const themePalettes: ThemePalette[] = [
+  {
+    name: 'Sky',
+    page: '#ffffff',
+    card: '#ffffff',
+    soft: '#eef6ff',
+    softHover: '#e3efff',
+    border: '#dbeafe',
+    text: '#111827',
+    muted: '#374151',
+    accent: '#29b9f3',
+    accentText: '#ffffff',
+  },
+  {
+    name: 'Lavender',
+    page: '#f8f5ff',
+    card: '#ffffff',
+    soft: '#f0ebff',
+    softHover: '#e8e1ff',
+    border: '#ddd6fe',
+    text: '#111827',
+    muted: '#374151',
+    accent: '#8b5cf6',
+    accentText: '#ffffff',
+  },
+  {
+    name: 'Mint',
+    page: '#f7fffb',
+    card: '#ffffff',
+    soft: '#ecfdf5',
+    softHover: '#dcfce7',
+    border: '#bbf7d0',
+    text: '#111827',
+    muted: '#374151',
+    accent: '#10b981',
+    accentText: '#ffffff',
+  },
+];
+
+const navItems = [
+  { label: 'Dashboard', href: '/dashboard/company' },
+  { label: 'Services', href: '/dashboard/company/services' },
+  { label: 'Projects', href: '/dashboard/company/projects' },
+  { label: 'Gallery', href: '/dashboard/company/gallery' },
+  { label: 'Articles', href: '/dashboard/company/articles' },
+  { label: 'Reviews', href: '/dashboard/company/reviews' },
+  { label: 'Messages', href: '/dashboard/company/messages' },
+  { label: 'Ads', href: '/dashboard/company/ads' },
+  { label: 'Analytics', href: '/dashboard/company/analytics' },
+  { label: 'Settings', href: '/dashboard/company/settings' },
+];
+
 export default function CompanyDashboardLayout({
   children,
 }: CompanyDashboardLayoutProps) {
   const router = useRouter();
+  const pathname = usePathname();
   const [checking, setChecking] = useState(true);
+  const [paletteIndex, setPaletteIndex] = useState(0);
 
   useEffect(() => {
     async function checkSession() {
@@ -38,8 +105,53 @@ export default function CompanyDashboardLayout({
       setChecking(false);
     }
 
-    checkSession();
+    void checkSession();
   }, [router]);
+
+  useEffect(() => {
+    const savedTheme = window.localStorage.getItem('sendio-company-theme');
+    const savedMode = window.localStorage.getItem('sendio-company-theme-mode');
+
+    if (savedTheme) {
+      const savedIndex = themePalettes.findIndex(
+        (palette) => palette.name === savedTheme,
+      );
+
+      if (savedIndex >= 0) {
+        setPaletteIndex(savedIndex);
+      }
+    }
+
+    if (savedMode === 'fixed') {
+      return;
+    }
+
+    const interval = window.setInterval(() => {
+      setPaletteIndex((current) => (current + 1) % themePalettes.length);
+    }, 120000);
+
+    return () => {
+      window.clearInterval(interval);
+    };
+  }, []);
+
+  const activePalette = themePalettes[paletteIndex];
+
+  const themeStyle = useMemo(
+    () =>
+      ({
+        '--sendio-page': activePalette.page,
+        '--sendio-card': activePalette.card,
+        '--sendio-soft': activePalette.soft,
+        '--sendio-soft-hover': activePalette.softHover,
+        '--sendio-border': activePalette.border,
+        '--sendio-text': activePalette.text,
+        '--sendio-muted': activePalette.muted,
+        '--sendio-accent': activePalette.accent,
+        '--sendio-accent-text': activePalette.accentText,
+      }) as React.CSSProperties,
+    [activePalette],
+  );
 
   async function handleLogout() {
     await supabase.auth.signOut();
@@ -52,8 +164,8 @@ export default function CompanyDashboardLayout({
 
   if (checking) {
     return (
-      <div className="min-h-screen bg-[#fefcf5] flex items-center justify-center">
-        <p className="text-[#2c3e2f] font-semibold">
+      <div className="flex min-h-screen items-center justify-center bg-white">
+        <p className="text-sm font-semibold text-gray-700">
           Checking session...
         </p>
       </div>
@@ -62,102 +174,136 @@ export default function CompanyDashboardLayout({
 
   return (
     <CompanyProvider>
-      <div className="min-h-screen bg-[#fefcf5] flex">
-        <aside className="w-72 bg-white border-r border-[#e2cfbc] shadow-sm">
-          <div className="p-6 border-b border-[#e2cfbc]">
-            <h1 className="text-2xl font-extrabold text-[#8b5a2b]">
+      <div
+        style={themeStyle}
+        className="flex min-h-screen bg-[var(--sendio-page)] text-[var(--sendio-text)]"
+      >
+        <aside className="sticky top-0 hidden h-screen w-56 shrink-0 border-r border-[var(--sendio-border)] bg-white/95 shadow-sm lg:flex lg:flex-col">
+          <div className="border-b border-[var(--sendio-border)] px-5 py-4">
+            <h1 className="text-xl font-black tracking-tight text-[var(--sendio-text)]">
               SENDIO
             </h1>
 
-            <p className="text-sm text-gray-500 mt-1">
+            <p className="mt-1 text-xs font-semibold text-[var(--sendio-muted)]">
               Company Dashboard
             </p>
           </div>
 
-          <nav className="p-4 space-y-2">
-            <Link href="/dashboard/company" className="block px-4 py-3 rounded-xl hover:bg-[#f6efe7] text-[#2c3e2f] font-medium">
-              Dashboard
-            </Link>
+          <nav className="flex-1 space-y-1 overflow-y-auto px-3 py-4">
+            {navItems.map((item) => {
+              const isActive =
+                pathname === item.href ||
+                (item.href !== '/dashboard/company' &&
+                  pathname.startsWith(`${item.href}/`));
 
-            <Link href="/dashboard/company/services" className="block px-4 py-3 rounded-xl hover:bg-[#f6efe7] text-[#2c3e2f] font-medium">
-              Services
-            </Link>
-
-            <Link href="/dashboard/company/projects" className="block px-4 py-3 rounded-xl hover:bg-[#f6efe7] text-[#2c3e2f] font-medium">
-              Projects
-            </Link>
-
-            <Link href="/dashboard/company/gallery" className="block px-4 py-3 rounded-xl hover:bg-[#f6efe7] text-[#2c3e2f] font-medium">
-              Gallery
-            </Link>
-
-            <Link href="/dashboard/company/articles" className="block px-4 py-3 rounded-xl hover:bg-[#f6efe7] text-[#2c3e2f] font-medium">
-              Articles
-            </Link>
-
-            <Link href="/dashboard/company/reviews" className="block px-4 py-3 rounded-xl hover:bg-[#f6efe7] text-[#2c3e2f] font-medium">
-              Reviews
-            </Link>
-
-            <Link href="/dashboard/company/messages" className="block px-4 py-3 rounded-xl hover:bg-[#f6efe7] text-[#2c3e2f] font-medium">
-              Messages
-            </Link>
-
-            <Link href="/dashboard/company/ads" className="block px-4 py-3 rounded-xl hover:bg-[#f6efe7] text-[#2c3e2f] font-medium">
-              Ads
-            </Link>
-
-            <Link href="/dashboard/company/analytics" className="block px-4 py-3 rounded-xl hover:bg-[#f6efe7] text-[#2c3e2f] font-medium">
-              Analytics
-            </Link>
-
-            <Link href="/dashboard/company/settings" className="block px-4 py-3 rounded-xl hover:bg-[#f6efe7] text-[#2c3e2f] font-medium">
-              Settings
-            </Link>
+              return (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  className={[
+                    'block rounded-2xl px-4 py-2.5 text-sm font-bold transition',
+                    isActive
+                      ? 'bg-[var(--sendio-soft)] text-[var(--sendio-text)] shadow-sm'
+                      : 'text-[var(--sendio-muted)] hover:bg-[var(--sendio-soft-hover)] hover:text-[var(--sendio-text)]',
+                  ].join(' ')}
+                >
+                  {item.label}
+                </Link>
+              );
+            })}
           </nav>
+
+          <div className="border-t border-[var(--sendio-border)] px-4 py-3">
+            <p className="text-xs font-bold leading-5 text-[var(--sendio-muted)]">
+              Build trust, stay visible, and grow with Sendio.
+            </p>
+          </div>
         </aside>
 
-        <div className="flex-1 flex flex-col">
-          <header className="bg-white border-b border-[#e2cfbc] px-8 py-5 flex items-center justify-between">
-            <div>
-              <h2 className="text-2xl font-bold text-[#2c3e2f]">
-                Company Dashboard
-              </h2>
+        <div className="flex min-w-0 flex-1 flex-col">
+          <header className="sticky top-0 z-20 border-b border-[var(--sendio-border)] bg-white/95 px-4 py-3 backdrop-blur md:px-6">
+            <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+              <div>
+                <h2 className="text-xl font-black tracking-tight text-[var(--sendio-text)]">
+                  Company Dashboard
+                </h2>
 
-              <p className="text-sm text-gray-500">
-                Manage your company profile and content
-              </p>
+                <p className="mt-0.5 text-xs font-semibold text-[var(--sendio-muted)]">
+                  Manage your company profile, visibility, messages, and growth.
+                </p>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleBack}
+                  className="rounded-2xl border border-[var(--sendio-border)] bg-white px-4 py-2 text-sm font-bold text-[var(--sendio-text)] transition hover:bg-[var(--sendio-soft-hover)]"
+                >
+                  Back
+                </button>
+
+                <Link
+                  href="/"
+                  className="rounded-2xl border border-[var(--sendio-border)] bg-white px-4 py-2 text-sm font-bold text-[var(--sendio-text)] transition hover:bg-[var(--sendio-soft-hover)]"
+                >
+                  View Website
+                </Link>
+
+                <button
+                  type="button"
+                  onClick={handleLogout}
+                  className="rounded-2xl bg-red-600 px-4 py-2 text-sm font-bold text-white transition hover:opacity-90"
+                >
+                  Logout
+                </button>
+              </div>
             </div>
 
-            <div className="flex items-center gap-3">
-              <button
-                type="button"
-                onClick={handleBack}
-                className="px-4 py-2 rounded-xl border border-[#e2cfbc] hover:bg-[#f6efe7]"
-              >
-                Back
-              </button>
+            <nav className="mt-3 flex gap-2 overflow-x-auto pb-1 lg:hidden">
+              {navItems.map((item) => {
+                const isActive =
+                  pathname === item.href ||
+                  (item.href !== '/dashboard/company' &&
+                    pathname.startsWith(`${item.href}/`));
 
-              <Link
-                href="/"
-                className="px-4 py-2 rounded-xl border border-[#e2cfbc] hover:bg-[#f6efe7]"
-              >
-                View Website
-              </Link>
-
-              <button
-                type="button"
-                onClick={handleLogout}
-                className="px-4 py-2 rounded-xl bg-red-600 text-white hover:opacity-90"
-              >
-                Logout
-              </button>
-            </div>
+                return (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    className={[
+                      'shrink-0 rounded-2xl border px-3 py-2 text-xs font-bold transition',
+                      isActive
+                        ? 'border-[var(--sendio-border)] bg-[var(--sendio-soft)] text-[var(--sendio-text)]'
+                        : 'border-[var(--sendio-border)] bg-white text-[var(--sendio-muted)] hover:bg-[var(--sendio-soft-hover)]',
+                    ].join(' ')}
+                  >
+                    {item.label}
+                  </Link>
+                );
+              })}
+            </nav>
           </header>
 
-          <main className="flex-1 p-8">
-            {children}
+          <main className="flex-1 px-4 py-4 md:px-6 md:py-5">
+            <div className="mx-auto w-full max-w-[1502px]">
+              {children}
+            </div>
           </main>
+
+          <footer className="border-t border-[var(--sendio-border)] bg-white px-4 py-3 md:px-6">
+            <div className="mx-auto flex w-full max-w-[1502px] flex-col gap-1 text-xs font-bold text-[var(--sendio-muted)] md:flex-row md:items-center md:justify-between">
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-black text-[var(--sendio-text)]">
+                  SENDIO
+                </span>
+                <span>Company tools</span>
+              </div>
+
+              <p>
+                Keep your profile clear, active, and ready for new clients.
+              </p>
+            </div>
+          </footer>
         </div>
       </div>
     </CompanyProvider>

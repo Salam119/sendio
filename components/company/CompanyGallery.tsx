@@ -1,7 +1,7 @@
 'use client';
 
 import Image from 'next/image';
-import { useEffect, useState } from 'react';
+import { ChangeEvent, useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { getCompanyId } from '@/lib/getCompanyId';
 
@@ -10,6 +10,9 @@ type GalleryItem = {
   url: string;
   type: string | null;
 };
+
+const MAX_IMAGES = 4;
+const MAX_VIDEOS = 4;
 
 export default function CompanyGallery() {
   const [companyId, setCompanyId] = useState<string | null>(null);
@@ -29,7 +32,8 @@ export default function CompanyGallery() {
     const { data, error } = await supabase
       .from('company_gallery')
       .select('*')
-      .eq('company_id', currentCompanyId);
+      .eq('company_id', currentCompanyId)
+      .order('id', { ascending: true });
 
     if (error) {
       console.error(error);
@@ -52,14 +56,11 @@ export default function CompanyGallery() {
       await loadGallery(id);
     }
 
-    initGallery();
+    void initGallery();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  async function uploadFile(
-    file: File,
-    type: 'image' | 'video'
-  ) {
+  async function uploadFile(file: File, type: 'image' | 'video') {
     if (!file) return;
 
     if (!companyId) {
@@ -67,13 +68,13 @@ export default function CompanyGallery() {
       return;
     }
 
-    if (type === 'image' && images.length >= 4) {
-      alert('Maximum 4 images');
+    if (type === 'image' && images.length >= MAX_IMAGES) {
+      alert(`Maximum ${MAX_IMAGES} images`);
       return;
     }
 
-    if (type === 'video' && videos.length >= 2) {
-      alert('Maximum 2 videos');
+    if (type === 'video' && videos.length >= MAX_VIDEOS) {
+      alert(`Maximum ${MAX_VIDEOS} videos`);
       return;
     }
 
@@ -94,19 +95,15 @@ export default function CompanyGallery() {
 
     const {
       data: { publicUrl },
-    } = supabase.storage
-      .from('company-gallery')
-      .getPublicUrl(filePath);
+    } = supabase.storage.from('company-gallery').getPublicUrl(filePath);
 
-    const { error: dbError } = await supabase
-      .from('company_gallery')
-      .insert([
-        {
-          company_id: companyId,
-          url: publicUrl,
-          type,
-        },
-      ]);
+    const { error: dbError } = await supabase.from('company_gallery').insert([
+      {
+        company_id: companyId,
+        url: publicUrl,
+        type,
+      },
+    ]);
 
     if (dbError) {
       alert(dbError.message);
@@ -122,9 +119,7 @@ export default function CompanyGallery() {
     const path = url.split('/company-gallery/')[1];
 
     if (path) {
-      await supabase.storage
-        .from('company-gallery')
-        .remove([path]);
+      await supabase.storage.from('company-gallery').remove([path]);
     }
 
     const { error } = await supabase
@@ -140,98 +135,156 @@ export default function CompanyGallery() {
     await loadGallery();
   }
 
+  function handleUploadChange(
+    event: ChangeEvent<HTMLInputElement>,
+    type: 'image' | 'video'
+  ) {
+    const file = event.target.files?.[0];
+
+    if (file) {
+      void uploadFile(file, type);
+    }
+
+    event.target.value = '';
+  }
+
   return (
-    <div className="space-y-6">
-      <div className="bg-white rounded-3xl border border-[#e2cfbc] p-6">
-        <h2 className="text-xl font-semibold mb-4">
-          Upload Images
-        </h2>
+    <section className="rounded-[22px] border border-[var(--sendio-border)] bg-white p-4 shadow-sm">
+      <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <p className="text-[10px] font-black uppercase tracking-[0.18em] text-[var(--sendio-muted)]">
+            Gallery
+          </p>
+          <h2 className="mt-1 text-base font-black text-[var(--sendio-text)]">
+            Images and videos
+          </h2>
+        </div>
 
-        <p className="text-sm text-gray-500 mb-3">
-          {images.length}/4 Images
-        </p>
-
-        <input
-          type="file"
-          accept="image/*"
-          disabled={loading || images.length >= 4}
-          onChange={(e) => {
-            const file = e.target.files?.[0];
-
-            if (file) {
-              uploadFile(file, 'image');
-            }
-          }}
-          className="w-full border border-[#e2cfbc] rounded-xl p-3"
-        />
+        <div className="flex gap-2 text-[11px] font-black text-[var(--sendio-muted)]">
+          <span className="rounded-full bg-[var(--sendio-soft)] px-3 py-1">
+            {images.length}/{MAX_IMAGES} images
+          </span>
+          <span className="rounded-full bg-[var(--sendio-soft)] px-3 py-1">
+            {videos.length}/{MAX_VIDEOS} videos
+          </span>
+        </div>
       </div>
 
-      <div className="bg-white rounded-3xl border border-[#e2cfbc] p-6">
-        <h2 className="text-xl font-semibold mb-4">
-          Upload Videos
-        </h2>
+      <GalleryRow
+        title="Images"
+        type="image"
+        items={images}
+        maxItems={MAX_IMAGES}
+        loading={loading}
+        onUpload={handleUploadChange}
+        onDelete={deleteItem}
+      />
 
-        <p className="text-sm text-gray-500 mb-3">
-          {videos.length}/2 Videos
-        </p>
-
-        <input
-          type="file"
-          accept="video/*"
-          disabled={loading || videos.length >= 2}
-          onChange={(e) => {
-            const file = e.target.files?.[0];
-
-            if (file) {
-              uploadFile(file, 'video');
-            }
-          }}
-          className="w-full border border-[#e2cfbc] rounded-xl p-3"
+      <div className="mt-4">
+        <GalleryRow
+          title="Videos"
+          type="video"
+          items={videos}
+          maxItems={MAX_VIDEOS}
+          loading={loading}
+          onUpload={handleUploadChange}
+          onDelete={deleteItem}
         />
       </div>
+    </section>
+  );
+}
 
-      <div className="bg-white rounded-3xl border border-[#e2cfbc] p-6">
-        <h2 className="text-xl font-semibold mb-6">
-          Gallery
-        </h2>
+function GalleryRow({
+  title,
+  type,
+  items,
+  maxItems,
+  loading,
+  onUpload,
+  onDelete,
+}: {
+  title: string;
+  type: 'image' | 'video';
+  items: GalleryItem[];
+  maxItems: number;
+  loading: boolean;
+  onUpload: (
+    event: ChangeEvent<HTMLInputElement>,
+    type: 'image' | 'video'
+  ) => void;
+  onDelete: (id: string, url: string) => Promise<void>;
+}) {
+  const slots = Array.from({ length: maxItems }, (_, index) => items[index]);
 
-        <div className="grid md:grid-cols-2 gap-4">
-          {items.map((item) => (
+  return (
+    <div>
+      <div className="mb-2 flex items-center justify-between">
+        <h3 className="text-sm font-black text-[var(--sendio-text)]">
+          {title}
+        </h3>
+
+        <span className="text-[11px] font-bold text-[var(--sendio-muted)]">
+          {items.length}/{maxItems}
+        </span>
+      </div>
+
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+        {slots.map((item, index) =>
+          item ? (
             <div
               key={item.id}
-              className="border border-[#e2cfbc] rounded-2xl overflow-hidden"
+              className="group relative aspect-square overflow-hidden rounded-2xl border border-[var(--sendio-border)] bg-[var(--sendio-soft)]"
             >
-              {item.type === 'image' ? (
-                <div className="relative w-full h-56">
-                  <Image
-                    src={item.url}
-                    alt="Gallery image"
-                    fill
-                    className="object-cover"
-                    sizes="(max-width: 768px) 100vw, 50vw"
-                  />
-                </div>
+              {type === 'image' ? (
+                <Image
+                  src={item.url}
+                  alt="Company gallery image"
+                  fill
+                  className="object-cover"
+                  sizes="(max-width: 768px) 50vw, 25vw"
+                />
               ) : (
                 <video
                   src={item.url}
                   controls
-                  className="w-full h-56"
+                  className="h-full w-full bg-black object-contain"
                 />
               )}
 
               <button
-                onClick={() => deleteItem(item.id, item.url)}
-                className="w-full py-3 text-red-500"
+                type="button"
+                onClick={() => void onDelete(item.id, item.url)}
+                className="absolute right-2 top-2 flex h-7 w-7 items-center justify-center rounded-full bg-white/95 text-sm font-black text-red-500 shadow-sm"
+                title="Delete"
               >
-                Delete
+                ×
               </button>
             </div>
-          ))}
-        </div>
+          ) : (
+            <label
+              key={`${type}-${index}`}
+              className="flex aspect-square cursor-pointer flex-col items-center justify-center rounded-2xl border border-dashed border-[var(--sendio-border)] bg-[var(--sendio-soft)] p-3 text-center transition hover:bg-[var(--sendio-soft-hover)]"
+            >
+              <span className="text-xl font-black text-[var(--sendio-text)]">
+                +
+              </span>
+
+              <span className="mt-1 text-[11px] font-black text-[var(--sendio-muted)]">
+                Upload {type}
+              </span>
+
+              <input
+                type="file"
+                accept={type === 'image' ? 'image/*' : 'video/*'}
+                disabled={loading}
+                onChange={(event) => onUpload(event, type)}
+                className="hidden"
+              />
+            </label>
+          )
+        )}
       </div>
     </div>
   );
 }
-
-
-

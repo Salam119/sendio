@@ -25,7 +25,8 @@ export default function CompanyFeatures() {
     const { data, error } = await supabase
       .from('company_features')
       .select('*')
-      .eq('company_id', currentCompanyId);
+      .eq('company_id', currentCompanyId)
+      .order('id', { ascending: true });
 
     if (error) {
       alert(error.message);
@@ -48,7 +49,7 @@ export default function CompanyFeatures() {
       await loadFeatures(id);
     }
 
-    initFeatures();
+    void initFeatures();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -62,14 +63,12 @@ export default function CompanyFeatures() {
 
     setLoading(true);
 
-    const { error } = await supabase
-      .from('company_features')
-      .insert([
-        {
-          company_id: companyId,
-          title: title.trim(),
-        },
-      ]);
+    const { error } = await supabase.from('company_features').insert([
+      {
+        company_id: companyId,
+        title: title.trim(),
+      },
+    ]);
 
     if (error) {
       alert(error.message);
@@ -98,53 +97,67 @@ export default function CompanyFeatures() {
   }
 
   return (
-    <div className="bg-white rounded-2xl border border-[#e2cfbc] p-6">
-      <h2 className="text-2xl font-bold text-[#2c3e2f] mb-6">
-        Company Features
-      </h2>
+    <section className="rounded-[22px] border border-[var(--sendio-border)] bg-white p-4 shadow-sm">
+      <div className="mb-3 flex items-center justify-between gap-3">
+        <div>
+          <p className="text-[10px] font-black uppercase tracking-[0.18em] text-[var(--sendio-muted)]">
+            Features
+          </p>
+          <h2 className="mt-1 text-base font-black text-[var(--sendio-text)]">
+            Strengths and specialties
+          </h2>
+        </div>
 
-      <div className="flex gap-3 mb-6">
+        <span className="rounded-full bg-[var(--sendio-soft)] px-3 py-1 text-[11px] font-black text-[var(--sendio-text)]">
+          {features.length}
+        </span>
+      </div>
+
+      <div className="flex gap-2">
         <input
           value={title}
           onChange={(e) => setTitle(e.target.value)}
           placeholder="Add a feature"
-          className="flex-1 border border-[#e2cfbc] rounded-xl px-4 py-3"
+          className="min-w-0 flex-1 rounded-2xl border border-[var(--sendio-border)] bg-white px-3 py-2.5 text-sm font-semibold text-[var(--sendio-text)] outline-none placeholder:text-gray-400 focus:border-[var(--sendio-accent)]"
         />
 
         <button
-          onClick={addFeature}
+          type="button"
+          onClick={() => void addFeature()}
           disabled={loading}
-          className="bg-[#c49a6c] text-white px-5 py-3 rounded-xl"
+          className="rounded-full bg-[var(--sendio-accent)] px-4 py-2 text-xs font-black text-[var(--sendio-accent-text)] disabled:opacity-60"
         >
-          {loading ? 'Saving...' : 'Add'}
+          {loading ? '...' : 'Add'}
         </button>
       </div>
 
-      <div className="flex flex-wrap gap-3">
-        {features.map((feature) => (
-          <div
-            key={feature.id}
-            className="flex items-center gap-3 bg-[#fefcf5] border border-[#e2cfbc] px-4 py-2 rounded-full"
-          >
-            <span className="text-sm text-[#2c3e2f]">
-              {feature.title}
-            </span>
-
-            <button
-              onClick={() => deleteFeature(feature.id)}
-              className="text-red-500 text-sm"
-            >
-              Delete
-            </button>
-          </div>
-        ))}
-
-        {features.length === 0 && (
-          <p className="text-gray-400 text-sm">
+      <div className="mt-4 flex flex-wrap gap-2">
+        {features.length === 0 ? (
+          <p className="rounded-2xl border border-dashed border-[var(--sendio-border)] bg-[var(--sendio-soft)] px-3 py-2 text-xs font-bold text-[var(--sendio-muted)]">
             No features added yet.
           </p>
+        ) : (
+          features.map((feature) => (
+            <div
+              key={feature.id}
+              className="flex items-center gap-2 rounded-full border border-[var(--sendio-border)] bg-[var(--sendio-soft)] px-3 py-2"
+            >
+              <span className="max-w-[220px] truncate text-xs font-black text-[var(--sendio-text)]">
+                {feature.title}
+              </span>
+
+              <button
+                type="button"
+                onClick={() => void deleteFeature(feature.id)}
+                className="flex h-5 w-5 items-center justify-center rounded-full bg-white text-xs font-black text-red-500"
+                title="Delete feature"
+              >
+                ×
+              </button>
+            </div>
+          ))
         )}
       </div>
-    </div>
+    </section>
   );
 }

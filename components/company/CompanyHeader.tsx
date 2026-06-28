@@ -1,5 +1,5 @@
-
 'use client';
+
 import Image from 'next/image';
 import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
@@ -9,10 +9,30 @@ type Company = {
   name: string;
   category: string | null;
   city: string | null;
+  address: string | null;
   status: string | null;
   logo: string | null;
-  cover: string | null;
+  phone: string | null;
+  email: string | null;
+  rating: number | null;
+  reviews_count: number | null;
 };
+
+function cleanPhone(phone: string | null) {
+  return phone?.replace(/[^\d+]/g, '') ?? '';
+}
+
+function getStatusStyle(status: string | null) {
+  if (status === 'available') {
+    return 'border-green-200 bg-green-50 text-green-700';
+  }
+
+  if (status === 'busy') {
+    return 'border-amber-200 bg-amber-50 text-amber-700';
+  }
+
+  return 'border-red-200 bg-red-50 text-red-700';
+}
 
 export default function CompanyHeader() {
   const [company, setCompany] = useState<Company | null>(null);
@@ -31,7 +51,9 @@ export default function CompanyHeader() {
 
       const { data, error } = await supabase
         .from('companies')
-        .select('name, category, city, status, logo, cover')
+        .select(
+          'name, category, city, address, status, logo, phone, email, rating, reviews_count'
+        )
         .eq('id', companyId)
         .single();
 
@@ -42,7 +64,7 @@ export default function CompanyHeader() {
         return;
       }
 
-      setCompany(data);
+      setCompany(data as Company);
     });
 
     return () => {
@@ -53,7 +75,9 @@ export default function CompanyHeader() {
   async function reloadCompany(companyId: string) {
     const { data, error } = await supabase
       .from('companies')
-      .select('name, category, city, status, logo, cover')
+      .select(
+        'name, category, city, address, status, logo, phone, email, rating, reviews_count'
+      )
       .eq('id', companyId)
       .single();
 
@@ -62,10 +86,10 @@ export default function CompanyHeader() {
       return;
     }
 
-    setCompany(data);
+    setCompany(data as Company);
   }
 
-  async function uploadImage(file: File, field: 'logo' | 'cover') {
+  async function uploadLogo(file: File) {
     setLoading(true);
 
     const companyId = await getCompanyId();
@@ -77,7 +101,7 @@ export default function CompanyHeader() {
     }
 
     const fileName = `${Date.now()}-${file.name}`;
-    const filePath = `${companyId}/${field}/${fileName}`;
+    const filePath = `${companyId}/logo/${fileName}`;
 
     const { error: uploadError } = await supabase.storage
       .from('company-gallery')
@@ -96,7 +120,7 @@ export default function CompanyHeader() {
     const { error } = await supabase
       .from('companies')
       .update({
-        [field]: publicUrl,
+        logo: publicUrl,
       })
       .eq('id', companyId);
 
@@ -110,25 +134,95 @@ export default function CompanyHeader() {
     setLoading(false);
   }
 
-  return (
-    <div className="bg-white rounded-2xl border border-[#e2cfbc] overflow-hidden mb-6">
-      <div className="relative h-56 bg-[#fefcf5] flex items-center justify-center">
-        {company?.cover ? (
-          <Image
-            src={company.cover}
-            alt="Cover"
-            fill
-            className="object-cover"
-            sizes="100vw"
-          />
-        ) : (
-          <span className="text-gray-400 text-sm">
-            No cover image uploaded yet.
-          </span>
-        )}
+  const phoneNumber = cleanPhone(company?.phone ?? null);
+  const rating = Number(company?.rating || 0).toFixed(1);
+  const reviewsCount = company?.reviews_count || 0;
+  const status = company?.status || 'available';
 
-        <label className="absolute bottom-4 right-4 bg-[#c49a6c] text-white px-4 py-2 rounded-xl cursor-pointer">
-          {loading ? 'Uploading...' : 'Upload Cover'}
+  return (
+    <section className="rounded-[24px] border border-[var(--sendio-border)] bg-white p-4 shadow-sm">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
+          <div className="relative h-24 w-24 shrink-0 overflow-hidden rounded-[24px] border border-[var(--sendio-border)] bg-[var(--sendio-soft)] shadow-sm">
+            {company?.logo ? (
+              <Image
+                src={company.logo}
+                alt="Company logo"
+                fill
+                className="object-cover"
+                sizes="96px"
+              />
+            ) : (
+              <div className="flex h-full w-full items-center justify-center text-xl font-black text-[var(--sendio-muted)]">
+                Logo
+              </div>
+            )}
+          </div>
+
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <h1 className="text-2xl font-black tracking-tight text-[var(--sendio-text)] md:text-3xl">
+                {company?.name || 'Company Name'}
+              </h1>
+
+              <span
+                className={`rounded-full border px-3 py-1 text-[11px] font-black uppercase ${getStatusStyle(
+                  status
+                )}`}
+              >
+                {status}
+              </span>
+            </div>
+
+            <div className="mt-2 flex flex-wrap items-center gap-2 text-xs font-bold text-[var(--sendio-muted)]">
+              <span>★ {rating}</span>
+              <span>({reviewsCount} reviews)</span>
+              {company?.category ? <span>• {company.category}</span> : null}
+            </div>
+
+            <div className="mt-2 flex flex-wrap gap-2 text-xs font-semibold text-[var(--sendio-muted)]">
+              {company?.city ? <span>{company.city}</span> : null}
+              {company?.address ? <span>• {company.address}</span> : null}
+            </div>
+
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              {phoneNumber ? (
+                <a
+                  href={`tel:${phoneNumber}`}
+                  className="flex h-9 w-9 items-center justify-center rounded-full border border-[var(--sendio-border)] bg-[var(--sendio-soft)] text-sm font-black transition hover:bg-[var(--sendio-soft-hover)]"
+                  title="Call"
+                >
+                  ☎
+                </a>
+              ) : null}
+
+              {company?.email ? (
+                <a
+                  href={`mailto:${company.email}`}
+                  className="flex h-9 w-9 items-center justify-center rounded-full border border-[var(--sendio-border)] bg-[var(--sendio-soft)] text-sm font-black transition hover:bg-[var(--sendio-soft-hover)]"
+                  title="Email"
+                >
+                  ✉
+                </a>
+              ) : null}
+
+              {phoneNumber ? (
+                <a
+                  href={`https://wa.me/${phoneNumber.replace(/\D/g, '')}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex h-9 w-9 items-center justify-center rounded-full border border-green-200 bg-green-50 text-[11px] font-black text-green-700 transition hover:bg-green-100"
+                  title="WhatsApp"
+                >
+                  WA
+                </a>
+              ) : null}
+            </div>
+          </div>
+        </div>
+
+        <label className="inline-flex cursor-pointer items-center justify-center rounded-full bg-[var(--sendio-accent)] px-4 py-2 text-xs font-black text-[var(--sendio-accent-text)] shadow-sm transition hover:opacity-90">
+          {loading ? 'Uploading...' : 'Upload Logo'}
           <input
             type="file"
             accept="image/*"
@@ -137,67 +231,13 @@ export default function CompanyHeader() {
               const file = e.target.files?.[0];
 
               if (file) {
-                void uploadImage(file, 'cover');
+                void uploadLogo(file);
               }
             }}
             className="hidden"
           />
         </label>
       </div>
-
-      <div className="p-6">
-        <div className="-mt-16 mb-4 relative z-10">
-          <div className="relative w-32 h-32 rounded-full bg-white border-4 border-white shadow flex items-center justify-center overflow-hidden">
-            {company?.logo ? (
-              <Image
-                src={company.logo}
-                alt="Logo"
-                fill
-                className="object-cover"
-                sizes="128px"
-              />
-            ) : (
-              <span className="text-gray-400 text-sm">Logo</span>
-            )}
-          </div>
-
-          <label className="inline-block mt-3 bg-[#c49a6c] text-white px-4 py-2 rounded-xl cursor-pointer text-sm">
-            {loading ? 'Uploading...' : 'Upload Logo'}
-            <input
-              type="file"
-              accept="image/*"
-              disabled={loading}
-              onChange={(e) => {
-                const file = e.target.files?.[0];
-
-                if (file) {
-                  void uploadImage(file, 'logo');
-                }
-              }}
-              className="hidden"
-            />
-          </label>
-        </div>
-
-        <h1 className="text-3xl font-bold text-[#2c3e2f]">
-          {company?.name || 'Company Name'}
-        </h1>
-
-        <div className="flex flex-wrap gap-3 mt-3 text-gray-500">
-          {company?.category && <span>{company.category}</span>}
-
-          {company?.city && <span>{company.city}</span>}
-        </div>
-
-        <div className="mt-4">
-          <span className="inline-flex items-center px-4 py-2 rounded-full text-sm font-medium bg-green-100 text-green-700">
-            {(company?.status || 'available').toUpperCase()}
-          </span>
-        </div>
-      </div>
-    </div>
+    </section>
   );
 }
-
-
-

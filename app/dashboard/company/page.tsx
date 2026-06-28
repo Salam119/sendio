@@ -14,86 +14,87 @@ import CompanyGallery from '@/components/company/CompanyGallery';
 
 export default function CompanyDashboardPage() {
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       <CompanyHeader />
-      <CompanyInfo />
-      <CompanyStatus />
-      <CompanyAbout />
 
-      <section className="rounded-[22px] border border-blue-100 bg-white p-5 shadow-sm">
-        <div className="mb-4">
-          <p className="text-xs font-black uppercase tracking-[0.18em] text-gray-600">
-            Public Profile Tools
-          </p>
-          <h2 className="mt-2 inline-flex min-h-[34px] items-center rounded-[22px] border border-blue-100 bg-[#eef6ff] px-4 py-2 text-sm font-black text-gray-900">
-            Showcase & Location
-          </h2>
-          <p className="mt-3 max-w-2xl text-sm font-bold leading-6 text-gray-600">
-            Manage the public sections that appear inside your company profile.
-          </p>
-        </div>
+      <div className="grid gap-4 xl:grid-cols-[1.35fr_0.65fr]">
+        <CompanyInfo />
+        <CompanyStatus />
+      </div>
 
-        <div className="grid gap-4 md:grid-cols-3">
-          <Link
-            href="/dashboard/company/showcase"
-            className="group rounded-[22px] border border-blue-100 bg-[#eef6ff] p-5 text-gray-900 transition hover:bg-[#e3efff]"
-          >
-            <div className="mb-3 inline-flex rounded-[22px] border border-green-200 bg-green-100 px-4 py-2 text-xs font-black text-green-800">
-              Company Showcase
+      <div className="grid gap-4 xl:grid-cols-[1fr_1fr]">
+        <CompanyAbout />
+
+        <section className="rounded-[22px] border border-[var(--sendio-border)] bg-white p-4 shadow-sm">
+          <div className="mb-3 flex items-center justify-between gap-3">
+            <div>
+              <p className="text-[10px] font-black uppercase tracking-[0.18em] text-[var(--sendio-muted)]">
+                Public profile tools
+              </p>
+
+              <h2 className="mt-1 text-base font-black text-[var(--sendio-text)]">
+                Showcase, location & branches
+              </h2>
             </div>
 
-            <h3 className="text-lg font-black">Internal profile highlight</h3>
-            <p className="mt-2 text-sm font-bold leading-6 text-gray-600">
-              Add a new product, achievement, project, opportunity, service, or offer.
-            </p>
-
-            <span className="mt-4 inline-flex h-9 items-center rounded-[18px] border border-blue-100 bg-white px-4 text-sm font-black transition group-hover:bg-[#eef6ff]">
-              Open Showcase
+            <span className="rounded-full bg-[var(--sendio-soft)] px-3 py-1 text-[11px] font-black text-[var(--sendio-text)]">
+              Public
             </span>
-          </Link>
+          </div>
 
-          <Link
-            href="/dashboard/company/location"
-            className="group rounded-[22px] border border-blue-100 bg-[#eef6ff] p-5 text-gray-900 transition hover:bg-[#e3efff]"
-          >
-            <div className="mb-3 inline-flex rounded-[22px] border border-blue-100 bg-white px-4 py-2 text-xs font-black text-gray-900">
-              Location & Directions
-            </div>
+          <div className="grid gap-3 md:grid-cols-3 xl:grid-cols-1 2xl:grid-cols-3">
+            <Link
+              href="/dashboard/company/showcase"
+              className="group rounded-2xl border border-[var(--sendio-border)] bg-[var(--sendio-soft)] p-3 text-[var(--sendio-text)] transition hover:bg-[var(--sendio-soft-hover)]"
+            >
+              <p className="text-xs font-black">Showcase</p>
+              <p className="mt-1 text-[11px] font-semibold leading-5 text-[var(--sendio-muted)]">
+                Products, achievements, offers, and profile highlights.
+              </p>
+              <span className="mt-3 inline-flex rounded-full bg-white px-3 py-1 text-[11px] font-black">
+                Open
+              </span>
+            </Link>
 
-            <h3 className="text-lg font-black">Help clients reach you</h3>
-            <p className="mt-2 text-sm font-bold leading-6 text-gray-600">
-              Add your company address so clients can open Google Maps directions.
-            </p>
+            <Link
+              href="/dashboard/company/location"
+              className="group rounded-2xl border border-[var(--sendio-border)] bg-[var(--sendio-soft)] p-3 text-[var(--sendio-text)] transition hover:bg-[var(--sendio-soft-hover)]"
+            >
+              <p className="text-xs font-black">Location</p>
+              <p className="mt-1 text-[11px] font-semibold leading-5 text-[var(--sendio-muted)]">
+                Address and Google Maps directions for clients.
+              </p>
+              <span className="mt-3 inline-flex rounded-full bg-white px-3 py-1 text-[11px] font-black">
+                Open
+              </span>
+            </Link>
 
-            <span className="mt-4 inline-flex h-9 items-center rounded-[18px] border border-blue-100 bg-white px-4 text-sm font-black transition group-hover:bg-[#eef6ff]">
-              Open Location
-            </span>
-          </Link>
+            <Link
+              href="/dashboard/company/branches"
+              className="group rounded-2xl border border-[var(--sendio-border)] bg-[var(--sendio-soft)] p-3 text-[var(--sendio-text)] transition hover:bg-[var(--sendio-soft-hover)]"
+            >
+              <p className="text-xs font-black">Branches</p>
+              <p className="mt-1 text-[11px] font-semibold leading-5 text-[var(--sendio-muted)]">
+                Branches and partner company links.
+              </p>
+              <span className="mt-3 inline-flex rounded-full bg-white px-3 py-1 text-[11px] font-black">
+                Open
+              </span>
+            </Link>
+          </div>
+        </section>
+      </div>
 
-          <Link
-            href="/dashboard/company/branches"
-            className="group rounded-[22px] border border-blue-100 bg-[#eef6ff] p-5 text-gray-900 transition hover:bg-[#e3efff]"
-          >
-            <div className="mb-3 inline-flex rounded-[22px] border border-blue-100 bg-white px-4 py-2 text-xs font-black text-gray-900">
-              Branches & Partners
-            </div>
+      <div className="grid gap-4 xl:grid-cols-2">
+        <CompanyServices />
+        <CompanyProjects />
+      </div>
 
-            <h3 className="text-lg font-black">Branches & Partners</h3>
-            <p className="mt-2 text-sm font-bold leading-6 text-gray-600">
-              Manage company branches and partner company links.
-            </p>
+      <div className="grid gap-4 xl:grid-cols-2">
+        <CompanyFeatures />
+        <CompanySocialLinks />
+      </div>
 
-            <span className="mt-4 inline-flex h-9 items-center rounded-[18px] border border-blue-100 bg-white px-4 text-sm font-black transition group-hover:bg-[#eef6ff]">
-              Open Branches
-            </span>
-          </Link>
-        </div>
-      </section>
-
-      <CompanyServices />
-      <CompanyProjects />
-      <CompanyFeatures />
-      <CompanySocialLinks />
       <CompanyGallery />
     </div>
   );

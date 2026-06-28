@@ -136,75 +136,74 @@ export default function CompanyInfo() {
   }
 
   return (
-    <div className="bg-white rounded-2xl border border-[#e2cfbc] p-6">
-      <h2 className="text-2xl font-bold text-[#2c3e2f] mb-6">
-        Company Info
-      </h2>
-
-      <div className="grid md:grid-cols-2 gap-6">
-        <div className="space-y-3">
-          <input
-            value={phone}
-            onChange={(e) => setPhone(e.target.value)}
-            placeholder="Phone"
-            className="w-full border border-[#e2cfbc] rounded-xl px-4 py-3"
-          />
-
-          <input
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            placeholder="Email"
-            className="w-full border border-[#e2cfbc] rounded-xl px-4 py-3"
-          />
-
-          <input
-            value={website}
-            onChange={(e) => setWebsite(e.target.value)}
-            placeholder="Website"
-            className="w-full border border-[#e2cfbc] rounded-xl px-4 py-3"
-          />
-
-          <input
-            value={city}
-            onChange={(e) => setCity(e.target.value)}
-            placeholder="City"
-            className="w-full border border-[#e2cfbc] rounded-xl px-4 py-3"
-          />
-
-          <input
-            value={address}
-            onChange={(e) => setAddress(e.target.value)}
-            placeholder="Address"
-            className="w-full border border-[#e2cfbc] rounded-xl px-4 py-3"
-          />
-
-          <input
-            value={category}
-            onChange={(e) => setCategory(e.target.value)}
-            placeholder="Category"
-            className="w-full border border-[#e2cfbc] rounded-xl px-4 py-3"
-          />
-
-          <button
-            onClick={saveCompanyInfo}
-            disabled={loading}
-            className="bg-[#c49a6c] text-white px-5 py-3 rounded-xl"
-          >
-            {loading ? 'Saving...' : 'Save Company Info'}
-          </button>
+    <section className="rounded-[22px] border border-[var(--sendio-border)] bg-white p-4 shadow-sm">
+      <div className="mb-3 flex items-center justify-between gap-3">
+        <div>
+          <p className="text-[10px] font-black uppercase tracking-[0.18em] text-[var(--sendio-muted)]">
+            Company info
+          </p>
+          <h2 className="mt-1 text-base font-black text-[var(--sendio-text)]">
+            Basic contact and profile data
+          </h2>
         </div>
 
-        <div className="space-y-3">
-          <InsightCard label="Views" value={views} />
-
-          <InsightCard label="Connections" value={connections} />
-
-          <InsightCard label="Rating" value={`${rating} / 5`} />
-
-          <InsightCard label="Reviews" value={reviewsCount} />
-        </div>
+        <button
+          type="button"
+          onClick={saveCompanyInfo}
+          disabled={loading}
+          className="rounded-full bg-[var(--sendio-accent)] px-4 py-2 text-xs font-black text-[var(--sendio-accent-text)] shadow-sm disabled:opacity-60"
+        >
+          {loading ? 'Saving...' : 'Save'}
+        </button>
       </div>
-    </div>
+
+      <div className="grid gap-3 md:grid-cols-2">
+        <CompactInput value={phone} onChange={setPhone} placeholder="Phone" />
+        <CompactInput value={email} onChange={setEmail} placeholder="Email" />
+        <CompactInput
+          value={website}
+          onChange={setWebsite}
+          placeholder="Website"
+        />
+        <CompactInput value={city} onChange={setCity} placeholder="City" />
+        <CompactInput
+          value={address}
+          onChange={setAddress}
+          placeholder="Address"
+        />
+        <CompactInput
+          value={category}
+          onChange={setCategory}
+          placeholder="Category"
+        />
+      </div>
+
+      <div className="mt-4 grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+        <InsightCard label="Views" value={views} />
+        <InsightCard label="Connections" value={connections} />
+        <InsightCard label="Rating" value={`${rating} / 5`} />
+        <InsightCard label="Reviews" value={reviewsCount} />
+      </div>
+    </section>
+  );
+}
+
+function CompactInput({
+  value,
+  onChange,
+  placeholder,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  placeholder: string;
+}) {
+  return (
+    <input
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      placeholder={placeholder}
+      className="w-full rounded-2xl border border-[var(--sendio-border)] bg-white px-3 py-2.5 text-sm font-semibold text-[var(--sendio-text)] outline-none transition placeholder:text-gray-400 focus:border-[var(--sendio-accent)]"
+    />
   );
 }
 
@@ -216,10 +215,13 @@ function InsightCard({
   value: string | number;
 }) {
   return (
-    <div className="border border-[#e2cfbc] rounded-xl p-4 flex justify-between items-center">
-      <span className="text-sm text-[#2c3e2f]">{label}</span>
-
-      <span className="text-sm font-semibold text-[#2c3e2f]">{value}</span>
+    <div className="rounded-2xl border border-[var(--sendio-border)] bg-[var(--sendio-soft)] px-3 py-2">
+      <p className="text-[10px] font-black uppercase tracking-[0.14em] text-[var(--sendio-muted)]">
+        {label}
+      </p>
+      <p className="mt-1 text-sm font-black text-[var(--sendio-text)]">
+        {value}
+      </p>
     </div>
   );
 }

@@ -88,49 +88,57 @@ export default function CompanyStatus() {
 
   const statusStyle =
     status === 'available'
-      ? 'bg-green-100 text-green-700 border-green-300'
+      ? 'border-green-200 bg-green-50 text-green-700'
       : status === 'busy'
-        ? 'bg-yellow-100 text-yellow-700 border-yellow-300'
-        : 'bg-red-100 text-red-700 border-red-300';
+        ? 'border-amber-200 bg-amber-50 text-amber-700'
+        : 'border-red-200 bg-red-50 text-red-700';
 
   return (
-    <div className="bg-white rounded-2xl border border-[#e2cfbc] p-6">
-      <h2 className="text-2xl font-bold text-[#2c3e2f] mb-6">
-        Company Status
-      </h2>
+    <section className="rounded-[22px] border border-[var(--sendio-border)] bg-white p-4 shadow-sm">
+      <div className="mb-3 flex items-center justify-between gap-3">
+        <div>
+          <p className="text-[10px] font-black uppercase tracking-[0.18em] text-[var(--sendio-muted)]">
+            Status
+          </p>
+          <h2 className="mt-1 text-base font-black text-[var(--sendio-text)]">
+            Availability
+          </h2>
+        </div>
 
-      <div className="space-y-4">
+        <span
+          className={`rounded-full border px-3 py-1 text-[11px] font-black uppercase ${statusStyle}`}
+        >
+          {status}
+        </span>
+      </div>
+
+      <div className="space-y-3">
         <select
           value={status}
           onChange={(e) => setStatus(e.target.value)}
-          className="w-full border border-[#e2cfbc] rounded-xl px-4 py-3"
+          className="w-full rounded-2xl border border-[var(--sendio-border)] bg-white px-3 py-2.5 text-sm font-bold text-[var(--sendio-text)] outline-none focus:border-[var(--sendio-accent)]"
         >
           <option value="available">Available</option>
           <option value="busy">Busy</option>
           <option value="closed">Closed</option>
         </select>
 
-        <div
-          className={`inline-flex px-4 py-2 rounded-full border text-sm font-semibold ${statusStyle}`}
-        >
-          {status.toUpperCase()}
-        </div>
-
         <input
           value={workingHours}
           onChange={(e) => setWorkingHours(e.target.value)}
           placeholder="Working hours"
-          className="w-full border border-[#e2cfbc] rounded-xl px-4 py-3"
+          className="w-full rounded-2xl border border-[var(--sendio-border)] bg-white px-3 py-2.5 text-sm font-semibold text-[var(--sendio-text)] outline-none placeholder:text-gray-400 focus:border-[var(--sendio-accent)]"
         />
 
         <button
+          type="button"
           onClick={saveStatus}
           disabled={loading}
-          className="bg-[#c49a6c] text-white px-5 py-3 rounded-xl disabled:opacity-60"
+          className="w-full rounded-full bg-[var(--sendio-accent)] px-4 py-2 text-xs font-black text-[var(--sendio-accent-text)] disabled:opacity-60"
         >
-          {loading ? 'Saving...' : 'Save Status'}
+          {loading ? 'Saving...' : 'Save status'}
         </button>
       </div>
-    </div>
+    </section>
   );
 }

@@ -10,6 +10,8 @@ type Project = {
   description: string | null;
 };
 
+const PROJECT_DESCRIPTION_LIMIT = 600;
+
 export default function CompanyProjects() {
   const [companyId, setCompanyId] = useState<string | null>(null);
   const [projects, setProjects] = useState<Project[]>([]);
@@ -27,7 +29,8 @@ export default function CompanyProjects() {
     const { data, error } = await supabase
       .from('company_projects')
       .select('*')
-      .eq('company_id', currentCompanyId);
+      .eq('company_id', currentCompanyId)
+      .order('id', { ascending: true });
 
     if (error) {
       console.error(error);
@@ -50,7 +53,7 @@ export default function CompanyProjects() {
       await loadProjects(id);
     }
 
-    initProjects();
+    void initProjects();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -64,15 +67,13 @@ export default function CompanyProjects() {
 
     setLoading(true);
 
-    const { error } = await supabase
-      .from('company_projects')
-      .insert([
-        {
-          company_id: companyId,
-          title: title.trim(),
-          description: description.trim() || null,
-        },
-      ]);
+    const { error } = await supabase.from('company_projects').insert([
+      {
+        company_id: companyId,
+        title: title.trim(),
+        description: description.trim() || null,
+      },
+    ]);
 
     if (error) {
       console.error(error);
@@ -104,68 +105,84 @@ export default function CompanyProjects() {
   }
 
   return (
-    <div className="bg-white rounded-2xl border border-[#e2cfbc] p-6">
-      <h2 className="text-2xl font-bold text-[#2c3e2f] mb-6">
-        Company Projects
-      </h2>
+    <section className="rounded-[22px] border border-[var(--sendio-border)] bg-white p-4 shadow-sm">
+      <div className="mb-3 flex items-center justify-between gap-3">
+        <div>
+          <p className="text-[10px] font-black uppercase tracking-[0.18em] text-[var(--sendio-muted)]">
+            Projects
+          </p>
+          <h2 className="mt-1 text-base font-black text-[var(--sendio-text)]">
+            Work highlights
+          </h2>
+        </div>
 
-      <div className="space-y-3 mb-6">
+        <span className="rounded-full bg-[var(--sendio-soft)] px-3 py-1 text-[11px] font-black text-[var(--sendio-text)]">
+          {projects.length}
+        </span>
+      </div>
+
+      <div className="grid gap-2 md:grid-cols-[0.8fr_1fr_auto]">
         <input
           value={title}
           onChange={(e) => setTitle(e.target.value)}
           placeholder="Project title"
-          className="w-full border border-[#e2cfbc] rounded-xl px-4 py-3"
+          className="rounded-2xl border border-[var(--sendio-border)] bg-white px-3 py-2.5 text-sm font-semibold text-[var(--sendio-text)] outline-none placeholder:text-gray-400 focus:border-[var(--sendio-accent)]"
         />
 
-        <textarea
+        <input
           value={description}
+          maxLength={PROJECT_DESCRIPTION_LIMIT}
           onChange={(e) => setDescription(e.target.value)}
-          placeholder="Project description"
-          className="w-full border border-[#e2cfbc] rounded-xl px-4 py-3 h-28 resize-none"
+          placeholder="Short description"
+          className="rounded-2xl border border-[var(--sendio-border)] bg-white px-3 py-2.5 text-sm font-semibold text-[var(--sendio-text)] outline-none placeholder:text-gray-400 focus:border-[var(--sendio-accent)]"
         />
 
         <button
-          onClick={addProject}
+          type="button"
+          onClick={() => void addProject()}
           disabled={loading}
-          className="bg-[#c49a6c] text-white px-5 py-3 rounded-xl"
+          className="rounded-full bg-[var(--sendio-accent)] px-4 py-2 text-xs font-black text-[var(--sendio-accent-text)] disabled:opacity-60"
         >
-          {loading ? 'Saving...' : 'Add Project'}
+          {loading ? '...' : 'Add'}
         </button>
       </div>
 
-      <div className="space-y-3">
-        {projects.map((project) => (
-          <div
-            key={project.id}
-            className="border border-[#e2cfbc] rounded-xl p-4"
-          >
-            <div className="flex justify-between items-start gap-4">
-              <div>
-                <h3 className="font-semibold text-[#2c3e2f]">
-                  {project.title}
-                </h3>
-
-                <p className="text-gray-500 mt-1">
-                  {project.description || 'No description'}
-                </p>
-              </div>
-
-              <button
-                onClick={() => deleteProject(project.id)}
-                className="text-red-500"
-              >
-                Delete
-              </button>
-            </div>
-          </div>
-        ))}
-
-        {projects.length === 0 && (
-          <div className="text-gray-400">
+      <div className="mt-4 space-y-2">
+        {projects.length === 0 ? (
+          <p className="rounded-2xl border border-dashed border-[var(--sendio-border)] bg-[var(--sendio-soft)] px-3 py-2 text-xs font-bold text-[var(--sendio-muted)]">
             No projects added yet.
-          </div>
+          </p>
+        ) : (
+          projects.map((project) => (
+            <article
+              key={project.id}
+              className="rounded-2xl border border-[var(--sendio-border)] bg-[var(--sendio-soft)] px-3 py-2"
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <h3 className="truncate text-sm font-black text-[var(--sendio-text)]">
+                    {project.title}
+                  </h3>
+
+                  {project.description ? (
+                    <p className="mt-1 line-clamp-2 text-xs font-semibold leading-5 text-[var(--sendio-muted)]">
+                      {project.description}
+                    </p>
+                  ) : null}
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => void deleteProject(project.id)}
+                  className="shrink-0 rounded-full bg-white px-2 py-1 text-[11px] font-black text-red-500"
+                >
+                  Delete
+                </button>
+              </div>
+            </article>
+          ))
         )}
       </div>
-    </div>
+    </section>
   );
 }
