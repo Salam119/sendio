@@ -754,8 +754,25 @@ useEffect(() => {
             <span>{getServiceIcon(service)}</span>
             <p>{service.name}</p>
           </div>
+        {!selectedProvider && !currentUserId ? (
+  <section className="loginLockBox">
+    <p>
+      Please sign in first. You can browse services, but sending a service
+      request requires a real Sendio account.
+    </p>
 
-          {selectedProvider ? (
+    <div className="loginLockActions">
+      <button type="button" className="nextButton" onClick={requestLogin}>
+        Sign in
+      </button>
+
+      <Link href="/register" className="backButton">
+        Create account
+      </Link>
+    </div>
+  </section>
+) : null}
+          {selectedProvider && currentUserId ? (
             <section className="directRequestGrid">
               <article className="directPanel providerPanel">
                 <p className="panelLabel">Selected provider</p>
@@ -944,7 +961,7 @@ useEffect(() => {
             </section>
           ) : null}
 
-          {!selectedProvider && step === 0 ? (
+          {!selectedProvider && currentUserId && step === 0 ? (
             <section className="stepBlock">
               <h1>What type of service do you need?</h1>
 
@@ -976,7 +993,7 @@ useEffect(() => {
             </section>
           ) : null}
 
-          {!selectedProvider && step === 1 ? (
+          {!selectedProvider && currentUserId && step === 1 ? (
             <section className="stepBlock">
               <h1>When do you need this work done?</h1>
 
@@ -1001,7 +1018,7 @@ useEffect(() => {
             </section>
           ) : null}
 
-          {!selectedProvider && step === 2 ? (
+          {!selectedProvider && currentUserId && step === 2 ? (
             <section className="stepBlock">
               <h1>What is your project address?</h1>
 
@@ -1022,7 +1039,7 @@ useEffect(() => {
             </section>
           ) : null}
 
-          {!selectedProvider && step === 3 ? (
+          {!selectedProvider && currentUserId && step === 3 ? (
             <section className="stepBlock">
               <h1>Please tell us a little about your project.</h1>
 
@@ -1060,7 +1077,7 @@ useEffect(() => {
             </section>
           ) : null}
 
-          {!selectedProvider && step === 4 ? (
+          {!selectedProvider && currentUserId && step === 4 ? (
             <section className="stepBlock">
               <h1>We have matching providers in your area.</h1>
               <p className="subText">Add your contact details so providers can respond to your request.</p>
@@ -1101,7 +1118,7 @@ useEffect(() => {
                 className="tinyCancelButton"
                 onClick={() => router.push('/services')}
               >
-                تراجع عن الطلب
+                
               </button>
             </>
           ) : null}
