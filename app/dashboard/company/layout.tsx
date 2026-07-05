@@ -83,7 +83,7 @@ export default function CompanyDashboardLayout({
   const [checking, setChecking] = useState(true);
   const [paletteIndex, setPaletteIndex] = useState(0);
 
-  useEffect(() => {
+    useEffect(() => {
     async function checkSession() {
       const {
         data: { user },
@@ -95,46 +95,65 @@ export default function CompanyDashboardLayout({
         return;
       }
 
-      const userType = user.user_metadata?.user_type;
+      const { data: profileData, error: profileError } = await supabase
+        .from('profiles')
+        .select('user_type')
+        .eq('id', user.id)
+        .maybeSingle();
 
-      if (userType !== 'company') {
-        router.replace('/');
+      if (profileError) {
+        console.error('Profile lookup error:', profileError.message);
+      }
+
+      const userType =
+        (profileData as { user_type: string | null } | null)?.user_type ??
+        user.user_metadata?.user_type ??
+        null;
+
+      if (userType === 'company') {
+        setChecking(false);
         return;
       }
 
-      setChecking(false);
+      if (userType === 'worker') {
+        router.replace('/dashboard/worker');
+        return;
+      }
+
+      router.replace('/');
     }
 
     void checkSession();
   }, [router]);
+useEffect(() => {
+  const savedTheme = window.localStorage.getItem('sendio-company-theme');
+  const savedMode = window.localStorage.getItem('sendio-company-theme-mode');
 
-  useEffect(() => {
-    const savedTheme = window.localStorage.getItem('sendio-company-theme');
-    const savedMode = window.localStorage.getItem('sendio-company-theme-mode');
+  if (savedTheme) {
+    const savedIndex = themePalettes.findIndex(
+      (palette) => palette.name === savedTheme,
+    );
 
-    if (savedTheme) {
-      const savedIndex = themePalettes.findIndex(
-        (palette) => palette.name === savedTheme,
-      );
-
-      if (savedIndex >= 0) {
+    if (savedIndex >= 0) {
+      window.setTimeout(() => {
         setPaletteIndex(savedIndex);
-      }
+      }, 0);
     }
+  }
 
-    if (savedMode === 'fixed') {
-      return;
-    }
+  if (savedMode === 'fixed') {
+    return;
+  }
 
-    const interval = window.setInterval(() => {
-      setPaletteIndex((current) => (current + 1) % themePalettes.length);
-    }, 120000);
+  const interval = window.setInterval(() => {
+    setPaletteIndex((current) => (current + 1) % themePalettes.length);
+  }, 120000);
 
-    return () => {
-      window.clearInterval(interval);
-    };
-  }, []);
-
+  return () => {
+    window.clearInterval(interval);
+  };
+}, []);
+ 
   const activePalette = themePalettes[paletteIndex];
 
   const themeStyle = useMemo(

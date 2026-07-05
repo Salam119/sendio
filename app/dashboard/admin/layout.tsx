@@ -78,13 +78,23 @@ export default function AdminDashboardLayout({
     <main className="min-h-screen bg-[#f6f3ef] text-[#173321]">
       <header className="border-b border-[#e2d3bf] bg-white">
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-4">
-          <button
-            type="button"
-            onClick={() => router.push('/')}
-            className="rounded-full border border-[#d8c3a5] px-4 py-2 text-sm font-bold text-[#173321] hover:bg-[#fbf8f3]"
-          >
-            Back
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => router.back()}
+              className="rounded-full border border-[#d8c3a5] px-4 py-2 text-sm font-bold text-[#173321] hover:bg-[#fbf8f3]"
+            >
+              Back
+            </button>
+
+            <button
+              type="button"
+              onClick={() => router.push('/')}
+              className="rounded-full border border-[#d8c3a5] px-4 py-2 text-sm font-bold text-[#173321] hover:bg-[#fbf8f3]"
+            >
+              Home
+            </button>
+          </div>
 
           <div className="text-center">
             <h1 className="text-lg font-black text-[#0b5b2f]">

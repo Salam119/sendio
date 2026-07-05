@@ -640,7 +640,7 @@ export default function AdminDashboardPage() {
           <Link href="/dashboard/admin/moderation">Moderation</Link>
           <Link href="/dashboard/admin/ads">Ads</Link>
           <Link href="/dashboard/admin/admins">Admin Team</Link>
-          <a href="#logs">Logs</a>
+          <Link href="/dashboard/admin/logs">Logs</Link>
         </nav>
 
         <div className="sideUser">
@@ -659,7 +659,6 @@ export default function AdminDashboardPage() {
             <p>Manage Sendio platform with control and confidence.</p>
           </div>
 
-          <div className="protectedPill">🛡 Super admin is protected and cannot be changed.</div>
         </header>
 
         {notice ? <p className="notice">{notice}</p> : null}
@@ -870,25 +869,20 @@ export default function AdminDashboardPage() {
           </aside>
         </section>
 
-        <section className="panel shortcutsPanel" id="settings">
+        <section className="panel shortcutsPanel">
           <h2>Platform Shortcuts</h2>
-          <p>Quick access to key control panels.</p>
+          <p>Quick access to active admin control panels and platform overview.</p>
 
           <div className="shortcutsGrid">
             <Link href="/dashboard/admin/ads">📣 Ads Control</Link>
             <Link href="/dashboard/admin/moderation">💬 Moderation</Link>
-            <Link href="/dashboard/admin/settings">⚙ Platform Settings</Link>
-            <span>🏢 Companies</span>
-            <span>👥 Workers</span>
-            <span>👤 Clients</span>
-            <span>⭐ Reviews</span>
-            <span id="logs">📋 Logs</span>
+            <Link href="/dashboard/admin/admins">👥 Admin Team</Link>
+            <a href="#overview">🏢 Companies</a>
+            <a href="#overview">👥 Workers</a>
+            <a href="#overview">👤 Clients</a>
+            <a href="#overview">⭐ Reviews</a>
+            <a href="#overview">📋 Overview</a>
           </div>
-        </section>
-
-        <section className="protectedNote">
-          🔒 The Super Admin account is permanently protected and cannot be removed,
-          downgraded, or replaced by any admin.
         </section>
       </section>
 
@@ -1009,14 +1003,6 @@ const styles = `
     font-weight: 700;
   }
 
-  .protectedPill {
-    background: #fff4dd;
-    border: 1px solid rgba(196, 151, 103, 0.28);
-    border-radius: 12px;
-    padding: 12px 14px;
-    font-size: 13px;
-    font-weight: 850;
-  }
 
   .notice,
   .error {
@@ -1325,14 +1311,6 @@ const styles = `
     font-weight: 900;
   }
 
-  .protectedNote {
-    margin-top: 16px;
-    background: rgba(16, 86, 64, 0.08);
-    border: 1px solid rgba(16, 86, 64, 0.16);
-    border-radius: 14px;
-    padding: 13px 15px;
-    font-weight: 850;
-  }
 
   .loadingCard {
     width: min(720px, calc(100% - 40px));

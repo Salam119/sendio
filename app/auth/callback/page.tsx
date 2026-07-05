@@ -4,6 +4,8 @@ import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 
+type UserType = 'client' | 'worker' | 'company';
+
 type ProfileData = {
   user_type: string | null;
 };
@@ -15,6 +17,47 @@ function getHashValue(key: string) {
   const params = new URLSearchParams(hash);
 
   return params.get(key);
+}
+
+function isUserType(value: string | null | undefined): value is UserType {
+  return value === 'client' || value === 'worker' || value === 'company';
+}
+
+function getRedirectPath(userType: UserType | null) {
+  if (userType === 'company') return '/dashboard/company';
+  if (userType === 'worker') return '/dashboard/worker';
+
+  return '/';
+}
+
+function getPendingUserType() {
+  if (typeof window === 'undefined') return null;
+
+  const pendingType = window.localStorage.getItem('sendio_pending_user_type');
+
+  if (isUserType(pendingType)) {
+    return pendingType;
+  }
+
+  return null;
+}
+
+function clearPendingAuthData() {
+  if (typeof window === 'undefined') return;
+
+  window.localStorage.removeItem('sendio_pending_user_type');
+  window.localStorage.removeItem('sendio_pending_auth_provider');
+}
+
+function saveAccountTypeNotice(savedType: UserType, requestedType: UserType) {
+  if (typeof window === 'undefined') return;
+
+  if (savedType === requestedType) return;
+
+  window.sessionStorage.setItem(
+    'sendio_account_type_notice',
+    `This email is already registered as ${savedType}. You have been redirected to your existing account.`,
+  );
 }
 
 export default function AuthCallbackPage() {
@@ -63,27 +106,75 @@ export default function AuthCallbackPage() {
           return;
         }
 
-        const { data: profileData } = await supabase
+        const pendingUserType = getPendingUserType();
+
+        const { data: profileData, error: profileError } = await supabase
           .from('profiles')
           .select('user_type')
           .eq('id', user.id)
           .maybeSingle();
 
-        const userType =
-          (profileData as ProfileData | null)?.user_type ??
-          user.user_metadata?.user_type ??
-          null;
+        if (profileError) {
+          console.error('Profile lookup error:', profileError.message);
+        }
 
-        if (userType === 'company') {
-          router.replace('/dashboard/company');
+        const profileUserType = (profileData as ProfileData | null)?.user_type;
+        const metadataUserType = user.user_metadata?.user_type;
+
+        const savedUserType = isUserType(profileUserType)
+          ? profileUserType
+          : isUserType(metadataUserType)
+            ? metadataUserType
+            : null;
+
+        if (savedUserType) {
+          if (pendingUserType && pendingUserType !== savedUserType) {
+            saveAccountTypeNotice(savedUserType, pendingUserType);
+          }
+
+          clearPendingAuthData();
+          router.replace(getRedirectPath(savedUserType));
           return;
         }
 
-        if (userType === 'worker') {
-          router.replace('/dashboard/worker');
+        if (pendingUserType) {
+          const { error: metadataError } = await supabase.auth.updateUser({
+            data: {
+              user_type: pendingUserType,
+              full_name:
+                user.user_metadata?.full_name ??
+                user.user_metadata?.name ??
+                user.email ??
+                '',
+            },
+          });
+
+          if (metadataError) {
+            console.error('Update user metadata error:', metadataError.message);
+          }
+
+          const { error: profileUpsertError } = await supabase
+            .from('profiles')
+            .upsert(
+              {
+                id: user.id,
+                user_type: pendingUserType,
+              },
+              {
+                onConflict: 'id',
+              },
+            );
+
+          if (profileUpsertError) {
+            console.error('Profile upsert error:', profileUpsertError.message);
+          }
+
+          clearPendingAuthData();
+          router.replace(getRedirectPath(pendingUserType));
           return;
         }
 
+        clearPendingAuthData();
         router.replace('/');
       } catch (error) {
         console.error('Unexpected auth callback error:', error);
@@ -91,12 +182,12 @@ export default function AuthCallbackPage() {
       }
     }
 
-    handleCallback();
+    void handleCallback();
   }, [router]);
 
   return (
-    <div className="min-h-screen bg-[#fefcf5] flex items-center justify-center">
-      <p className="text-[#2c3e2f] font-semibold">
+    <div className="flex min-h-screen items-center justify-center bg-[#fefcf5]">
+      <p className="font-semibold text-[#2c3e2f]">
         Confirming your account...
       </p>
     </div>

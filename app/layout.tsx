@@ -1,5 +1,7 @@
 import "./globals.css";
 import SendioThemeController from "@/components/sendio/SendioThemeController";
+import GlobalMessageAlert from "@/components/GlobalMessageAlert";
+import GlobalAccountNotice from "@/components/GlobalAccountNotice";
 import { CompanyProvider } from "@/context/CompanyContext";
 
 export default function RootLayout({
@@ -11,7 +13,11 @@ export default function RootLayout({
     <html lang="en">
       <body>
         <SendioThemeController />
-        <CompanyProvider>{children}</CompanyProvider>
+        <CompanyProvider>
+          {children}
+          <GlobalMessageAlert />
+          <GlobalAccountNotice />
+        </CompanyProvider>
       </body>
     </html>
   );

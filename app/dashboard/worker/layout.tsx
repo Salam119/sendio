@@ -14,8 +14,6 @@ type WorkerPublicLinkData = {
   slug: string | null;
 };
 
-type WorkerMenu = 'profile' | 'manage' | 'requests' | 'account' | null;
-
 function getWorkerPublicHref(worker: WorkerPublicLinkData) {
   const identifier = worker.slug?.trim() || worker.id;
 
@@ -27,32 +25,60 @@ export default function WorkerDashboardLayout({
 }: WorkerDashboardLayoutProps) {
   const router = useRouter();
 
+  const [checking, setChecking] = useState(true);
   const [workerPublicHref, setWorkerPublicHref] = useState<string | null>(null);
-  const [openMenu, setOpenMenu] = useState<WorkerMenu>(null);
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [menuNotice, setMenuNotice] = useState('');
 
   const menuAreaRef = useRef<HTMLDivElement | null>(null);
 
-  function toggleMenu(menu: Exclude<WorkerMenu, null>) {
-    setOpenMenu((current) => (current === menu ? null : menu));
+  function closeMenu() {
+    setIsMenuOpen(false);
   }
 
-  function closeMenus() {
-    setOpenMenu(null);
+  function handleFixProfileColors() {
+    window.localStorage.setItem('sendio-worker-profile-theme-mode', 'fixed');
+    window.localStorage.setItem('sendio-theme-mode', 'fixed');
+    setMenuNotice('Profile colors fixed.');
+    setIsMenuOpen(false);
   }
 
   useEffect(() => {
     let isMounted = true;
 
-    async function loadWorkerPublicLink() {
+    async function checkSessionAndLoadWorker() {
       const {
         data: { user },
+        error,
       } = await supabase.auth.getUser();
 
-      if (!user) {
-        if (isMounted) {
-          setWorkerPublicHref(null);
-        }
+      if (error || !user) {
+        router.replace('/login');
+        return;
+      }
 
+      const { data: profileData, error: profileError } = await supabase
+        .from('profiles')
+        .select('user_type')
+        .eq('id', user.id)
+        .maybeSingle();
+
+      if (profileError) {
+        console.error('Profile lookup error:', profileError.message);
+      }
+
+      const userType =
+        (profileData as { user_type: string | null } | null)?.user_type ??
+        user.user_metadata?.user_type ??
+        null;
+
+      if (userType === 'company') {
+        router.replace('/dashboard/company');
+        return;
+      }
+
+      if (userType !== 'worker') {
+        router.replace('/');
         return;
       }
 
@@ -64,20 +90,21 @@ export default function WorkerDashboardLayout({
 
       if (!isMounted) return;
 
-      if (!data) {
+      if (data) {
+        setWorkerPublicHref(getWorkerPublicHref(data as WorkerPublicLinkData));
+      } else {
         setWorkerPublicHref(null);
-        return;
       }
 
-      setWorkerPublicHref(getWorkerPublicHref(data as WorkerPublicLinkData));
+      setChecking(false);
     }
 
-    loadWorkerPublicLink();
+    void checkSessionAndLoadWorker();
 
     return () => {
       isMounted = false;
     };
-  }, []);
+  }, [router]);
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
@@ -85,13 +112,13 @@ export default function WorkerDashboardLayout({
         menuAreaRef.current &&
         !menuAreaRef.current.contains(event.target as Node)
       ) {
-        setOpenMenu(null);
+        setIsMenuOpen(false);
       }
     }
 
     function handleEscape(event: KeyboardEvent) {
       if (event.key === 'Escape') {
-        setOpenMenu(null);
+        setIsMenuOpen(false);
       }
     }
 
@@ -105,19 +132,24 @@ export default function WorkerDashboardLayout({
   }, []);
 
   const handleLogout = async () => {
-    closeMenus();
+    closeMenu();
     await supabase.auth.signOut();
     router.replace('/login');
   };
 
-  const dropdownButtonClass =
-    'flex h-[34px] min-w-24 items-center justify-center rounded-full bg-[#23a7f1] px-[14px] text-[13px] font-bold text-white shadow-sm transition hover:bg-[#168ed1]';
+  const menuItemClass =
+    'block w-full px-4 py-2 text-left text-sm font-bold text-gray-700 hover:bg-[#e8f9f2]';
 
-  const dropdownMenuClass =
-    'absolute right-0 top-[42px] z-50 min-w-52 overflow-hidden rounded-2xl border border-gray-100 bg-white py-2 text-sm shadow-xl';
+  if (checking) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-white">
+        <p className="text-sm font-semibold text-gray-700">
+          Checking session...
+        </p>
+      </div>
+    );
+  }
 
-  const dropdownItemClass =
-    'block w-full px-4 py-2 text-left font-semibold text-gray-700 hover:bg-[#e8f9f2]';
   return (
     <main className="min-h-screen bg-gray-50 text-gray-900">
       <header className="border-b bg-white">
@@ -130,192 +162,87 @@ export default function WorkerDashboardLayout({
               </p>
             </div>
 
-            <div ref={menuAreaRef} className="flex flex-wrap items-center gap-2">
-              <div className="relative">
-                <button
-                  type="button"
-                  onClick={() => toggleMenu('profile')}
-                  aria-expanded={openMenu === 'profile'}
-                  className={dropdownButtonClass}
-                >
-                  Profile ▼
-                </button>
+            <div ref={menuAreaRef} className="relative flex items-center justify-end">
+              <button
+                type="button"
+                onClick={() => setIsMenuOpen((current) => !current)}
+                aria-expanded={isMenuOpen}
+                aria-label="Open worker menu"
+                className="flex h-11 w-11 items-center justify-center rounded-full bg-[#23a7f1] text-2xl font-black leading-none text-white shadow-sm transition hover:bg-[#168ed1]"
+              >
+                ☰
+              </button>
 
-                {openMenu === 'profile' ? (
-                  <div className={dropdownMenuClass}>
-                    {workerPublicHref ? (
-                      <Link
-                        href={workerPublicHref}
-                        onClick={closeMenus}
-                        className={dropdownItemClass}
-                      >
-                        View Public Profile
-                      </Link>
-                    ) : null}
+              {isMenuOpen ? (
+                <div className="absolute right-0 top-14 z-50 min-w-64 overflow-hidden rounded-3xl border border-gray-100 bg-white py-2 shadow-xl">
+                  <Link
+                    href="/dashboard/worker"
+                    onClick={closeMenu}
+                    className={menuItemClass}
+                  >
+                    Worker Dashboard
+                  </Link>
 
+                  {workerPublicHref ? (
                     <Link
-                      href="/dashboard/worker#basic-info"
-                      onClick={closeMenus}
-                      className={dropdownItemClass}
+                      href={workerPublicHref}
+                      onClick={closeMenu}
+                      className={menuItemClass}
                     >
-                      Edit Profile
+                      Open Public Profile
                     </Link>
+                  ) : null}
 
-                    <Link
-                      href="/dashboard/worker#profile-photo"
-                      onClick={closeMenus}
-                      className={dropdownItemClass}
-                    >
-                      Upload Profile Photo
-                    </Link>
+                  <Link
+                    href="/dashboard/worker/requests"
+                    onClick={closeMenu}
+                    className={menuItemClass}
+                  >
+                    Requests
+                  </Link>
 
-                    <Link
-                      href="/dashboard/worker#profile-completion"
-                      onClick={closeMenus}
-                      className={dropdownItemClass}
-                    >
-                      Profile Completion
-                    </Link>
-                  </div>
-                ) : null}
-              </div>
+                  <Link
+                    href="/dashboard/worker/cv"
+                    onClick={closeMenu}
+                    className={menuItemClass}
+                  >
+                    CV
+                  </Link>
 
-              <div className="relative">
-                <button
-                  type="button"
-                  onClick={() => toggleMenu('manage')}
-                  aria-expanded={openMenu === 'manage'}
-                  className={dropdownButtonClass}
-                >
-                  Manage ▼
-                </button>
+                  <button
+                    type="button"
+                    onClick={handleFixProfileColors}
+                    className={menuItemClass}
+                  >
+                    Fix Profile Colors
+                  </button>
 
-                {openMenu === 'manage' ? (
-                  <div className={dropdownMenuClass}>
-                    <Link
-                      href="/dashboard/worker#services"
-                      onClick={closeMenus}
-                      className={dropdownItemClass}
-                    >
-                      Services
-                    </Link>
+                  <Link href="/" onClick={closeMenu} className={menuItemClass}>
+                    Back to Home
+                  </Link>
 
-                    <Link
-                      href="/dashboard/worker#skills"
-                      onClick={closeMenus}
-                      className={dropdownItemClass}
-                    >
-                      Skills
-                    </Link>
+                  <div className="my-2 border-t border-gray-100" />
 
-                    <Link
-                      href="/dashboard/worker#media-management"
-                      onClick={closeMenus}
-                      className={dropdownItemClass}
-                    >
-                      Achievements Gallery
-                    </Link>
-
-                    <Link
-                      href="/dashboard/worker#reviews"
-                      onClick={closeMenus}
-                      className={dropdownItemClass}
-                    >
-                      Reviews
-                    </Link>
-                  </div>
-                ) : null}
-              </div>
-
-              <div className="relative">
-                <button
-                  type="button"
-                  onClick={() => toggleMenu('requests')}
-                  aria-expanded={openMenu === 'requests'}
-                  className={dropdownButtonClass}
-                >
-                  Requests ▼
-                </button>
-
-                {openMenu === 'requests' ? (
-                  <div className={dropdownMenuClass}>
-                    <Link
-                      href="/dashboard/worker#latest-requests"
-                      onClick={closeMenus}
-                      className={dropdownItemClass}
-                    >
-                      Latest Requests
-                    </Link>
-
-                    <Link
-                      href="/dashboard/worker/requests"
-                      onClick={closeMenus}
-                      className={dropdownItemClass}
-                    >
-                      Open All Requests
-                    </Link>
-
-                    <Link
-                      href="/dashboard/worker/requests"
-                      onClick={closeMenus}
-                      className={dropdownItemClass}
-                    >
-                      Unread Requests
-                    </Link>
-
-                    <Link
-                      href="/dashboard/worker/requests"
-                      onClick={closeMenus}
-                      className={dropdownItemClass}
-                    >
-                      Archived Requests
-                    </Link>
-                  </div>
-                ) : null}
-              </div>
-
-              <div className="relative">
-                <button
-                  type="button"
-                  onClick={() => toggleMenu('account')}
-                  aria-expanded={openMenu === 'account'}
-                  className={dropdownButtonClass}
-                >
-                  Account ▼
-                </button>
-
-                {openMenu === 'account' ? (
-                  <div className={dropdownMenuClass}>
-                    <Link
-                      href="/dashboard/worker"
-                      onClick={closeMenus}
-                      className={dropdownItemClass}
-                    >
-                      Dashboard Home
-                    </Link>
-
-                    <Link
-                      href="/"
-                      onClick={closeMenus}
-                      className={dropdownItemClass}
-                    >
-                      Back to Home
-                    </Link>
-
-                    <button
-                      type="button"
-                      onClick={handleLogout}
-                      className={dropdownItemClass}
-                    >
-                      Logout
-                    </button>
-                  </div>
-                ) : null}
-              </div>
+                  <button
+                    type="button"
+                    onClick={handleLogout}
+                    className="block w-full px-4 py-2 text-left text-sm font-black text-red-600 hover:bg-red-50"
+                  >
+                    Logout
+                  </button>
+                </div>
+              ) : null}
             </div>
           </div>
+
+          {menuNotice ? (
+            <div className="w-fit rounded-full border border-emerald-100 bg-emerald-50 px-4 py-2 text-xs font-black text-emerald-700">
+              {menuNotice}
+            </div>
+          ) : null}
         </div>
       </header>
+
       <section className="mx-auto max-w-6xl px-4 py-6">{children}</section>
     </main>
   );

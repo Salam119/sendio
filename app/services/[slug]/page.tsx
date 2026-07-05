@@ -207,12 +207,20 @@ export default function ServiceRequestPage() {
   const [lastName, setLastName] = useState('');
   const [phone, setPhone] = useState('');
   const [email, setEmail] = useState('');
+useEffect(() => {
+  if (!cityFromQuery) {
+    return;
+  }
 
-  useEffect(() => {
-    if (cityFromQuery) {
-      setCity(cityFromQuery);
-    }
-  }, [cityFromQuery]);
+  const timeout = window.setTimeout(() => {
+    setCity(cityFromQuery);
+  }, 0);
+
+  return () => {
+    window.clearTimeout(timeout);
+  };
+}, [cityFromQuery]);
+ 
 
   useEffect(() => {
     let active = true;

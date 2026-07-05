@@ -204,6 +204,7 @@ function getTableName(kind: ArchiveKind) {
 
 export default function AdminModerationPage() {
   const [adminRole, setAdminRole] = useState<AdminRole | null>(null);
+  const [currentUserId, setCurrentUserId] = useState('');
   const [items, setItems] = useState<AdminArchiveItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [pageStatus, setPageStatus] = useState<string | null>(null);
@@ -272,6 +273,7 @@ export default function AdminModerationPage() {
       if (!isMounted) return;
 
       if (userError || !user) {
+        setCurrentUserId('');
         setAdminRole(null);
         setItems([]);
         setPageStatus('You must be signed in as an admin.');
@@ -298,6 +300,7 @@ export default function AdminModerationPage() {
       const role = profileData?.role;
 
       if (role !== 'admin' && role !== 'super_admin') {
+        setCurrentUserId('');
         setAdminRole(null);
         setItems([]);
         setPageStatus('Access denied. Admin role is required.');
@@ -305,6 +308,7 @@ export default function AdminModerationPage() {
         return;
       }
 
+      setCurrentUserId(user.id);
       setAdminRole(role);
 
       const [companyMessagesResult, workerRequestsResult] = await Promise.all([
@@ -480,6 +484,129 @@ export default function AdminModerationPage() {
     };
   }, [refreshKey]);
 
+  function getAuditMetadata(
+    item: AdminArchiveItem,
+    extraMetadata?: Record<string, unknown>
+  ) {
+    return {
+      kind: item.kind,
+      owner_id: item.owner_id,
+      owner_name: item.owner_name,
+      owner_href: item.owner_href,
+      client_id: item.client_id,
+      client_name: item.name,
+      client_email: item.email,
+      client_phone: item.phone,
+      message_text: item.message,
+      source_channel: item.source_channel,
+      source_url: item.source_url,
+      event_type: item.event_type,
+      moderation_status: item.moderation_status,
+      admin_note: item.admin_note,
+      created_at: item.created_at,
+      ...extraMetadata,
+    };
+  }
+
+  async function writeModerationAuditLog({
+    item,
+    action,
+    description,
+    category = 'messages',
+    targetTable,
+    targetId,
+    metadata,
+  }: {
+    item?: AdminArchiveItem;
+    action: string;
+    description: string;
+    category?: string;
+    targetTable?: string;
+    targetId?: string | null;
+    metadata?: Record<string, unknown>;
+  }) {
+    if (!currentUserId) return;
+
+    await supabase.from('admin_audit_logs').insert({
+      actor_id: currentUserId,
+      actor_role: adminRole,
+      action,
+      target_table: targetTable || (item ? getTableName(item.kind) : 'admin_moderation'),
+      target_id: targetId ?? item?.id ?? null,
+      description,
+      category,
+      status: 'success',
+      metadata: item ? getAuditMetadata(item, metadata) : metadata || {},
+    });
+  }
+
+  async function handleOpenSource(item: AdminArchiveItem) {
+    if (adminRole !== 'super_admin' || !canOpenSourceUrl(item.source_url)) return;
+
+    await writeModerationAuditLog({
+      item,
+      action: 'moderation_open_source',
+      category: 'messages',
+      description: `Opened source for ${getEventLabel(item.event_type, item.kind)} from ${item.name || item.email}.`,
+      metadata: {
+        opened_url: item.source_url,
+      },
+    });
+
+    if (item.source_url?.startsWith('http')) {
+      window.open(item.source_url, '_blank', 'noopener,noreferrer');
+      return;
+    }
+
+    window.location.href = item.source_url || '#';
+  }
+
+  async function handleReplyByEmail(item: AdminArchiveItem) {
+    if (adminRole !== 'super_admin' || !canReplyByEmail(item.email)) return;
+
+    await writeModerationAuditLog({
+      item,
+      action: 'moderation_reply_email',
+      category: 'messages',
+      description: `Opened email reply to ${item.email} for ${getEventLabel(item.event_type, item.kind)}.`,
+      metadata: {
+        reply_email: item.email,
+      },
+    });
+
+    window.location.href = getReplyMailUrl(item);
+  }
+
+  async function handleCallClient(item: AdminArchiveItem) {
+    const phoneReplyUrl = getPhoneReplyUrl(item.phone);
+
+    if (adminRole !== 'super_admin' || !phoneReplyUrl) return;
+
+    await writeModerationAuditLog({
+      item,
+      action: 'moderation_call_client',
+      category: 'messages',
+      description: `Started phone call to ${item.phone} for ${getEventLabel(item.event_type, item.kind)}.`,
+      metadata: {
+        phone: item.phone,
+      },
+    });
+
+    window.location.href = phoneReplyUrl;
+  }
+
+  async function handleOpenOwnerProfile(item: AdminArchiveItem) {
+    await writeModerationAuditLog({
+      item,
+      action: 'moderation_open_owner_profile',
+      category: 'moderation',
+      description: `Opened ${getKindLabel(item.kind).toLowerCase()} profile "${item.owner_name}".`,
+      metadata: {
+        opened_profile: item.owner_href,
+      },
+    });
+  }
+
   async function updateItem(
     item: AdminArchiveItem,
     payload: Record<string, string | boolean | null>
@@ -515,7 +642,16 @@ export default function AdminModerationPage() {
   }
 
   async function markAdminRead(item: AdminArchiveItem) {
-    await updateItem(item, { admin_seen: true });
+    const updated = await updateItem(item, { admin_seen: true });
+
+    if (!updated) return;
+
+    await writeModerationAuditLog({
+      item,
+      action: 'moderation_mark_read',
+      category: 'messages',
+      description: `Marked ${getEventLabel(item.event_type, item.kind)} from ${item.name || item.email} as read by admin.`,
+    });
   }
 
   async function markAllAdminRead() {
@@ -543,26 +679,65 @@ export default function AdminModerationPage() {
       return;
     }
 
+    const markedCount = items.filter(
+      (item) => item.admin_seen === false && item.is_archived !== true
+    ).length;
+
     setItems((currentItems) =>
       currentItems.map((item) => ({
         ...item,
         admin_seen: true,
       }))
     );
+
+    await writeModerationAuditLog({
+      action: 'moderation_mark_all_read',
+      category: 'messages',
+      targetTable: 'admin_moderation',
+      targetId: null,
+      description: `Marked all admin moderation messages as read. Total affected: ${markedCount}.`,
+      metadata: {
+        affected_count: markedCount,
+      },
+    });
   }
 
   async function archiveItem(item: AdminArchiveItem) {
-    await updateItem(item, {
+    const updated = await updateItem(item, {
       is_archived: true,
       admin_seen: true,
       status: 'archived',
     });
+
+    if (!updated) return;
+
+    await writeModerationAuditLog({
+      item,
+      action: 'moderation_archive',
+      category: 'messages',
+      description: `Archived ${getEventLabel(item.event_type, item.kind)} from ${item.name || item.email}.`,
+      metadata: {
+        new_status: 'archived',
+      },
+    });
   }
 
   async function restoreItem(item: AdminArchiveItem) {
-    await updateItem(item, {
+    const updated = await updateItem(item, {
       is_archived: false,
       status: 'seen',
+    });
+
+    if (!updated) return;
+
+    await writeModerationAuditLog({
+      item,
+      action: 'moderation_restore',
+      category: 'messages',
+      description: `Restored ${getEventLabel(item.event_type, item.kind)} from ${item.name || item.email}.`,
+      metadata: {
+        new_status: 'seen',
+      },
     });
   }
 
@@ -571,10 +746,23 @@ export default function AdminModerationPage() {
     const moderationStatus = moderationStatusDrafts[key] || 'normal';
     const adminNote = adminNoteDrafts[key]?.trim() || null;
 
-    await updateItem(item, {
+    const updated = await updateItem(item, {
       moderation_status: moderationStatus,
       admin_note: adminNote,
       admin_seen: true,
+    });
+
+    if (!updated) return;
+
+    await writeModerationAuditLog({
+      item,
+      action: 'moderation_save_note',
+      category: 'moderation',
+      description: `Saved moderation status "${moderationStatus}" for ${getEventLabel(item.event_type, item.kind)} from ${item.name || item.email}.`,
+      metadata: {
+        new_moderation_status: moderationStatus,
+        new_admin_note: adminNote,
+      },
     });
   }
 
@@ -784,6 +972,9 @@ export default function AdminModerationPage() {
                             <Link
                               href={item.owner_href}
                               target="_blank"
+                              onClick={() => {
+                                void handleOpenOwnerProfile(item);
+                              }}
                               className="font-bold text-[#0b5b2f]"
                             >
                               {item.owner_name}
@@ -801,41 +992,40 @@ export default function AdminModerationPage() {
                     </div>
 
                     <div className="flex flex-wrap gap-2">
-                      {sourceUrlAvailable ? (
-                        <a
-                          href={item.source_url ?? '#'}
-                          target={
-                            item.source_url?.startsWith('http')
-                              ? '_blank'
-                              : undefined
-                          }
-                          rel={
-                            item.source_url?.startsWith('http')
-                              ? 'noreferrer'
-                              : undefined
-                          }
+                      {adminRole === 'super_admin' && sourceUrlAvailable ? (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            void handleOpenSource(item);
+                          }}
                           className="rounded-full bg-white px-3 py-2 text-xs font-bold text-[#0b5b2f] border border-[#e2cfbc] hover:bg-[#f1e6d8]"
                         >
                           Open Source
-                        </a>
+                        </button>
                       ) : null}
 
-                      {canReplyByEmail(item.email) ? (
-                        <a
-                          href={getReplyMailUrl(item)}
+                      {adminRole === 'super_admin' && canReplyByEmail(item.email) ? (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            void handleReplyByEmail(item);
+                          }}
                           className="rounded-full bg-[#f1e6d8] px-3 py-2 text-xs font-bold text-[#0b5b2f] border border-[#e2cfbc] hover:bg-[#eadcc9]"
                         >
                           Reply by Email
-                        </a>
+                        </button>
                       ) : null}
 
-                      {phoneReplyUrl ? (
-                        <a
-                          href={phoneReplyUrl}
+                      {adminRole === 'super_admin' && phoneReplyUrl ? (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            void handleCallClient(item);
+                          }}
                           className="rounded-full bg-[#f1e6d8] px-3 py-2 text-xs font-bold text-[#0b5b2f] border border-[#e2cfbc] hover:bg-[#eadcc9]"
                         >
                           Call Client
-                        </a>
+                        </button>
                       ) : null}
 
                       {unread ? (

@@ -11,16 +11,13 @@ type GalleryItem = {
   type: string | null;
 };
 
-const MAX_IMAGES = 4;
-const MAX_VIDEOS = 4;
+const MAX_MEDIA = 4;
 
 export default function CompanyGallery() {
   const [companyId, setCompanyId] = useState<string | null>(null);
   const [items, setItems] = useState<GalleryItem[]>([]);
   const [loading, setLoading] = useState(false);
-
-  const images = items.filter((item) => item.type === 'image');
-  const videos = items.filter((item) => item.type === 'video');
+  const [previewItem, setPreviewItem] = useState<GalleryItem | null>(null);
 
   async function loadGallery(id?: string) {
     const currentCompanyId = id || companyId;
@@ -31,7 +28,7 @@ export default function CompanyGallery() {
 
     const { data, error } = await supabase
       .from('company_gallery')
-      .select('*')
+      .select('id, url, type')
       .eq('company_id', currentCompanyId)
       .order('id', { ascending: true });
 
@@ -60,7 +57,7 @@ export default function CompanyGallery() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  async function uploadFile(file: File, type: 'image' | 'video') {
+  async function uploadFile(file: File) {
     if (!file) return;
 
     if (!companyId) {
@@ -68,15 +65,14 @@ export default function CompanyGallery() {
       return;
     }
 
-    if (type === 'image' && images.length >= MAX_IMAGES) {
-      alert(`Maximum ${MAX_IMAGES} images`);
+    if (items.length >= MAX_MEDIA) {
+      alert('Gallery is full. Delete or replace one media item before uploading a new file.');
       return;
     }
 
-    if (type === 'video' && videos.length >= MAX_VIDEOS) {
-      alert(`Maximum ${MAX_VIDEOS} videos`);
-      return;
-    }
+    const type: 'image' | 'video' = file.type.startsWith('video/')
+      ? 'video'
+      : 'image';
 
     setLoading(true);
 
@@ -106,6 +102,7 @@ export default function CompanyGallery() {
     ]);
 
     if (dbError) {
+      await supabase.storage.from('company-gallery').remove([filePath]);
       alert(dbError.message);
       setLoading(false);
       return;
@@ -116,6 +113,12 @@ export default function CompanyGallery() {
   }
 
   async function deleteItem(id: string, url: string) {
+    const confirmed = window.confirm('Delete this media item?');
+
+    if (!confirmed) {
+      return;
+    }
+
     const path = url.split('/company-gallery/')[1];
 
     if (path) {
@@ -135,18 +138,17 @@ export default function CompanyGallery() {
     await loadGallery();
   }
 
-  function handleUploadChange(
-    event: ChangeEvent<HTMLInputElement>,
-    type: 'image' | 'video'
-  ) {
+  function handleUploadChange(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
 
     if (file) {
-      void uploadFile(file, type);
+      void uploadFile(file);
     }
 
     event.target.value = '';
   }
+
+  const slots = Array.from({ length: MAX_MEDIA }, (_, index) => items[index]);
 
   return (
     <section className="rounded-[22px] border border-[var(--sendio-border)] bg-white p-4 shadow-sm">
@@ -155,80 +157,41 @@ export default function CompanyGallery() {
           <p className="text-[10px] font-black uppercase tracking-[0.18em] text-[var(--sendio-muted)]">
             Gallery
           </p>
+
           <h2 className="mt-1 text-base font-black text-[var(--sendio-text)]">
             Images and videos
           </h2>
+
+          <p className="mt-1 text-[11px] font-semibold text-[var(--sendio-muted)]">
+            Upload up to {MAX_MEDIA} media items. Use them later for logo, ads, showcase, or public profile.
+          </p>
         </div>
 
-        <div className="flex gap-2 text-[11px] font-black text-[var(--sendio-muted)]">
-          <span className="rounded-full bg-[var(--sendio-soft)] px-3 py-1">
-            {images.length}/{MAX_IMAGES} images
+        <div className="flex items-center gap-2">
+          <span className="rounded-full bg-[var(--sendio-soft)] px-3 py-1 text-[11px] font-black text-[var(--sendio-muted)]">
+            {items.length}/{MAX_MEDIA} media
           </span>
-          <span className="rounded-full bg-[var(--sendio-soft)] px-3 py-1">
-            {videos.length}/{MAX_VIDEOS} videos
-          </span>
+
+          <label
+            className={`inline-flex items-center justify-center rounded-full px-4 py-2 text-[11px] font-black shadow-sm transition ${
+              loading || items.length >= MAX_MEDIA
+                ? 'cursor-not-allowed bg-gray-100 text-gray-400'
+                : 'cursor-pointer bg-[var(--sendio-accent)] text-[var(--sendio-accent-text)] hover:opacity-90'
+            }`}
+          >
+            {loading ? 'Uploading...' : 'Upload media'}
+            <input
+              type="file"
+              accept="image/*,video/*"
+              disabled={loading || items.length >= MAX_MEDIA}
+              onChange={handleUploadChange}
+              className="hidden"
+            />
+          </label>
         </div>
       </div>
 
-      <GalleryRow
-        title="Images"
-        type="image"
-        items={images}
-        maxItems={MAX_IMAGES}
-        loading={loading}
-        onUpload={handleUploadChange}
-        onDelete={deleteItem}
-      />
-
-      <div className="mt-4">
-        <GalleryRow
-          title="Videos"
-          type="video"
-          items={videos}
-          maxItems={MAX_VIDEOS}
-          loading={loading}
-          onUpload={handleUploadChange}
-          onDelete={deleteItem}
-        />
-      </div>
-    </section>
-  );
-}
-
-function GalleryRow({
-  title,
-  type,
-  items,
-  maxItems,
-  loading,
-  onUpload,
-  onDelete,
-}: {
-  title: string;
-  type: 'image' | 'video';
-  items: GalleryItem[];
-  maxItems: number;
-  loading: boolean;
-  onUpload: (
-    event: ChangeEvent<HTMLInputElement>,
-    type: 'image' | 'video'
-  ) => void;
-  onDelete: (id: string, url: string) => Promise<void>;
-}) {
-  const slots = Array.from({ length: maxItems }, (_, index) => items[index]);
-
-  return (
-    <div>
-      <div className="mb-2 flex items-center justify-between">
-        <h3 className="text-sm font-black text-[var(--sendio-text)]">
-          {title}
-        </h3>
-
-        <span className="text-[11px] font-bold text-[var(--sendio-muted)]">
-          {items.length}/{maxItems}
-        </span>
-      </div>
-
+    
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
         {slots.map((item, index) =>
           item ? (
@@ -236,26 +199,39 @@ function GalleryRow({
               key={item.id}
               className="group relative aspect-square overflow-hidden rounded-2xl border border-[var(--sendio-border)] bg-[var(--sendio-soft)]"
             >
-              {type === 'image' ? (
-                <Image
-                  src={item.url}
-                  alt="Company gallery image"
-                  fill
-                  className="object-cover"
-                  sizes="(max-width: 768px) 50vw, 25vw"
-                />
-              ) : (
+              <button
+                type="button"
+                onClick={() => setPreviewItem(item)}
+                className="absolute inset-0 z-10"
+                title="Open preview"
+              >
+                <span className="sr-only">Open preview</span>
+              </button>
+
+              {item.type === 'video' ? (
                 <video
                   src={item.url}
-                  controls
-                  className="h-full w-full bg-black object-contain"
+                  muted
+                  playsInline
+                  className="h-full w-full object-contain"
+                />
+              ) : (
+                <Image
+                  src={item.url}
+                  alt="Company gallery media"
+                  fill
+                  className="object-contain"
+                  sizes="(max-width: 768px) 50vw, 25vw"
                 />
               )}
 
               <button
                 type="button"
-                onClick={() => void onDelete(item.id, item.url)}
-                className="absolute right-2 top-2 flex h-7 w-7 items-center justify-center rounded-full bg-white/95 text-sm font-black text-red-500 shadow-sm"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  void deleteItem(item.id, item.url);
+                }}
+                className="absolute right-2 top-2 z-20 flex h-7 w-7 items-center justify-center rounded-full bg-white/95 text-sm font-black text-red-500 shadow-sm transition hover:bg-red-50"
                 title="Delete"
               >
                 ×
@@ -263,28 +239,63 @@ function GalleryRow({
             </div>
           ) : (
             <label
-              key={`${type}-${index}`}
-              className="flex aspect-square cursor-pointer flex-col items-center justify-center rounded-2xl border border-dashed border-[var(--sendio-border)] bg-[var(--sendio-soft)] p-3 text-center transition hover:bg-[var(--sendio-soft-hover)]"
+              key={`empty-${index}`}
+              className={`flex aspect-square flex-col items-center justify-center rounded-2xl border border-dashed border-[var(--sendio-border)] bg-[var(--sendio-soft)] p-3 text-center transition ${
+                loading || items.length >= MAX_MEDIA
+                  ? 'cursor-not-allowed opacity-60'
+                  : 'cursor-pointer hover:bg-[var(--sendio-soft-hover)]'
+              }`}
             >
               <span className="text-xl font-black text-[var(--sendio-text)]">
                 +
               </span>
 
               <span className="mt-1 text-[11px] font-black text-[var(--sendio-muted)]">
-                Upload {type}
+                Upload media
               </span>
 
               <input
                 type="file"
-                accept={type === 'image' ? 'image/*' : 'video/*'}
-                disabled={loading}
-                onChange={(event) => onUpload(event, type)}
+                accept="image/*,video/*"
+                disabled={loading || items.length >= MAX_MEDIA}
+                onChange={handleUploadChange}
                 className="hidden"
               />
             </label>
           )
         )}
       </div>
+{previewItem ? (
+  <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
+    <div className="relative inline-flex max-h-[92vh] max-w-[92vw] items-center justify-center rounded-[24px] bg-white p-3 shadow-2xl">
+      <button
+        type="button"
+        onClick={() => setPreviewItem(null)}
+        className="absolute -right-3 -top-3 z-20 flex h-9 w-9 items-center justify-center rounded-full bg-white text-lg font-black text-[var(--sendio-text)] shadow-sm"
+        title="Close"
+      >
+        ×
+      </button>
+
+      {previewItem.type === 'video' ? (
+        <video
+          src={previewItem.url}
+          controls
+          className="max-h-[86vh] max-w-[88vw] rounded-2xl object-contain"
+        />
+      ) : (
+        <Image
+          src={previewItem.url}
+          alt="Company gallery preview"
+          width={1200}
+          height={1200}
+          className="h-auto max-h-[86vh] w-auto max-w-[88vw] rounded-2xl object-contain"
+        />
+      )}
     </div>
+  </div>
+) : null}
+     
+    </section>
   );
 }

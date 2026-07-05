@@ -1,7 +1,7 @@
 'use client';
 
 import Image from 'next/image';
-import { useEffect, useState } from 'react';
+import { ChangeEvent, useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { getCompanyId } from '@/lib/getCompanyId';
 
@@ -17,6 +17,14 @@ type Company = {
   rating: number | null;
   reviews_count: number | null;
 };
+
+type GalleryItem = {
+  id: string;
+  url: string;
+  type: string | null;
+};
+
+const MAX_MEDIA = 4;
 
 function cleanPhone(phone: string | null) {
   return phone?.replace(/[^\d+]/g, '') ?? '';
@@ -36,49 +44,47 @@ function getStatusStyle(status: string | null) {
 
 export default function CompanyHeader() {
   const [company, setCompany] = useState<Company | null>(null);
+  const [companyId, setCompanyId] = useState<string | null>(null);
+  const [galleryItems, setGalleryItems] = useState<GalleryItem[]>([]);
   const [loading, setLoading] = useState(false);
+  const [showGalleryPicker, setShowGalleryPicker] = useState(false);
 
+  const galleryImages = galleryItems.filter((item) => item.type === 'image');
   useEffect(() => {
     let isMounted = true;
 
-    void getCompanyId().then(async (companyId) => {
+    void getCompanyId().then(async (id) => {
       if (!isMounted) return;
 
-      if (!companyId) {
+      if (!id) {
         alert('Company not found for this user.');
         return;
       }
 
-      const { data, error } = await supabase
-        .from('companies')
-        .select(
-          'name, category, city, address, status, logo, phone, email, rating, reviews_count'
-        )
-        .eq('id', companyId)
-        .single();
+      setCompanyId(id);
 
-      if (!isMounted) return;
-
-      if (error) {
-        alert(error.message);
-        return;
-      }
-
-      setCompany(data as Company);
+      await Promise.all([reloadCompany(id), loadGallery(id)]);
     });
 
     return () => {
       isMounted = false;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  async function reloadCompany(companyId: string) {
+  async function reloadCompany(id?: string) {
+    const currentCompanyId = id || companyId;
+
+    if (!currentCompanyId) {
+      return;
+    }
+
     const { data, error } = await supabase
       .from('companies')
       .select(
         'name, category, city, address, status, logo, phone, email, rating, reviews_count'
       )
-      .eq('id', companyId)
+      .eq('id', currentCompanyId)
       .single();
 
     if (error) {
@@ -89,16 +95,74 @@ export default function CompanyHeader() {
     setCompany(data as Company);
   }
 
-  async function uploadLogo(file: File) {
+  async function loadGallery(id?: string) {
+    const currentCompanyId = id || companyId;
+
+    if (!currentCompanyId) {
+      return;
+    }
+
+    const { data, error } = await supabase
+      .from('company_gallery')
+      .select('id, url, type')
+      .eq('company_id', currentCompanyId)
+      .order('id', { ascending: true });
+
+    if (error) {
+      console.error(error);
+      return;
+    }
+
+    setGalleryItems(data || []);
+  }
+
+  async function setLogoFromGallery(url: string) {
+    if (!companyId) {
+      alert('Company ID not found.');
+      return;
+    }
+
     setLoading(true);
 
-    const companyId = await getCompanyId();
+    const { error } = await supabase
+      .from('companies')
+      .update({
+        logo: url,
+      })
+      .eq('id', companyId);
 
-    if (!companyId) {
-      alert('Company not found for this user.');
+    if (error) {
+      alert(error.message);
       setLoading(false);
       return;
     }
+
+    await reloadCompany(companyId);
+    setShowGalleryPicker(false);
+    setLoading(false);
+  }
+
+  async function uploadLogo(file: File) {
+    if (!file) return;
+
+    if (!companyId) {
+      alert('Company ID not found.');
+      return;
+    }
+
+    if (!file.type.startsWith('image/')) {
+      alert('Please upload an image file for the logo.');
+      return;
+    }
+
+    if (galleryItems.length >= MAX_MEDIA) {
+      alert(
+        'Gallery is full. Delete or replace one media item before uploading a new logo.'
+      );
+      return;
+    }
+
+    setLoading(true);
 
     const fileName = `${Date.now()}-${file.name}`;
     const filePath = `${companyId}/logo/${fileName}`;
@@ -117,27 +181,66 @@ export default function CompanyHeader() {
       data: { publicUrl },
     } = supabase.storage.from('company-gallery').getPublicUrl(filePath);
 
-    const { error } = await supabase
+    const { data: insertedGalleryItem, error: galleryError } = await supabase
+      .from('company_gallery')
+      .insert([
+        {
+          company_id: companyId,
+          url: publicUrl,
+          type: 'image',
+        },
+      ])
+      .select('id, url, type')
+      .single();
+
+    if (galleryError) {
+      await supabase.storage.from('company-gallery').remove([filePath]);
+      alert(galleryError.message);
+      setLoading(false);
+      return;
+    }
+
+    const { error: companyError } = await supabase
       .from('companies')
       .update({
         logo: publicUrl,
       })
       .eq('id', companyId);
 
-    if (error) {
-      alert(error.message);
+    if (companyError) {
+      if (insertedGalleryItem?.id) {
+        await supabase
+          .from('company_gallery')
+          .delete()
+          .eq('id', insertedGalleryItem.id);
+      }
+
+      await supabase.storage.from('company-gallery').remove([filePath]);
+
+      alert(companyError.message);
       setLoading(false);
       return;
     }
 
-    await reloadCompany(companyId);
+    await Promise.all([reloadCompany(companyId), loadGallery(companyId)]);
     setLoading(false);
+  }
+
+  function handleLogoUploadChange(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+
+    if (file) {
+      void uploadLogo(file);
+    }
+
+    event.target.value = '';
   }
 
   const phoneNumber = cleanPhone(company?.phone ?? null);
   const rating = Number(company?.rating || 0).toFixed(1);
   const reviewsCount = company?.reviews_count || 0;
   const status = company?.status || 'available';
+  const galleryIsFull = galleryItems.length >= MAX_MEDIA;
 
   return (
     <section className="rounded-[24px] border border-[var(--sendio-border)] bg-white p-4 shadow-sm">
@@ -149,7 +252,7 @@ export default function CompanyHeader() {
                 src={company.logo}
                 alt="Company logo"
                 fill
-                className="object-cover"
+                className="object-contain p-2"
                 sizes="96px"
               />
             ) : (
@@ -221,23 +324,102 @@ export default function CompanyHeader() {
           </div>
         </div>
 
-        <label className="inline-flex cursor-pointer items-center justify-center rounded-full bg-[var(--sendio-accent)] px-4 py-2 text-xs font-black text-[var(--sendio-accent-text)] shadow-sm transition hover:opacity-90">
-          {loading ? 'Uploading...' : 'Upload Logo'}
-          <input
-            type="file"
-            accept="image/*"
-            disabled={loading}
-            onChange={(e) => {
-              const file = e.target.files?.[0];
-
-              if (file) {
-                void uploadLogo(file);
+        <div className="flex flex-col gap-2 sm:items-end">
+          <div className="flex flex-wrap gap-2">
+            <label
+              className={`inline-flex items-center justify-center rounded-full px-4 py-2 text-xs font-black shadow-sm transition ${
+                loading || galleryIsFull
+                  ? 'cursor-not-allowed bg-gray-100 text-gray-400'
+                  : 'cursor-pointer bg-[var(--sendio-accent)] text-[var(--sendio-accent-text)] hover:opacity-90'
+              }`}
+              title={
+                galleryIsFull
+                  ? 'Gallery is full. Delete or replace one media item first.'
+                  : 'Upload logo'
               }
-            }}
-            className="hidden"
-          />
-        </label>
+            >
+              {loading ? 'Uploading...' : 'Upload Logo'}
+              <input
+                type="file"
+                accept="image/*"
+                disabled={loading || galleryIsFull}
+                onChange={handleLogoUploadChange}
+                className="hidden"
+              />
+            </label>
+
+            <button
+              type="button"
+              onClick={() => setShowGalleryPicker((current) => !current)}
+              disabled={loading || galleryImages.length === 0}
+              className={`inline-flex items-center justify-center rounded-full px-4 py-2 text-xs font-black shadow-sm transition ${
+                loading || galleryImages.length === 0
+                  ? 'cursor-not-allowed bg-gray-100 text-gray-400'
+                  : 'bg-[var(--sendio-soft)] text-[var(--sendio-text)] hover:bg-[var(--sendio-soft-hover)]'
+              }`}
+            >
+              Choose from Gallery
+            </button>
+          </div>
+
+          <span className="text-[11px] font-bold text-[var(--sendio-muted)]">
+            Gallery: {galleryItems.length}/{MAX_MEDIA}
+          </span>
+
+        
+        </div>
       </div>
+
+      {showGalleryPicker ? (
+        <div className="mt-4 rounded-[22px] border border-[var(--sendio-border)] bg-[var(--sendio-soft)] p-3">
+          <div className="mb-3 flex items-center justify-between gap-3">
+            <div>
+              <p className="text-[10px] font-black uppercase tracking-[0.18em] text-[var(--sendio-muted)]">
+                Choose logo
+              </p>
+              <h3 className="text-sm font-black text-[var(--sendio-text)]">
+                Select an image from Gallery
+              </h3>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setShowGalleryPicker(false)}
+              className="flex h-8 w-8 items-center justify-center rounded-full bg-white text-sm font-black text-[var(--sendio-text)] shadow-sm"
+              title="Close"
+            >
+              ×
+            </button>
+          </div>
+
+          {galleryImages.length > 0 ? (
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+              {galleryImages.map((item) => (
+                <button
+                  key={item.id}
+                  type="button"
+                  onClick={() => void setLogoFromGallery(item.url)}
+                  disabled={loading}
+                  className="relative aspect-square overflow-hidden rounded-2xl border border-[var(--sendio-border)] bg-white transition hover:scale-[1.02]"
+                  title="Use as logo"
+                >
+                  <Image
+                    src={item.url}
+                    alt="Gallery image"
+                    fill
+                    className="object-contain p-2"
+                    sizes="(max-width: 640px) 50vw, 25vw"
+                  />
+                </button>
+              ))}
+            </div>
+          ) : (
+            <p className="rounded-2xl bg-white px-4 py-3 text-xs font-bold text-[var(--sendio-muted)]">
+              No gallery images yet. Upload an image first.
+            </p>
+          )}
+        </div>
+      ) : null}
     </section>
   );
 }

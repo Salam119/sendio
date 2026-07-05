@@ -2,7 +2,8 @@
 
 import Image from 'next/image';
 import Link from 'next/link';
-import { FormEvent, useEffect, useState } from 'react';
+import { FormEvent, useEffect, useMemo, useState } from 'react';
+import type { CSSProperties } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   FaArrowLeft,
@@ -13,8 +14,10 @@ import {
   FaHouse,
   FaInstagram,
   FaLinkedinIn,
-  FaLock,
+  FaLocationDot,
   FaPhone,
+  FaStar,
+  FaTrash,
   FaWhatsapp,
   FaXTwitter,
 } from 'react-icons/fa6';
@@ -52,12 +55,14 @@ type WorkerService = {
   title: string;
   description: string | null;
   price: string | null;
+  created_at?: string | null;
 };
 
 type WorkerSkill = {
   id: string;
   worker_id: string;
   title: string;
+  created_at?: string | null;
 };
 
 type WorkerGalleryItem = {
@@ -140,11 +145,52 @@ type SocialForm = {
   website: string;
 };
 
+type SendioStyle = CSSProperties & {
+  '--sendio-page': string;
+  '--sendio-hero': string;
+  '--sendio-soft': string;
+  '--sendio-button': string;
+  '--sendio-button-hover': string;
+  '--sendio-border': string;
+  '--sendio-accent': string;
+};
+
 const WORKER_MEDIA_BUCKET = 'worker-media';
 const MAX_ACHIEVEMENT_IMAGES = 4;
 const MAX_ACHIEVEMENT_VIDEOS = 2;
 const MAX_IMAGE_SIZE_MB = 5;
 const MAX_VIDEO_SIZE_MB = 50;
+const FREE_GALLERY_ITEMS_LIMIT = MAX_ACHIEVEMENT_IMAGES;
+
+const SENDIO_THEMES = [
+  {
+    page: '#ffffff',
+    hero: '#e8f9f2',
+    soft: '#f7fffb',
+    button: '#23a7f1',
+    buttonHover: '#168ed1',
+    border: '#dbeafe',
+    accent: '#c7f7f1',
+  },
+  {
+    page: '#ffffff',
+    hero: '#eef6ff',
+    soft: '#f8fbff',
+    button: '#23a7f1',
+    buttonHover: '#168ed1',
+    border: '#dbeafe',
+    accent: '#dbeafe',
+  },
+  {
+    page: '#ffffff',
+    hero: '#f4edff',
+    soft: '#fbf8ff',
+    button: '#23a7f1',
+    buttonHover: '#168ed1',
+    border: '#eadcff',
+    accent: '#e8d8ff',
+  },
+];
 
 function formatDate(value: string | null) {
   if (!value) return 'Not available';
@@ -229,6 +275,18 @@ function getMailUrl(value: string | null) {
   return `mailto:${email}`;
 }
 
+function getMapsUrl(value: string | null) {
+  if (!value) return null;
+
+  const address = value.trim();
+
+  if (!address) return null;
+
+  return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
+    address
+  )}`;
+}
+
 function getFileExtension(file: File) {
   const fileNameParts = file.name.split('.');
   const extension = fileNameParts[fileNameParts.length - 1];
@@ -308,8 +366,30 @@ function validateVideoFile(file: File) {
   return null;
 }
 
+function cardClass(extra = '') {
+  return `overflow-hidden rounded-2xl border border-[var(--sendio-border)] bg-white p-5 shadow-sm ${extra}`;
+}
+
+function inputClass(extra = '') {
+  return `h-11 w-full rounded-[24px] border-0 bg-[var(--sendio-soft)] px-4 text-sm font-semibold text-slate-800 outline-none ring-1 ring-[var(--sendio-border)] focus:ring-2 focus:ring-[var(--sendio-button)] ${extra}`;
+}
+
+function textareaClass(extra = '') {
+  return `w-full resize-none rounded-[24px] border-0 bg-[var(--sendio-soft)] px-4 py-3 text-sm font-semibold text-slate-800 outline-none ring-1 ring-[var(--sendio-border)] focus:ring-2 focus:ring-[var(--sendio-button)] ${extra}`;
+}
+
+function buttonClass(extra = '') {
+  return `inline-flex h-11 items-center justify-center rounded-[24px] bg-[var(--sendio-button)] px-5 text-sm font-black text-white shadow-sm transition hover:bg-[var(--sendio-button-hover)] disabled:cursor-not-allowed disabled:opacity-60 ${extra}`;
+}
+
+function softButtonClass(extra = '') {
+  return `inline-flex h-10 items-center justify-center rounded-full border border-[var(--sendio-border)] bg-[var(--sendio-soft)] px-4 text-xs font-black text-slate-700 transition hover:ring-2 hover:ring-[var(--sendio-button)] ${extra}`;
+}
+
 export default function WorkerDashboardPage() {
   const router = useRouter();
+
+  const [paletteIndex, setPaletteIndex] = useState(0);
 
   const [worker, setWorker] = useState<WorkerProfile | null>(null);
   const [services, setServices] = useState<WorkerService[]>([]);
@@ -365,56 +445,36 @@ export default function WorkerDashboardPage() {
 
   const [loading, setLoading] = useState(true);
   const [savingProfile, setSavingProfile] = useState(false);
+  const [savingAdresse, setSavingAdresse] = useState(false);
+  const [savingContact, setSavingContact] = useState(false);
   const [savingService, setSavingService] = useState(false);
   const [savingSkill, setSavingSkill] = useState(false);
-  const [savingSocial, setSavingSocial] = useState(false);
   const [uploadingGallery, setUploadingGallery] = useState(false);
 
+  const [previewItem, setPreviewItem] = useState<WorkerGalleryItem | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
-  const imageGalleryCount = gallery.filter(
-    (item) => item.type === 'image'
-  ).length;
+  const theme = SENDIO_THEMES[paletteIndex];
 
-  const videoGalleryCount = gallery.filter(
-    (item) => item.type === 'video'
-  ).length;
+  const styleVars: SendioStyle = {
+    '--sendio-page': theme.page,
+    '--sendio-hero': theme.hero,
+    '--sendio-soft': theme.soft,
+    '--sendio-button': theme.button,
+    '--sendio-button-hover': theme.buttonHover,
+    '--sendio-border': theme.border,
+    '--sendio-accent': theme.accent,
+  };
 
-  const imageItems = gallery.filter((item) => item.type === 'image');
-  const videoItems = gallery.filter((item) => item.type === 'video');
+  const publicProfileHref = useMemo(() => {
+    if (!worker) return '/dashboard/worker';
+
+    return `/workers/${encodeURIComponent(worker.slug?.trim() || worker.id)}`;
+  }, [worker]);
+
   const latestRequests = requests.slice(0, 3);
-  const profileCompletionItems = worker
-    ? [
-        { label: 'Profile Photo', complete: Boolean(worker.avatar) },
-        { label: 'Name', complete: Boolean(worker.name?.trim()) },
-        { label: 'Profession', complete: Boolean(worker.profession?.trim()) },
-        { label: 'City', complete: Boolean(worker.city?.trim()) },
-        { label: 'Status', complete: Boolean(worker.status?.trim()) },
-        {
-          label: 'Contact',
-          complete: Boolean(
-            worker.phone?.trim() ||
-              worker.email?.trim() ||
-              worker.website?.trim() ||
-              worker.whatsapp?.trim()
-          ),
-        },
-        { label: 'About', complete: Boolean(worker.description?.trim()) },
-        { label: 'Services', complete: services.length > 0 },
-        { label: 'Skills', complete: skills.length > 0 },
-        { label: 'Gallery', complete: gallery.length > 0 },
-      ]
-    : [];
-  const completedProfileItems = profileCompletionItems.filter(
-    (item) => item.complete
-  ).length;
-  const profileCompletionPercent = profileCompletionItems.length
-    ? Math.round((completedProfileItems / profileCompletionItems.length) * 100)
-    : 0;
-  const missingProfileItems = profileCompletionItems
-    .filter((item) => !item.complete)
-    .map((item) => item.label);
+  const gallerySlots = Array.from({ length: FREE_GALLERY_ITEMS_LIMIT });
 
   const contactActions = worker
     ? [
@@ -426,6 +486,11 @@ export default function WorkerDashboardPage() {
           icon: FaWhatsapp,
         },
         { label: 'Website', href: normalizeUrl(worker.website), icon: FaGlobe },
+        {
+          label: 'Maps',
+          href: getMapsUrl(worker.address),
+          icon: FaLocationDot,
+        },
         {
           label: 'Facebook',
           href: normalizeUrl(socialLinks?.facebook ?? null),
@@ -448,6 +513,43 @@ export default function WorkerDashboardPage() {
         },
       ].filter((action) => action.href)
     : [];
+
+  const profileCompletionItems = worker
+    ? [
+        { label: 'Avatar from Gallery', complete: Boolean(worker.avatar) },
+        { label: 'Name', complete: Boolean(worker.name?.trim()) },
+        { label: 'Profession', complete: Boolean(worker.profession?.trim()) },
+        { label: 'Description', complete: Boolean(worker.description?.trim()) },
+        { label: 'Adresse', complete: Boolean(worker.address?.trim()) },
+        { label: 'Phone', complete: Boolean(worker.phone?.trim()) },
+        { label: 'Contact', complete: contactActions.length > 0 },
+        { label: 'Services', complete: services.length > 0 },
+        { label: 'Skills', complete: skills.length > 0 },
+        { label: 'Gallery', complete: gallery.length > 0 },
+      ]
+    : [];
+
+  const completedProfileItems = profileCompletionItems.filter(
+    (item) => item.complete
+  ).length;
+
+  const profileCompletionPercent = profileCompletionItems.length
+    ? Math.round((completedProfileItems / profileCompletionItems.length) * 100)
+    : 0;
+
+  const missingProfileItems = profileCompletionItems.filter(
+    (item) => !item.complete
+  );
+
+  useEffect(() => {
+    const interval = window.setInterval(() => {
+      setPaletteIndex((current) => (current + 1) % SENDIO_THEMES.length);
+    }, 120000);
+
+    return () => {
+      window.clearInterval(interval);
+    };
+  }, []);
 
   function fillEditForm(workerData: WorkerProfile) {
     setEditForm({
@@ -529,18 +631,6 @@ export default function WorkerDashboardPage() {
 
     setUserId(user.id);
     setAuthEmail(user.email ?? null);
-
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('user_type')
-      .eq('id', user.id)
-      .maybeSingle();
-
-    if (profile?.user_type && profile.user_type !== 'worker') {
-      setError('This dashboard is only for worker accounts.');
-      setLoading(false);
-      return;
-    }
 
     const workerId = await getWorkerId();
 
@@ -672,6 +762,7 @@ export default function WorkerDashboardPage() {
         profession: profession || null,
         city: city || null,
         email: authEmail,
+        status: 'available',
       })
       .select('*')
       .single();
@@ -690,7 +781,7 @@ export default function WorkerDashboardPage() {
     setSavingProfile(false);
   }
 
-  async function handleUpdateProfile(event: FormEvent<HTMLFormElement>) {
+  async function handleSaveHeroProfile(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
     if (!worker) return;
@@ -720,11 +811,6 @@ export default function WorkerDashboardPage() {
         profession: editForm.profession.trim() || null,
         description: editForm.description.trim() || null,
         city: editForm.city.trim() || null,
-        address: editForm.address.trim() || null,
-        phone: editForm.phone.trim() || null,
-        email: editForm.email.trim() || null,
-        website: editForm.website.trim() || null,
-        whatsapp: editForm.whatsapp.trim() || null,
         status: editForm.status,
         working_hours: editForm.working_hours.trim() || null,
         experience_years: experienceYears,
@@ -743,15 +829,108 @@ export default function WorkerDashboardPage() {
 
     setWorker(updatedWorker);
     fillEditForm(updatedWorker);
-    setNotice('Profile updated successfully.');
+    setNotice('Profile information saved successfully.');
     setSavingProfile(false);
+  }
+
+  async function handleSaveAdresse(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    if (!worker) return;
+
+    setSavingAdresse(true);
+    setError(null);
+    setNotice(null);
+
+    const { data, error: updateError } = await supabase
+      .from('workers')
+      .update({
+        address: editForm.address.trim() || null,
+        phone: editForm.phone.trim() || null,
+      })
+      .eq('id', worker.id)
+      .select('*')
+      .single();
+
+    if (updateError) {
+      setError(updateError.message);
+      setSavingAdresse(false);
+      return;
+    }
+
+    const updatedWorker = data as WorkerProfile;
+
+    setWorker(updatedWorker);
+    fillEditForm(updatedWorker);
+    setNotice('Adresse saved successfully.');
+    setSavingAdresse(false);
+  }
+
+  async function handleSaveContact(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    if (!worker) return;
+
+    setSavingContact(true);
+    setError(null);
+    setNotice(null);
+
+    const { data: workerData, error: workerUpdateError } = await supabase
+      .from('workers')
+      .update({
+        email: editForm.email.trim() || null,
+        website: editForm.website.trim() || null,
+        whatsapp: editForm.whatsapp.trim() || null,
+      })
+      .eq('id', worker.id)
+      .select('*')
+      .single();
+
+    if (workerUpdateError) {
+      setError(workerUpdateError.message);
+      setSavingContact(false);
+      return;
+    }
+
+    const socialPayload = {
+      worker_id: worker.id,
+      facebook: socialForm.facebook.trim() || null,
+      instagram: socialForm.instagram.trim() || null,
+      linkedin: socialForm.linkedin.trim() || null,
+      x: socialForm.x.trim() || null,
+      website: socialForm.website.trim() || null,
+    };
+
+    const { data: socialData, error: socialError } = await supabase
+      .from('worker_social_links')
+      .upsert(socialPayload, {
+        onConflict: 'worker_id',
+      })
+      .select('*')
+      .single();
+
+    if (socialError) {
+      setError(socialError.message);
+      setSavingContact(false);
+      return;
+    }
+
+    const updatedWorker = workerData as WorkerProfile;
+    const updatedSocialLinks = socialData as WorkerSocialLinks;
+
+    setWorker(updatedWorker);
+    fillEditForm(updatedWorker);
+    setSocialLinks(updatedSocialLinks);
+    fillSocialForm(updatedSocialLinks);
+    setNotice('Contact links saved successfully.');
+    setSavingContact(false);
   }
 
   async function handleSetAvatarFromGallery(item: WorkerGalleryItem) {
     if (!worker) return;
 
     if (item.type !== 'image') {
-      setError('Profile photo must be selected from uploaded images only.');
+      setError('Profile photo must be selected from an image in Gallery.');
       return;
     }
 
@@ -776,7 +955,7 @@ export default function WorkerDashboardPage() {
 
     setWorker(updatedWorker);
     fillEditForm(updatedWorker);
-    setNotice('Profile photo selected from your uploaded images.');
+    setNotice('Profile photo selected from Gallery.');
   }
 
   async function handleStudioUpload(file: File | undefined) {
@@ -801,32 +980,17 @@ export default function WorkerDashboardPage() {
   ) {
     if (!worker || !file) return;
 
-    if (mediaType === 'image') {
-      if (imageGalleryCount >= MAX_ACHIEVEMENT_IMAGES) {
-        setError(`Maximum ${MAX_ACHIEVEMENT_IMAGES} achievement images allowed.`);
-        return;
-      }
-
-      const validationError = validateImageFile(file);
-
-      if (validationError) {
-        setError(validationError);
-        return;
-      }
+    if (gallery.length >= FREE_GALLERY_ITEMS_LIMIT) {
+      setError(`Maximum ${FREE_GALLERY_ITEMS_LIMIT} gallery items allowed.`);
+      return;
     }
 
-    if (mediaType === 'video') {
-      if (videoGalleryCount >= MAX_ACHIEVEMENT_VIDEOS) {
-        setError(`Maximum ${MAX_ACHIEVEMENT_VIDEOS} achievement videos allowed.`);
-        return;
-      }
+    const validationError =
+      mediaType === 'image' ? validateImageFile(file) : validateVideoFile(file);
 
-      const validationError = validateVideoFile(file);
-
-      if (validationError) {
-        setError(validationError);
-        return;
-      }
+    if (validationError) {
+      setError(validationError);
+      return;
     }
 
     setUploadingGallery(true);
@@ -836,7 +1000,7 @@ export default function WorkerDashboardPage() {
     try {
       const uploaded = await uploadFileToWorkerStorage(
         worker.id,
-        mediaType === 'image' ? 'achievements/images' : 'achievements/videos',
+        mediaType === 'image' ? 'gallery/images' : 'gallery/videos',
         file
       );
 
@@ -856,24 +1020,20 @@ export default function WorkerDashboardPage() {
       }
 
       setGallery((current) => [data as WorkerGalleryItem, ...current]);
-      setNotice(
-        mediaType === 'image'
-          ? 'Achievement image uploaded successfully.'
-          : 'Achievement video uploaded successfully.'
-      );
+      setNotice('Gallery media uploaded successfully.');
     } catch (uploadError) {
       setError(
         uploadError instanceof Error
           ? uploadError.message
-          : 'Achievement media could not be uploaded.'
+          : 'Gallery media could not be uploaded.'
       );
+    } finally {
+      setUploadingGallery(false);
     }
-
-    setUploadingGallery(false);
   }
 
   async function handleDeleteGalleryItem(item: WorkerGalleryItem) {
-    const confirmed = window.confirm('Delete this achievement item?');
+    const confirmed = window.confirm('Delete this gallery item?');
 
     if (!confirmed) return;
 
@@ -916,7 +1076,7 @@ export default function WorkerDashboardPage() {
     setGallery((current) =>
       current.filter((galleryItem) => galleryItem.id !== item.id)
     );
-    setNotice('Achievement item deleted successfully.');
+    setNotice('Gallery item deleted successfully.');
   }
 
   async function handleAddService(event: FormEvent<HTMLFormElement>) {
@@ -935,14 +1095,16 @@ export default function WorkerDashboardPage() {
     setError(null);
     setNotice(null);
 
-    const { error: insertError } = await supabase
+    const { data, error: insertError } = await supabase
       .from('worker_services')
       .insert({
         worker_id: worker.id,
         title,
         description: serviceForm.description.trim() || null,
         price: serviceForm.price.trim() || null,
-      });
+      })
+      .select('*')
+      .single();
 
     if (insertError) {
       setError(insertError.message);
@@ -950,15 +1112,14 @@ export default function WorkerDashboardPage() {
       return;
     }
 
+    setServices((current) => [data as WorkerService, ...current]);
     setServiceForm({
       title: '',
       description: '',
       price: '',
     });
-
     setNotice('Service added successfully.');
     setSavingService(false);
-    await loadWorkerDashboard();
   }
 
   async function handleDeleteService(serviceId: string) {
@@ -1001,10 +1162,14 @@ export default function WorkerDashboardPage() {
     setError(null);
     setNotice(null);
 
-    const { error: insertError } = await supabase.from('worker_skills').insert({
-      worker_id: worker.id,
-      title,
-    });
+    const { data, error: insertError } = await supabase
+      .from('worker_skills')
+      .insert({
+        worker_id: worker.id,
+        title,
+      })
+      .select('*')
+      .single();
 
     if (insertError) {
       setError(insertError.message);
@@ -1012,10 +1177,10 @@ export default function WorkerDashboardPage() {
       return;
     }
 
+    setSkills((current) => [data as WorkerSkill, ...current]);
     setSkillForm({ title: '' });
     setNotice('Skill added successfully.');
     setSavingSkill(false);
-    await loadWorkerDashboard();
   }
 
   async function handleDeleteSkill(skillId: string) {
@@ -1040,569 +1205,190 @@ export default function WorkerDashboardPage() {
     setNotice('Skill deleted successfully.');
   }
 
-  async function handleSaveSocialLinks(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-
-    if (!worker) return;
-
-    setSavingSocial(true);
-    setError(null);
-    setNotice(null);
-
-    const payload = {
-      worker_id: worker.id,
-      facebook: socialForm.facebook.trim() || null,
-      instagram: socialForm.instagram.trim() || null,
-      linkedin: socialForm.linkedin.trim() || null,
-      x: socialForm.x.trim() || null,
-      website: socialForm.website.trim() || null,
-    };
-
-    const { data, error: upsertError } = await supabase
-      .from('worker_social_links')
-      .upsert(payload, {
-        onConflict: 'worker_id',
-      })
-      .select('*')
-      .single();
-
-    if (upsertError) {
-      setError(upsertError.message);
-      setSavingSocial(false);
-      return;
-    }
-
-    const updatedSocialLinks = data as WorkerSocialLinks;
-
-    setSocialLinks(updatedSocialLinks);
-    fillSocialForm(updatedSocialLinks);
-    setNotice('Social links saved successfully.');
-    setSavingSocial(false);
-  }
-
   if (loading) {
     return (
-      <div className="rounded-2xl bg-white p-6 shadow-sm">
-        <p className="text-sm text-gray-600">Loading worker dashboard...</p>
-      </div>
+      <main style={styleVars} className="min-h-screen bg-[var(--sendio-page)]">
+        <div className="rounded-2xl border border-[var(--sendio-border)] bg-white p-6 shadow-sm">
+          <p className="text-sm font-bold text-slate-600">
+            Loading worker dashboard...
+          </p>
+        </div>
+      </main>
     );
   }
 
   if (error && !worker) {
     return (
-      <div className="rounded-2xl border border-red-200 bg-red-50 p-6">
-        <h2 className="text-lg font-semibold text-red-700">Dashboard Error</h2>
-        <p className="mt-2 text-sm text-red-600">{error}</p>
-      </div>
+      <main style={styleVars} className="min-h-screen bg-[var(--sendio-page)]">
+        <div className="rounded-2xl border border-red-200 bg-red-50 p-6">
+          <h2 className="text-lg font-black text-red-700">Dashboard Error</h2>
+          <p className="mt-2 text-sm font-bold text-red-600">{error}</p>
+        </div>
+      </main>
     );
   }
 
   if (!worker) {
     return (
-      <div className="mx-auto max-w-2xl rounded-2xl bg-white p-6 shadow-sm">
-        <h2 className="text-2xl font-semibold">Create Worker Profile</h2>
-        <p className="mt-2 text-sm text-gray-600">
-          Create your real worker profile. This data will be saved in Supabase.
-        </p>
+      <main style={styleVars} className="min-h-screen bg-[var(--sendio-page)]">
+        <div className="mx-auto max-w-2xl rounded-2xl border border-[var(--sendio-border)] bg-white p-6 shadow-sm">
+          <h2 className="text-2xl font-black text-slate-950">
+            Create Worker Profile
+          </h2>
+          <p className="mt-2 text-sm font-bold text-slate-600">
+            Create your worker profile. This data will be saved in Supabase.
+          </p>
 
+          {error ? (
+            <div className="mt-4 rounded-xl border border-red-200 bg-red-50 p-3 text-sm font-bold text-red-700">
+              {error}
+            </div>
+          ) : null}
+
+          {notice ? (
+            <div className="mt-4 rounded-xl border border-green-200 bg-green-50 p-3 text-sm font-bold text-green-700">
+              {notice}
+            </div>
+          ) : null}
+
+          <form onSubmit={handleCreateWorkerProfile} className="mt-6 space-y-4">
+            <div>
+              <label className="mb-1 block text-sm font-black">
+                Worker Name
+              </label>
+              <input
+                type="text"
+                value={createForm.name}
+                onChange={(event) =>
+                  setCreateForm((current) => ({
+                    ...current,
+                    name: event.target.value,
+                  }))
+                }
+                className={inputClass()}
+                required
+              />
+            </div>
+
+            <div>
+              <label className="mb-1 block text-sm font-black">
+                Profession
+              </label>
+              <input
+                type="text"
+                value={createForm.profession}
+                onChange={(event) =>
+                  setCreateForm((current) => ({
+                    ...current,
+                    profession: event.target.value,
+                  }))
+                }
+                className={inputClass()}
+              />
+            </div>
+
+            <div>
+              <label className="mb-1 block text-sm font-black">City</label>
+              <input
+                type="text"
+                value={createForm.city}
+                onChange={(event) =>
+                  setCreateForm((current) => ({
+                    ...current,
+                    city: event.target.value,
+                  }))
+                }
+                className={inputClass()}
+              />
+            </div>
+
+            <button
+              type="submit"
+              disabled={savingProfile}
+              className={buttonClass('w-full')}
+            >
+              {savingProfile ? 'Creating...' : 'Create Worker Profile'}
+            </button>
+          </form>
+        </div>
+      </main>
+    );
+  }
+
+  return (
+    <main
+      style={styleVars}
+      className="min-h-screen bg-[var(--sendio-page)] text-slate-950"
+    >
+      <div className="mx-auto w-full max-w-[1502px] space-y-5 px-3 py-4">
         {error ? (
-          <div className="mt-4 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+          <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm font-bold text-red-700">
             {error}
           </div>
         ) : null}
 
         {notice ? (
-          <div className="mt-4 rounded-xl border border-green-200 bg-green-50 p-3 text-sm text-green-700">
+          <div className="rounded-2xl border border-green-200 bg-green-50 p-4 text-sm font-bold text-green-700">
             {notice}
           </div>
         ) : null}
 
-        <form onSubmit={handleCreateWorkerProfile} className="mt-6 space-y-4">
-          <div>
-            <label className="mb-1 block text-sm font-medium">
-              Worker Name
-            </label>
-            <input
-              type="text"
-              value={createForm.name}
-              onChange={(event) =>
-                setCreateForm((current) => ({
-                  ...current,
-                  name: event.target.value,
-                }))
-              }
-              className="h-11 w-full max-w-[345px] rounded-[24px] border-0 bg-[#e8f9f2] px-4 text-sm font-medium outline-none focus:ring-2 focus:ring-[#23a7f1]"
-              required
-            />
-          </div>
-
-          <div>
-            <label className="mb-1 block text-sm font-medium">
-              Profession
-            </label>
-            <input
-              type="text"
-              value={createForm.profession}
-              onChange={(event) =>
-                setCreateForm((current) => ({
-                  ...current,
-                  profession: event.target.value,
-                }))
-              }
-              className="h-11 w-full max-w-[345px] rounded-[24px] border-0 bg-[#e8f9f2] px-4 text-sm font-medium outline-none focus:ring-2 focus:ring-[#23a7f1]"
-            />
-          </div>
-
-          <div>
-            <label className="mb-1 block text-sm font-medium">City</label>
-            <input
-              type="text"
-              value={createForm.city}
-              onChange={(event) =>
-                setCreateForm((current) => ({
-                  ...current,
-                  city: event.target.value,
-                }))
-              }
-              className="w-full rounded-xl border px-4 py-3 outline-none focus:border-green-600"
-            />
-          </div>
-
-          <button
-            type="submit"
-            disabled={savingProfile}
-            className="w-full rounded-xl bg-green-700 px-4 py-3 font-medium text-white hover:bg-green-800 disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            {savingProfile ? 'Creating...' : 'Create Worker Profile'}
-          </button>
-        </form>
-      </div>
-    );
-  }
-
-  return (
-    <div className="space-y-6">
-      {error ? (
-        <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
-          {error}
-        </div>
-      ) : null}
-
-      {notice ? (
-        <div className="rounded-xl border border-green-200 bg-green-50 p-4 text-sm text-green-700">
-          {notice}
-        </div>
-      ) : null}
-
-      <section className="w-full max-w-[1502px] rounded-2xl bg-[#c7f7f1] p-5 shadow-sm md:p-6">
-        <div className="grid items-center gap-5 lg:grid-cols-[auto_1fr_auto]">
-          <div className="relative flex h-28 w-28 items-center justify-center overflow-hidden rounded-full border-4 border-white bg-white text-4xl font-bold text-gray-700 shadow-sm">
-            {worker.avatar ? (
-              <Image
-                src={worker.avatar}
-                alt={worker.name}
-                fill
-                className="object-cover"
-                sizes="112px"
-              />
-            ) : (
-              worker.name.charAt(0).toUpperCase()
-            )}
-          </div>
-
-          <div className="space-y-3">
-            <div>
-              <h2 className="text-3xl font-bold">{worker.name}</h2>
-              <p className="text-base font-semibold text-gray-700">
-                {worker.profession || 'Profession not added yet'}
-              </p>
-            </div>
-
-            <div className="flex flex-wrap gap-2">
-              <span className="rounded-full bg-[#e8f9f2] px-4 py-2 text-sm font-bold text-gray-800">
-                {worker.city || 'City not added yet'}
-              </span>
-              <span className="rounded-full bg-[#e8f9f2] px-4 py-2 text-sm font-bold text-gray-800">
-                {formatStatus(worker.status)}
-              </span>
-            </div>
-
-            <div className="flex flex-wrap gap-2">
-              <Link
-                href={`/workers/${encodeURIComponent(worker.slug?.trim() || worker.id)}`}
-                className="rounded-full bg-[#23a7f1] px-5 py-2 text-sm font-bold text-white hover:bg-[#168ed1]"
-              >
-                Edit Profile
-              </Link>
-            </div>
-          </div>
-
-          <div className="flex flex-wrap items-center justify-start gap-2 lg:justify-end">
-            <button
-              type="button"
-              onClick={() => router.back()}
-              className="inline-flex h-11 items-center gap-2 rounded-full border border-[#dbeafe] bg-[#eef6ff] px-4 text-sm font-bold text-[#1d4ed8] hover:bg-[#e3efff]"
-            >
-              <FaArrowLeft aria-hidden="true" />
-              Back
-            </button>
-
-            <a
-              href="#profile-completion"
-              className="inline-flex h-11 items-center gap-2 rounded-full border border-[#dbeafe] bg-[#eef6ff] px-4 text-sm font-bold text-[#1d4ed8] hover:bg-[#e3efff]"
-            >
-              <FaArrowRight aria-hidden="true" />
-              Next
-            </a>
-
-            <Link
-              href="/dashboard/worker"
-              className="inline-flex h-11 items-center gap-2 rounded-full border border-[#dbeafe] bg-[#eef6ff] px-4 text-sm font-bold text-[#1d4ed8] hover:bg-[#e3efff]"
-            >
-              <FaHouse aria-hidden="true" />
-              Home
-            </Link>
-          </div>
-        </div>
-      </section>
-
-      <section id="profile-completion" className="grid gap-4 lg:grid-cols-[1fr_1.2fr]">
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
-        <div className="rounded-2xl bg-[#e8f9f2] p-4 shadow-sm">
-          <p className="text-sm text-gray-500">Views</p>
-          <p className="mt-2 text-2xl font-bold">{worker.views ?? 0}</p>
-        </div>
-
-        <div className="rounded-2xl bg-[#e8f9f2] p-4 shadow-sm">
-          <p className="text-sm text-gray-500">Requests</p>
-          <p className="mt-2 text-2xl font-bold">{requests.length}</p>
-        </div>
-
-        <div className="rounded-2xl bg-[#e8f9f2] p-4 shadow-sm">
-          <p className="text-sm text-gray-500">Rating</p>
-          <p className="mt-2 text-2xl font-bold">
-            {(worker.rating ?? 0).toFixed(1)}
-          </p>
-        </div>
-
-        <div className="rounded-2xl bg-[#e8f9f2] p-4 shadow-sm">
-          <p className="text-sm text-gray-500">Reviews Count</p>
-          <p className="mt-2 text-2xl font-bold">
-            {worker.reviews_count ?? reviews.length}
-          </p>
-        </div>
-
-        <div className="rounded-2xl bg-[#e8f9f2] p-4 shadow-sm">
-          <p className="text-sm text-gray-500">Reviews</p>
-          <p className="mt-2 text-lg font-bold text-[#23a7f1]">
-            {getStars(worker.rating)}
-          </p>
-        </div>
-        </div>
-
-        <div className="rounded-2xl bg-white p-5 shadow-sm">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <h3 className="text-lg font-bold">Profile Completion</h3>
-              <p className="text-sm font-semibold text-gray-600">
-                {profileCompletionPercent}% complete
-              </p>
-            </div>
-            <div className="h-2 w-40 overflow-hidden rounded-full bg-gray-100">
-              <div
-                className="h-full rounded-full bg-[#23a7f1]"
-                style={{ width: `${profileCompletionPercent}%` }}
-              />
-            </div>
-          </div>
-          <p className="mt-3 text-sm text-gray-600">
-            Missing:{' '}
-            {missingProfileItems.length
-              ? missingProfileItems.join(', ')
-              : 'Nothing'}
-          </p>
-        </div>
-      </section>
-
-      <section className="grid items-start gap-6 lg:grid-cols-2">
-        <div id="profile-photo" className="overflow-hidden rounded-2xl bg-white p-5 shadow-sm">
-          <h3 className="text-xl font-bold">Profile Photo</h3>
-
-          <div className="relative mt-5 h-[260px] w-full overflow-hidden rounded-[24px] bg-[#e8f9f2]">
-            {worker.avatar ? (
-              <Image
-                src={worker.avatar}
-                alt={worker.name}
-                fill
-                className="object-contain"
-                sizes="(max-width: 1024px) 100vw, 486px"
-              />
-            ) : null}
-          </div>
-
-          <div className="mt-5 h-3 rounded-b-2xl bg-[#c7f7f1]" />
-        </div>
-
-        <div id="skills" className="overflow-hidden rounded-2xl bg-white p-6 shadow-sm">
-          <h3 className="text-xl font-semibold">Skills</h3>
-
-          <form onSubmit={handleAddSkill} className="mt-5 flex max-w-[370px] gap-2">
-            <input
-              type="text"
-              value={skillForm.title}
-              onChange={(event) =>
-                setSkillForm({
-                  title: event.target.value,
-                })
-              }
-              placeholder="Skill title"
-              className="h-11 w-full max-w-[345px] rounded-[24px] border-0 bg-[#e8f9f2] px-4 text-sm font-medium outline-none focus:ring-2 focus:ring-[#23a7f1]"
-              required
-            />
-
-            <button
-              type="submit"
-              disabled={savingSkill}
-              className="h-11 rounded-[24px] bg-[#23a7f1] px-5 text-sm font-bold text-white hover:bg-[#168ed1] disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              {savingSkill ? 'Adding...' : 'Add'}
-            </button>
-          </form>
-
-          <div className="mt-5 flex flex-wrap gap-2">
-            {skills.map((skill) => (
-              <div
-                key={skill.id}
-                className="flex h-10 items-center gap-2 rounded-[22px] bg-[#e8f9f2] px-4 text-sm font-medium text-gray-800"
-              >
-                <span>{skill.title}</span>
-
-                <button
-                  type="button"
-                  onClick={() => handleDeleteSkill(skill.id)}
-                  className="font-bold text-red-600"
-                >
-                  x
-                </button>
+        <section className="rounded-[32px] border border-[var(--sendio-border)] bg-[var(--sendio-hero)] p-5 shadow-sm">
+          <div className="grid gap-5 xl:grid-cols-[240px_1fr_230px]">
+            <div className="flex flex-col items-center justify-center rounded-[28px] bg-white/70 p-4">
+              <div className="relative flex h-32 w-32 items-center justify-center overflow-hidden rounded-full border-4 border-white bg-[var(--sendio-soft)] text-4xl font-black text-slate-700 shadow-sm">
+                {worker.avatar ? (
+                  <Image
+                    src={worker.avatar}
+                    alt={worker.name}
+                    fill
+                    className="object-contain"
+                    sizes="128px"
+                  />
+                ) : (
+                  worker.name.charAt(0).toUpperCase()
+                )}
               </div>
-            ))}
 
-            {skills.length === 0 ? (
-              <p className="text-sm text-gray-500">No skills added yet.</p>
-            ) : null}
-          </div>
-          <div className="mt-5 h-3 rounded-b-2xl bg-[#c7f7f1]" />
-        </div>
-      </section>
-      <section className="grid gap-3">
-        <div className="flex justify-end">
-          <label className="flex h-10 cursor-pointer items-center justify-center rounded-full bg-[#23a7f1] px-5 text-sm font-bold text-white shadow-sm hover:bg-[#168ed1]">
-            Upload from Studio
-            <input
-              type="file"
-              accept="image/*,video/*"
-              onChange={(event) => {
-                handleStudioUpload(event.target.files?.[0]);
-                event.currentTarget.value = '';
-              }}
-              className="sr-only"
-              disabled={uploadingGallery}
-            />
-          </label>
-        </div>
+              <p className="mt-3 text-center text-xs font-black text-slate-500">
+                Profile photo is selected from Gallery only.
+              </p>
 
-      <section id="media-management" className="grid items-start gap-3 xl:grid-cols-3">
-        <div className="w-full max-w-[486px] justify-self-center rounded-2xl bg-white p-4 shadow-sm xl:justify-self-stretch">
-          <div className="flex items-center justify-between gap-2">
-            <h3 className="text-lg font-bold">Videos</h3>
-            <span className="rounded-full bg-[#e8f9f2] px-3 py-1 text-xs font-bold text-gray-700">
-              {videoGalleryCount}/{MAX_ACHIEVEMENT_VIDEOS} free
-            </span>
-          </div>
+              <div className="mt-3 flex flex-wrap justify-center gap-2">
+                {contactActions.map((action) => {
+                  const Icon = action.icon;
 
-          <div className="mt-4 grid grid-cols-4 gap-2">
-            {Array.from({ length: 12 }).map((_, index) => {
-              const item = videoItems[index];
-              const locked = index >= MAX_ACHIEVEMENT_VIDEOS;
+                  return (
+                    <a
+                      key={action.label}
+                      href={action.href ?? '#'}
+                      target="_blank"
+                      rel="noreferrer"
+                      title={action.label}
+                      className="flex h-9 w-9 items-center justify-center rounded-full bg-white text-[var(--sendio-button)] shadow-sm hover:ring-2 hover:ring-[var(--sendio-button)]"
+                    >
+                      <Icon aria-hidden="true" />
+                    </a>
+                  );
+                })}
+              </div>
+            </div>
 
-              return (
-                <div
-                  key={item?.id ?? `video-slot-${index}`}
-                  className="aspect-square max-h-28 max-w-28 overflow-hidden rounded-xl border bg-gray-50"
-                >
-                  {item ? (
-                    <div className="flex h-full flex-col">
-                      <video
-                        src={item.url}
-                        controls
-                        className="min-h-0 flex-1 object-cover"
-                      />
-                      <div className="flex shrink-0 items-center justify-center gap-1 p-1">
-                        <a
-                          href={item.url}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="text-[11px] font-bold text-[#23a7f1]"
-                        >
-                          Open
-                        </a>
-                        <button
-                          type="button"
-                          onClick={() => handleDeleteGalleryItem(item)}
-                          className="text-[11px] font-bold text-red-600"
-                        >
-                          Delete
-                        </button>
-                      </div>
-                    </div>
-                  ) : locked ? (
-                    <div className="flex h-full flex-col items-center justify-center gap-2 bg-gray-100 text-gray-400">
-                      <FaLock />
-                      <span className="text-[11px] font-bold">Paid</span>
-                    </div>
-                  ) : (
-                    <div className="flex h-full flex-col items-center justify-center px-2 text-center text-[11px] font-bold text-gray-500">
-                      Empty Video
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-          <div className="mt-4 h-3 rounded-b-2xl bg-[#c7f7f1]" />
-        </div>
-
-        <div id="reviews" className="w-full max-w-[486px] justify-self-center overflow-hidden rounded-2xl bg-white p-4 shadow-sm xl:justify-self-stretch">
-          <div className="flex items-center justify-between gap-2">
-            <h3 className="text-lg font-bold">Reviews</h3>
-            <span className="text-sm font-bold text-[#23a7f1]">
-              {getStars(worker.rating)}
-            </span>
-          </div>
-
-          <div className="mt-4 max-h-[360px] space-y-3 overflow-y-auto pr-1">
-            {reviews.map((review) => (
-              <article key={review.id} className="rounded-xl border bg-gray-50 p-3">
-                <div className="flex items-start justify-between gap-2">
-                  <strong className="text-sm">{review.user_name}</strong>
-                  <span className="text-xs font-bold text-[#23a7f1]">
-                    {getStars(review.rating)}
-                  </span>
-                </div>
-                {review.created_at ? (
-                  <p className="mt-1 text-xs font-bold text-green-700">
-                    {formatDate(review.created_at)}
-                  </p>
-                ) : null}
-                {review.comment ? (
-                  <p className="mt-2 text-sm text-gray-700">{review.comment}</p>
-                ) : null}
-              </article>
-            ))}
-
-            {reviews.length === 0 ? (
-              <p className="text-sm text-gray-500">No reviews yet.</p>
-            ) : null}
-          </div>
-          <div className="mt-4 h-3 rounded-b-2xl bg-[#c7f7f1]" />
-        </div>
-
-        <div className="w-full max-w-[486px] justify-self-center rounded-2xl bg-white p-4 shadow-sm xl:justify-self-stretch">
-          <div className="flex items-center justify-between gap-2">
-            <h3 className="text-lg font-bold">Images</h3>
-            <span className="rounded-full bg-[#e8f9f2] px-3 py-1 text-xs font-bold text-gray-700">
-              {imageGalleryCount}/{MAX_ACHIEVEMENT_IMAGES} free
-            </span>
-          </div>
-
-          <div className="mt-4 grid grid-cols-4 gap-2">
-            {Array.from({ length: 12 }).map((_, index) => {
-              const item = imageItems[index];
-              const locked = index >= MAX_ACHIEVEMENT_IMAGES;
-
-              return (
-                <div
-                  key={item?.id ?? `image-slot-${index}`}
-                  className="aspect-square max-h-28 max-w-28 overflow-hidden rounded-xl border bg-gray-50"
-                >
-                  {item ? (
-                    <div className="flex h-full flex-col">
-                      <div className="relative min-h-0 flex-1">
-                        <Image
-                          src={item.url}
-                          alt="Worker achievement"
-                          fill
-                          className="object-cover"
-                          sizes="112px"
-                        />
-                      </div>
-                      <div className="flex shrink-0 items-center justify-center gap-1 p-1">
-                        <a
-                          href={item.url}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="text-[10px] font-bold text-[#23a7f1]"
-                        >
-                          Open
-                        </a>
-
-                        <button
-                          type="button"
-                          onClick={() => handleSetAvatarFromGallery(item)}
-                          disabled={worker.avatar === item.url}
-                          className="text-[10px] font-bold text-green-700 disabled:text-gray-400"
-                        >
-                          {worker.avatar === item.url ? 'Set' : 'Photo'}
-                        </button>
-
-                        <button
-                          type="button"
-                          onClick={() => handleDeleteGalleryItem(item)}
-                          className="text-[10px] font-bold text-red-600"
-                        >
-                          Delete
-                        </button>
-                      </div>
-                    </div>
-                  ) : locked ? (
-                    <div className="flex h-full flex-col items-center justify-center gap-2 bg-gray-100 text-gray-400">
-                      <FaLock />
-                      <span className="text-[11px] font-bold">Paid</span>
-                    </div>
-                  ) : (
-                    <div className="flex h-full flex-col items-center justify-center px-2 text-center text-[11px] font-bold text-gray-500">
-                      Empty Image
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-
-          {uploadingGallery ? (
-            <p className="mt-4 text-sm text-gray-600">
-              Uploading achievement media...
-            </p>
-          ) : null}
-          <div className="mt-4 h-3 rounded-b-2xl bg-[#c7f7f1]" />
-        </div>
-        </section>
-      </section>
-
-
-      <section className="grid items-start gap-4 lg:grid-cols-2">
-        <div className="grid gap-4">
-          <div id="basic-info" className="overflow-hidden rounded-2xl bg-white p-6 shadow-sm">
-            <h3 className="text-xl font-semibold">Basic Information</h3>
-
-            <form
-              onSubmit={handleUpdateProfile}
-              className="mt-5 grid max-w-[370px] gap-2"
-            >
+            <form onSubmit={handleSaveHeroProfile} className="space-y-3">
               <div>
-                <label className="mb-1 block text-sm font-medium">Name</label>
+                <p className="text-xs font-black uppercase tracking-[0.25em] text-slate-500">
+                  Worker Dashboard
+                </p>
+                <h1 className="mt-1 text-3xl font-black text-slate-950">
+                  {worker.name}
+                </h1>
+                <p className="text-sm font-bold text-slate-600">
+                  {worker.profession || 'Profession not added yet'}
+                </p>
+              </div>
+
+              <div className="grid gap-2 md:grid-cols-2">
                 <input
-                  type="text"
                   value={editForm.name}
                   onChange={(event) =>
                     setEditForm((current) => ({
@@ -1610,17 +1396,12 @@ export default function WorkerDashboardPage() {
                       name: event.target.value,
                     }))
                   }
-                  className="h-11 w-full max-w-[345px] rounded-[24px] border-0 bg-[#e8f9f2] px-4 text-sm font-medium outline-none focus:ring-2 focus:ring-[#23a7f1]"
+                  placeholder="Worker name"
+                  className={inputClass()}
                   required
                 />
-              </div>
 
-              <div>
-                <label className="mb-1 block text-sm font-medium">
-                  Profession
-                </label>
                 <input
-                  type="text"
                   value={editForm.profession}
                   onChange={(event) =>
                     setEditForm((current) => ({
@@ -1628,14 +1409,11 @@ export default function WorkerDashboardPage() {
                       profession: event.target.value,
                     }))
                   }
-                  className="h-11 w-full max-w-[345px] rounded-[24px] border-0 bg-[#e8f9f2] px-4 text-sm font-medium outline-none focus:ring-2 focus:ring-[#23a7f1]"
+                  placeholder="Profession"
+                  className={inputClass()}
                 />
-              </div>
 
-              <div>
-                <label className="mb-1 block text-sm font-medium">City</label>
                 <input
-                  type="text"
                   value={editForm.city}
                   onChange={(event) =>
                     setEditForm((current) => ({
@@ -1643,87 +1421,10 @@ export default function WorkerDashboardPage() {
                       city: event.target.value,
                     }))
                   }
-                  className="h-11 w-full max-w-[345px] rounded-[24px] border-0 bg-[#e8f9f2] px-4 text-sm font-medium outline-none focus:ring-2 focus:ring-[#23a7f1]"
+                  placeholder="City"
+                  className={inputClass()}
                 />
-              </div>
 
-              <div>
-                <label className="mb-1 block text-sm font-medium">Address</label>
-                <input
-                  type="text"
-                  value={editForm.address}
-                  onChange={(event) =>
-                    setEditForm((current) => ({
-                      ...current,
-                      address: event.target.value,
-                    }))
-                  }
-                  className="h-11 w-full max-w-[345px] rounded-[24px] border-0 bg-[#e8f9f2] px-4 text-sm font-medium outline-none focus:ring-2 focus:ring-[#23a7f1]"
-                />
-              </div>
-
-              <div>
-                <label className="mb-1 block text-sm font-medium">Phone</label>
-                <input
-                  type="text"
-                  value={editForm.phone}
-                  onChange={(event) =>
-                    setEditForm((current) => ({
-                      ...current,
-                      phone: event.target.value,
-                    }))
-                  }
-                  className="h-11 w-full max-w-[345px] rounded-[24px] border-0 bg-[#e8f9f2] px-4 text-sm font-medium outline-none focus:ring-2 focus:ring-[#23a7f1]"
-                />
-              </div>
-
-              <div>
-                <label className="mb-1 block text-sm font-medium">Email</label>
-                <input
-                  type="email"
-                  value={editForm.email}
-                  onChange={(event) =>
-                    setEditForm((current) => ({
-                      ...current,
-                      email: event.target.value,
-                    }))
-                  }
-                  className="h-11 w-full max-w-[345px] rounded-[24px] border-0 bg-[#e8f9f2] px-4 text-sm font-medium outline-none focus:ring-2 focus:ring-[#23a7f1]"
-                />
-              </div>
-
-              <div>
-                <label className="mb-1 block text-sm font-medium">Website</label>
-                <input
-                  type="text"
-                  value={editForm.website}
-                  onChange={(event) =>
-                    setEditForm((current) => ({
-                      ...current,
-                      website: event.target.value,
-                    }))
-                  }
-                  className="h-11 w-full max-w-[345px] rounded-[24px] border-0 bg-[#e8f9f2] px-4 text-sm font-medium outline-none focus:ring-2 focus:ring-[#23a7f1]"
-                />
-              </div>
-
-              <div>
-                <label className="mb-1 block text-sm font-medium">WhatsApp</label>
-                <input
-                  type="text"
-                  value={editForm.whatsapp}
-                  onChange={(event) =>
-                    setEditForm((current) => ({
-                      ...current,
-                      whatsapp: event.target.value,
-                    }))
-                  }
-                  className="h-11 w-full max-w-[345px] rounded-[24px] border-0 bg-[#e8f9f2] px-4 text-sm font-medium outline-none focus:ring-2 focus:ring-[#23a7f1]"
-                />
-              </div>
-
-              <div>
-                <label className="mb-1 block text-sm font-medium">Status</label>
                 <select
                   value={editForm.status}
                   onChange={(event) =>
@@ -1732,18 +1433,25 @@ export default function WorkerDashboardPage() {
                       status: event.target.value,
                     }))
                   }
-                  className="h-11 w-full max-w-[345px] rounded-[24px] border-0 bg-[#e8f9f2] px-4 text-sm font-medium outline-none focus:ring-2 focus:ring-[#23a7f1]"
+                  className={inputClass()}
                 >
                   <option value="available">Available</option>
                   <option value="busy">Busy</option>
                   <option value="unavailable">Unavailable</option>
                 </select>
-              </div>
 
-              <div>
-                <label className="mb-1 block text-sm font-medium">
-                  Experience Years
-                </label>
+                <input
+                  value={editForm.working_hours}
+                  onChange={(event) =>
+                    setEditForm((current) => ({
+                      ...current,
+                      working_hours: event.target.value,
+                    }))
+                  }
+                  placeholder="Working hours"
+                  className={inputClass()}
+                />
+
                 <input
                   type="number"
                   min="0"
@@ -1754,59 +1462,410 @@ export default function WorkerDashboardPage() {
                       experience_years: event.target.value,
                     }))
                   }
-                  className="h-11 w-full max-w-[345px] rounded-[24px] border-0 bg-[#e8f9f2] px-4 text-sm font-medium outline-none focus:ring-2 focus:ring-[#23a7f1]"
+                  placeholder="Experience years"
+                  className={inputClass()}
                 />
               </div>
 
-              <div>
-                <label className="mb-1 block text-sm font-medium">
-                  Working Hours
-                </label>
-                <textarea
-                  value={editForm.working_hours}
-                  onChange={(event) =>
-                    setEditForm((current) => ({
-                      ...current,
-                      working_hours: event.target.value,
-                    }))
-                  }
-                  rows={1}
-                  className="min-h-11 w-full max-w-[345px] resize-none rounded-[24px] border-0 bg-[#e8f9f2] px-4 py-3 text-sm font-medium outline-none [field-sizing:content] focus:ring-2 focus:ring-[#23a7f1]"
-                />
+              <textarea
+                value={editForm.description}
+                onChange={(event) =>
+                  setEditForm((current) => ({
+                    ...current,
+                    description: event.target.value,
+                  }))
+                }
+                rows={2}
+                placeholder="About this worker"
+                className={textareaClass()}
+              />
+
+              <button
+                type="submit"
+                disabled={savingProfile}
+                className={buttonClass()}
+              >
+                {savingProfile ? 'Saving...' : 'Save Profile'}
+              </button>
+            </form>
+
+            <div className="flex flex-col justify-between gap-3 rounded-[28px] bg-white/70 p-4">
+              <div className="grid gap-2">
+                <span className="rounded-full bg-white px-4 py-2 text-sm font-black text-slate-700 shadow-sm">
+                  {formatStatus(worker.status)}
+                </span>
+                <span className="rounded-full bg-white px-4 py-2 text-sm font-black text-slate-700 shadow-sm">
+                  {worker.city || 'City waiting'}
+                </span>
+                <span className="rounded-full bg-white px-4 py-2 text-sm font-black text-slate-700 shadow-sm">
+                  {getStars(worker.rating)}
+                </span>
               </div>
 
+              <div className="grid gap-2">
+                <button
+                  type="button"
+                  onClick={() => router.back()}
+                  className={softButtonClass('justify-start gap-2')}
+                >
+                  <FaArrowLeft aria-hidden="true" />
+                  Back
+                </button>
+
+                <a
+                  href="#profile-completion"
+                  className={softButtonClass('justify-start gap-2')}
+                >
+                  <FaArrowRight aria-hidden="true" />
+                  Next
+                </a>
+
+                <Link
+                  href="/dashboard/worker"
+                  className={softButtonClass('justify-start gap-2')}
+                >
+                  <FaHouse aria-hidden="true" />
+                  Home
+                </Link>
+
+                <Link
+                  href={publicProfileHref}
+                  className={buttonClass('justify-start gap-2')}
+                >
+                  Open Public Profile
+                </Link>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section className="grid gap-4 xl:grid-cols-3">
+          <div id="adresse" className={cardClass()}>
+            <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
-                <label className="mb-1 block text-sm font-medium">About</label>
-                <textarea
-                  value={editForm.description}
-                  onChange={(event) =>
-                    setEditForm((current) => ({
-                      ...current,
-                      description: event.target.value,
-                    }))
-                  }
-                  rows={1}
-                  className="min-h-11 w-full max-w-[345px] resize-none rounded-[24px] border-0 bg-[#e8f9f2] px-4 py-3 text-sm font-medium outline-none [field-sizing:content] focus:ring-2 focus:ring-[#23a7f1]"
-                />
+                <h2 className="text-xl font-black">Adresse</h2>
+                <p className="mt-1 text-sm font-bold text-slate-600">
+                  Full address and phone for worker location.
+                </p>
               </div>
 
-              <div>
+              <span className="rounded-full bg-[var(--sendio-soft)] px-3 py-1 text-xs font-black text-slate-700">
+                {editForm.address.trim() ? 'Google Maps ready' : 'Maps waiting'}
+              </span>
+            </div>
+
+            <form onSubmit={handleSaveAdresse} className="mt-5 space-y-3">
+              <textarea
+                value={editForm.address}
+                onChange={(event) =>
+                  setEditForm((current) => ({
+                    ...current,
+                    address: event.target.value,
+                  }))
+                }
+                rows={2}
+                placeholder="Full address"
+                className={textareaClass()}
+              />
+
+              <input
+                value={editForm.phone}
+                onChange={(event) =>
+                  setEditForm((current) => ({
+                    ...current,
+                    phone: event.target.value,
+                  }))
+                }
+                placeholder="Phone"
+                className={inputClass()}
+              />
+
+              <div className="flex flex-wrap gap-2">
+                {getMapsUrl(editForm.address) ? (
+                  <a
+                    href={getMapsUrl(editForm.address) ?? '#'}
+                    target="_blank"
+                    rel="noreferrer"
+                    className={softButtonClass('gap-2')}
+                  >
+                    <FaLocationDot aria-hidden="true" />
+                    Open Maps
+                  </a>
+                ) : null}
+
                 <button
                   type="submit"
-                  disabled={savingProfile}
-                  className="h-11 rounded-[24px] bg-[#23a7f1] px-5 text-sm font-bold text-white hover:bg-[#168ed1] disabled:cursor-not-allowed disabled:opacity-60"
+                  disabled={savingAdresse}
+                  className={buttonClass()}
                 >
-                  {savingProfile ? 'Saving...' : 'Save Profile'}
+                  {savingAdresse ? 'Saving...' : 'Save Adresse'}
                 </button>
               </div>
             </form>
-            <div className="mt-5 h-3 rounded-b-2xl bg-[#c7f7f1]" />
+
+            <div className="mt-5 h-3 rounded-b-2xl bg-[var(--sendio-accent)]" />
           </div>
 
-          <div id="services" className="overflow-hidden rounded-2xl bg-white p-6 shadow-sm">
-            <h3 className="text-xl font-semibold">Services</h3>
+          <div id="worker-cv" className={cardClass()}>
+            <h2 className="text-xl font-black">CV</h2>
+            <p className="mt-2 text-sm font-bold text-slate-600">
+              Manage manual CV or upload PDF / DOC / DOCX.
+            </p>
 
-            <form onSubmit={handleAddService} className="mt-5 grid max-w-[370px] gap-2">
+            <div className="mt-6 rounded-[24px] bg-[var(--sendio-soft)] p-5">
+              <p className="text-sm font-black text-slate-700">
+                CV is managed in its own clean page.
+              </p>
+              <p className="mt-2 text-xs font-bold text-slate-500">
+                This dashboard only opens the CV page.
+              </p>
+            </div>
+
+            <Link href="/dashboard/worker/cv" className={buttonClass('mt-5')}>
+              Open CV
+            </Link>
+
+            <div className="mt-5 h-3 rounded-b-2xl bg-[var(--sendio-accent)]" />
+          </div>
+
+          <div id="contact" className={cardClass()}>
+            <h2 className="text-xl font-black">Contact</h2>
+            <p className="mt-1 text-sm font-bold text-slate-600">
+              Contact and social links for the public worker profile.
+            </p>
+
+            <form onSubmit={handleSaveContact} className="mt-5 grid gap-2">
+              <input
+                value={editForm.email}
+                onChange={(event) =>
+                  setEditForm((current) => ({
+                    ...current,
+                    email: event.target.value,
+                  }))
+                }
+                placeholder="Email"
+                className={inputClass()}
+              />
+
+              <input
+                value={editForm.website}
+                onChange={(event) =>
+                  setEditForm((current) => ({
+                    ...current,
+                    website: event.target.value,
+                  }))
+                }
+                placeholder="Website"
+                className={inputClass()}
+              />
+
+              <input
+                value={editForm.whatsapp}
+                onChange={(event) =>
+                  setEditForm((current) => ({
+                    ...current,
+                    whatsapp: event.target.value,
+                  }))
+                }
+                placeholder="WhatsApp"
+                className={inputClass()}
+              />
+
+              <input
+                value={socialForm.facebook}
+                onChange={(event) =>
+                  setSocialForm((current) => ({
+                    ...current,
+                    facebook: event.target.value,
+                  }))
+                }
+                placeholder="Facebook"
+                className={inputClass()}
+              />
+
+              <input
+                value={socialForm.instagram}
+                onChange={(event) =>
+                  setSocialForm((current) => ({
+                    ...current,
+                    instagram: event.target.value,
+                  }))
+                }
+                placeholder="Instagram"
+                className={inputClass()}
+              />
+
+              <input
+                value={socialForm.linkedin}
+                onChange={(event) =>
+                  setSocialForm((current) => ({
+                    ...current,
+                    linkedin: event.target.value,
+                  }))
+                }
+                placeholder="LinkedIn"
+                className={inputClass()}
+              />
+
+              <input
+                value={socialForm.x}
+                onChange={(event) =>
+                  setSocialForm((current) => ({
+                    ...current,
+                    x: event.target.value,
+                  }))
+                }
+                placeholder="X"
+                className={inputClass()}
+              />
+
+              <button
+                type="submit"
+                disabled={savingContact}
+                className={buttonClass('mt-2')}
+              >
+                {savingContact ? 'Saving...' : 'Save Contact'}
+              </button>
+            </form>
+
+            <div className="mt-5 h-3 rounded-b-2xl bg-[var(--sendio-accent)]" />
+          </div>
+        </section>
+
+        <section className="grid gap-4 xl:grid-cols-[1.2fr_1fr_1fr]">
+          <div id="media-management" className={cardClass()}>
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <h2 className="text-xl font-black">Gallery</h2>
+                <p className="mt-1 text-sm font-bold text-slate-600">
+                  Main studio for profile media.
+                </p>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="rounded-full bg-[var(--sendio-soft)] px-3 py-1 text-xs font-black text-slate-700">
+                  {gallery.length}/{FREE_GALLERY_ITEMS_LIMIT} free
+                </span>
+
+                <span className="rounded-full bg-[var(--sendio-soft)] px-3 py-1 text-xs font-black text-slate-500">
+                  +{MAX_ACHIEVEMENT_VIDEOS} later plan
+                </span>
+
+                <label className={buttonClass('cursor-pointer')}>
+                  Upload
+                  <input
+                    type="file"
+                    accept="image/*,video/*"
+                    onChange={(event) => {
+                      handleStudioUpload(event.target.files?.[0]);
+                      event.currentTarget.value = '';
+                    }}
+                    disabled={uploadingGallery}
+                    className="sr-only"
+                  />
+                </label>
+              </div>
+            </div>
+
+            <div className="mt-5 grid grid-cols-2 gap-3 md:grid-cols-4">
+              {gallerySlots.map((_, index) => {
+                const item = gallery[index];
+
+                return (
+                  <div
+                    key={item?.id ?? `gallery-slot-${index}`}
+                    className="rounded-2xl border border-[var(--sendio-border)] bg-[var(--sendio-soft)] p-2"
+                  >
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (item) setPreviewItem(item);
+                      }}
+                      disabled={!item}
+                      className="flex aspect-square w-full items-center justify-center overflow-hidden rounded-xl bg-white disabled:cursor-default"
+                    >
+                      {item ? (
+                        item.type === 'video' ? (
+                          <video
+                            src={item.url}
+                            className="h-full w-full object-contain"
+                            muted
+                            playsInline
+                          />
+                        ) : (
+                          <span className="relative h-full w-full">
+                            <Image
+                              src={item.url}
+                              alt="Worker gallery item"
+                              fill
+                              className="object-contain"
+                              sizes="180px"
+                            />
+                          </span>
+                        )
+                      ) : (
+                        <span className="text-xs font-black text-slate-400">
+                          Empty
+                        </span>
+                      )}
+                    </button>
+
+                    {item ? (
+                      <div className="mt-2 flex flex-wrap items-center justify-center gap-1">
+                        <button
+                          type="button"
+                          onClick={() => setPreviewItem(item)}
+                          className="rounded-full bg-white px-3 py-1 text-[11px] font-black text-[var(--sendio-button)]"
+                        >
+                          Preview
+                        </button>
+
+                        {item.type === 'image' ? (
+                          <button
+                            type="button"
+                            onClick={() => handleSetAvatarFromGallery(item)}
+                            disabled={worker.avatar === item.url}
+                            className="rounded-full bg-white px-3 py-1 text-[11px] font-black text-green-700 disabled:text-slate-400"
+                          >
+                            {worker.avatar === item.url ? 'Set' : 'Photo'}
+                          </button>
+                        ) : null}
+
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteGalleryItem(item)}
+                          className="rounded-full bg-white px-3 py-1 text-[11px] font-black text-red-600"
+                        >
+                          <FaTrash aria-hidden="true" />
+                        </button>
+                      </div>
+                    ) : null}
+                  </div>
+                );
+              })}
+            </div>
+
+            {uploadingGallery ? (
+              <p className="mt-4 text-sm font-bold text-slate-600">
+                Uploading gallery media...
+              </p>
+            ) : null}
+
+            <p className="mt-4 text-xs font-bold text-slate-500">
+              Images and videos are displayed with object-contain, so vertical
+              video and full media remain visible without cropping.
+            </p>
+
+            <div className="mt-5 h-3 rounded-b-2xl bg-[var(--sendio-accent)]" />
+          </div>
+
+          <div id="services" className={cardClass()}>
+            <h2 className="text-xl font-black">Services</h2>
+            <p className="mt-1 text-sm font-bold text-slate-600">
+              Add real worker services.
+            </p>
+
+            <form onSubmit={handleAddService} className="mt-5 grid gap-2">
               <input
                 type="text"
                 value={serviceForm.title}
@@ -1817,7 +1876,7 @@ export default function WorkerDashboardPage() {
                   }))
                 }
                 placeholder="Service title"
-                className="h-11 w-full max-w-[345px] rounded-[24px] border-0 bg-[#e8f9f2] px-4 text-sm font-medium outline-none focus:ring-2 focus:ring-[#23a7f1]"
+                className={inputClass()}
                 required
               />
 
@@ -1830,8 +1889,8 @@ export default function WorkerDashboardPage() {
                   }))
                 }
                 placeholder="Service description"
-                rows={1}
-                className="min-h-11 w-full max-w-[345px] resize-none rounded-[24px] border-0 bg-[#e8f9f2] px-4 py-3 text-sm font-medium outline-none [field-sizing:content] focus:ring-2 focus:ring-[#23a7f1]"
+                rows={2}
+                className={textareaClass()}
               />
 
               <input
@@ -1844,337 +1903,291 @@ export default function WorkerDashboardPage() {
                   }))
                 }
                 placeholder="Price"
-                className="h-11 w-full max-w-[345px] rounded-[24px] border-0 bg-[#e8f9f2] px-4 text-sm font-medium outline-none focus:ring-2 focus:ring-[#23a7f1]"
+                className={inputClass()}
               />
 
               <button
                 type="submit"
                 disabled={savingService}
-                className="h-11 w-fit rounded-[24px] bg-[#23a7f1] px-5 text-sm font-bold text-white hover:bg-[#168ed1] disabled:cursor-not-allowed disabled:opacity-60"
+                className={buttonClass()}
               >
                 {savingService ? 'Adding...' : 'Add Service'}
               </button>
             </form>
-            <div className="mt-5 h-3 rounded-b-2xl bg-[#c7f7f1]" />
-          </div>
-        </div>
 
-        <div className="grid gap-4">
-          <div id="contact" className="overflow-hidden rounded-2xl bg-white p-6 shadow-sm">
-            <h3 className="text-xl font-semibold">Contact</h3>
-
-            <div className="mt-5 flex flex-wrap gap-2">
-              {contactActions.map((action) => {
-                const Icon = action.icon;
-
-                return (
-                  <a
-                    key={action.label}
-                    href={action.href ?? '#'}
-                    title={action.label}
-                    aria-label={action.label}
-                    target={action.href?.startsWith('http') ? '_blank' : undefined}
-                    rel={action.href?.startsWith('http') ? 'noreferrer' : undefined}
-                    className="flex h-11 w-11 items-center justify-center rounded-full bg-[#23a7f1] text-white shadow-sm hover:bg-[#168ed1]"
+            <div className="mt-5 space-y-2">
+              {services.length > 0 ? (
+                services.map((service) => (
+                  <div
+                    key={service.id}
+                    className="rounded-2xl bg-[var(--sendio-soft)] p-3"
                   >
-                    <Icon aria-hidden="true" />
-                  </a>
-                );
-              })}
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="text-sm font-black">{service.title}</p>
+                        {service.description ? (
+                          <p className="mt-1 text-xs font-bold text-slate-600">
+                            {service.description}
+                          </p>
+                        ) : null}
+                        {service.price ? (
+                          <p className="mt-1 text-xs font-black text-slate-700">
+                            {service.price}
+                          </p>
+                        ) : null}
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteService(service.id)}
+                        className="rounded-full bg-white px-3 py-1 text-xs font-black text-red-600"
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <p className="rounded-2xl bg-[var(--sendio-soft)] p-3 text-sm font-bold text-slate-500">
+                  No services added yet.
+                </p>
+              )}
             </div>
 
-            <form onSubmit={handleSaveSocialLinks} className="mt-5 grid gap-3">
-              <div className="flex flex-wrap gap-2">
-                <details className="group relative">
-                  <summary
-                    title="Facebook"
-                    aria-label="Facebook"
-                    className="flex h-11 w-11 cursor-pointer list-none items-center justify-center rounded-full bg-[#e8f9f2] text-gray-800 shadow-sm hover:ring-2 hover:ring-[#23a7f1] [&::-webkit-details-marker]:hidden"
-                  >
-                    <FaFacebookF aria-hidden="true" />
-                  </summary>
-                  <div className="mt-2 flex w-[260px] max-w-full items-center gap-2 rounded-[24px] bg-[#e8f9f2] p-2">
-                    <input
-                      type="text"
-                      value={socialForm.facebook}
-                      onChange={(event) =>
-                        setSocialForm((current) => ({
-                          ...current,
-                          facebook: event.target.value,
-                        }))
-                      }
-                      aria-label="Facebook link"
-                      placeholder="Paste link"
-                      className="h-10 min-w-0 flex-1 rounded-[20px] border-0 bg-white px-3 text-sm font-medium outline-none focus:ring-2 focus:ring-[#23a7f1]"
-                    />
-                    <button
-                      type="submit"
-                      title="Save"
-                      aria-label="Save"
-                      disabled={savingSocial}
-                      className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#23a7f1] text-sm font-bold text-white hover:bg-[#168ed1] disabled:cursor-not-allowed disabled:opacity-60"
-                    >
-                      ✓
-                    </button>
-                  </div>
-                </details>
-
-                <details className="group relative">
-                  <summary
-                    title="Instagram"
-                    aria-label="Instagram"
-                    className="flex h-11 w-11 cursor-pointer list-none items-center justify-center rounded-full bg-[#e8f9f2] text-gray-800 shadow-sm hover:ring-2 hover:ring-[#23a7f1] [&::-webkit-details-marker]:hidden"
-                  >
-                    <FaInstagram aria-hidden="true" />
-                  </summary>
-                  <div className="mt-2 flex w-[260px] max-w-full items-center gap-2 rounded-[24px] bg-[#e8f9f2] p-2">
-                    <input
-                      type="text"
-                      value={socialForm.instagram}
-                      onChange={(event) =>
-                        setSocialForm((current) => ({
-                          ...current,
-                          instagram: event.target.value,
-                        }))
-                      }
-                      aria-label="Instagram link"
-                      placeholder="Paste link"
-                      className="h-10 min-w-0 flex-1 rounded-[20px] border-0 bg-white px-3 text-sm font-medium outline-none focus:ring-2 focus:ring-[#23a7f1]"
-                    />
-                    <button
-                      type="submit"
-                      title="Save"
-                      aria-label="Save"
-                      disabled={savingSocial}
-                      className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#23a7f1] text-sm font-bold text-white hover:bg-[#168ed1] disabled:cursor-not-allowed disabled:opacity-60"
-                    >
-                      ✓
-                    </button>
-                  </div>
-                </details>
-
-                <details className="group relative">
-                  <summary
-                    title="LinkedIn"
-                    aria-label="LinkedIn"
-                    className="flex h-11 w-11 cursor-pointer list-none items-center justify-center rounded-full bg-[#e8f9f2] text-gray-800 shadow-sm hover:ring-2 hover:ring-[#23a7f1] [&::-webkit-details-marker]:hidden"
-                  >
-                    <FaLinkedinIn aria-hidden="true" />
-                  </summary>
-                  <div className="mt-2 flex w-[260px] max-w-full items-center gap-2 rounded-[24px] bg-[#e8f9f2] p-2">
-                    <input
-                      type="text"
-                      value={socialForm.linkedin}
-                      onChange={(event) =>
-                        setSocialForm((current) => ({
-                          ...current,
-                          linkedin: event.target.value,
-                        }))
-                      }
-                      aria-label="LinkedIn link"
-                      placeholder="Paste link"
-                      className="h-10 min-w-0 flex-1 rounded-[20px] border-0 bg-white px-3 text-sm font-medium outline-none focus:ring-2 focus:ring-[#23a7f1]"
-                    />
-                    <button
-                      type="submit"
-                      title="Save"
-                      aria-label="Save"
-                      disabled={savingSocial}
-                      className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#23a7f1] text-sm font-bold text-white hover:bg-[#168ed1] disabled:cursor-not-allowed disabled:opacity-60"
-                    >
-                      ✓
-                    </button>
-                  </div>
-                </details>
-
-                <details className="group relative">
-                  <summary
-                    title="X"
-                    aria-label="X"
-                    className="flex h-11 w-11 cursor-pointer list-none items-center justify-center rounded-full bg-[#e8f9f2] text-gray-800 shadow-sm hover:ring-2 hover:ring-[#23a7f1] [&::-webkit-details-marker]:hidden"
-                  >
-                    <FaXTwitter aria-hidden="true" />
-                  </summary>
-                  <div className="mt-2 flex w-[260px] max-w-full items-center gap-2 rounded-[24px] bg-[#e8f9f2] p-2">
-                    <input
-                      type="text"
-                      value={socialForm.x}
-                      onChange={(event) =>
-                        setSocialForm((current) => ({
-                          ...current,
-                          x: event.target.value,
-                        }))
-                      }
-                      aria-label="X link"
-                      placeholder="Paste link"
-                      className="h-10 min-w-0 flex-1 rounded-[20px] border-0 bg-white px-3 text-sm font-medium outline-none focus:ring-2 focus:ring-[#23a7f1]"
-                    />
-                    <button
-                      type="submit"
-                      title="Save"
-                      aria-label="Save"
-                      disabled={savingSocial}
-                      className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#23a7f1] text-sm font-bold text-white hover:bg-[#168ed1] disabled:cursor-not-allowed disabled:opacity-60"
-                    >
-                      ✓
-                    </button>
-                  </div>
-                </details>
-
-                <details className="group relative">
-                  <summary
-                    title="Website"
-                    aria-label="Website"
-                    className="flex h-11 w-11 cursor-pointer list-none items-center justify-center rounded-full bg-[#e8f9f2] text-gray-800 shadow-sm hover:ring-2 hover:ring-[#23a7f1] [&::-webkit-details-marker]:hidden"
-                  >
-                    <FaGlobe aria-hidden="true" />
-                  </summary>
-                  <div className="mt-2 flex w-[260px] max-w-full items-center gap-2 rounded-[24px] bg-[#e8f9f2] p-2">
-                    <input
-                      type="text"
-                      value={socialForm.website}
-                      onChange={(event) =>
-                        setSocialForm((current) => ({
-                          ...current,
-                          website: event.target.value,
-                        }))
-                      }
-                      aria-label="Website link"
-                      placeholder="Paste link"
-                      className="h-10 min-w-0 flex-1 rounded-[20px] border-0 bg-white px-3 text-sm font-medium outline-none focus:ring-2 focus:ring-[#23a7f1]"
-                    />
-                    <button
-                      type="submit"
-                      title="Save"
-                      aria-label="Save"
-                      disabled={savingSocial}
-                      className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#23a7f1] text-sm font-bold text-white hover:bg-[#168ed1] disabled:cursor-not-allowed disabled:opacity-60"
-                    >
-                      ✓
-                    </button>
-                  </div>
-                </details>
-              </div>
-            </form>
-            <div className="mt-5 h-3 rounded-b-2xl bg-[#c7f7f1]" />
+            <div className="mt-5 h-3 rounded-b-2xl bg-[var(--sendio-accent)]" />
           </div>
 
-          <div id="latest-requests" className="overflow-hidden rounded-2xl bg-white p-6 shadow-sm">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <h3 className="text-xl font-semibold">Latest Requests</h3>
-              <Link
-                href="/dashboard/worker/requests"
-                className="rounded-full bg-[#23a7f1] px-4 py-2 text-sm font-bold text-white hover:bg-[#168ed1]"
+          <div id="skills" className={cardClass()}>
+            <h2 className="text-xl font-black">Skills</h2>
+            <p className="mt-1 text-sm font-bold text-slate-600">
+              Add real worker skills.
+            </p>
+
+            <form onSubmit={handleAddSkill} className="mt-5 flex gap-2">
+              <input
+                type="text"
+                value={skillForm.title}
+                onChange={(event) =>
+                  setSkillForm({ title: event.target.value })
+                }
+                placeholder="Skill title"
+                className={inputClass()}
+                required
+              />
+
+              <button
+                type="submit"
+                disabled={savingSkill}
+                className={buttonClass('shrink-0')}
               >
-                Open All Requests
+                {savingSkill ? '...' : 'Add'}
+              </button>
+            </form>
+
+            <div className="mt-5 flex flex-wrap gap-2">
+              {skills.length > 0 ? (
+                skills.map((skill) => (
+                  <span
+                    key={skill.id}
+                    className="inline-flex items-center gap-2 rounded-full bg-[var(--sendio-soft)] px-3 py-2 text-xs font-black text-slate-700"
+                  >
+                    {skill.title}
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteSkill(skill.id)}
+                      className="text-red-500"
+                      aria-label={`Delete ${skill.title}`}
+                    >
+                      ×
+                    </button>
+                  </span>
+                ))
+              ) : (
+                <p className="text-sm font-bold text-slate-500">
+                  No skills added yet.
+                </p>
+              )}
+            </div>
+
+            <div className="mt-5 h-3 rounded-b-2xl bg-[var(--sendio-accent)]" />
+          </div>
+        </section>
+
+        <section className="grid gap-4 xl:grid-cols-3">
+          <div id="reviews" className={cardClass()}>
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <h2 className="text-xl font-black">Reviews</h2>
+                <p className="mt-1 text-sm font-bold text-slate-600">
+                  Public feedback summary.
+                </p>
+              </div>
+
+              <span className="inline-flex items-center gap-1 rounded-full bg-[var(--sendio-soft)] px-3 py-1 text-xs font-black text-slate-700">
+                <FaStar aria-hidden="true" />
+                {worker.rating ?? 0}
+              </span>
+            </div>
+
+            <div className="mt-5 space-y-2">
+              {reviews.slice(0, 3).length > 0 ? (
+                reviews.slice(0, 3).map((review) => (
+                  <div
+                    key={review.id}
+                    className="rounded-2xl bg-[var(--sendio-soft)] p-3"
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="text-sm font-black">{review.user_name}</p>
+                      <span className="text-xs font-black text-yellow-600">
+                        {getStars(review.rating)}
+                      </span>
+                    </div>
+
+                    {review.comment ? (
+                      <p className="mt-1 text-xs font-bold text-slate-600">
+                        {review.comment}
+                      </p>
+                    ) : null}
+                  </div>
+                ))
+              ) : (
+                <p className="rounded-2xl bg-[var(--sendio-soft)] p-3 text-sm font-bold text-slate-500">
+                  No reviews yet.
+                </p>
+              )}
+            </div>
+
+            <div className="mt-5 h-3 rounded-b-2xl bg-[var(--sendio-accent)]" />
+          </div>
+
+          <div id="latest-requests" className={cardClass()}>
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <h2 className="text-xl font-black">Latest Requests</h2>
+                <p className="mt-1 text-sm font-bold text-slate-600">
+                  Recent client requests.
+                </p>
+              </div>
+
+              <Link href="/dashboard/worker/requests" className={softButtonClass()}>
+                Open All
               </Link>
             </div>
 
-            <div className="mt-5 grid max-w-[370px] gap-2">
-              {latestRequests.map((request) => (
-                <div
-                  key={request.id}
-                  className="rounded-[24px] bg-[#e8f9f2] px-4 py-3"
-                >
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="min-w-0">
-                      <h4 className="font-semibold">{request.name}</h4>
+            <div className="mt-5 space-y-2">
+              {latestRequests.length > 0 ? (
+                latestRequests.map((request) => (
+                  <div
+                    key={request.id}
+                    className="rounded-2xl bg-[var(--sendio-soft)] p-3"
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div>
+                        <p className="text-sm font-black">{request.name}</p>
+                        <p className="text-xs font-bold text-slate-500">
+                          {formatDate(request.created_at)}
+                        </p>
+                      </div>
 
-                      <p className="mt-3 text-sm text-gray-700">
-                        {request.message}
-                      </p>
-
-                      <p className="mt-3 text-xs text-gray-500">
-                        {formatDate(request.created_at)}
-                      </p>
+                      <span className="rounded-full bg-white px-3 py-1 text-[11px] font-black text-slate-600">
+                        {request.status || 'new'}
+                      </span>
                     </div>
 
-                    <span className="rounded-full bg-green-100 px-3 py-1 text-xs font-semibold text-green-800">
-                      {request.status || 'new'}
-                    </span>
+                    <p className="mt-2 line-clamp-2 text-xs font-bold text-slate-600">
+                      {request.message}
+                    </p>
                   </div>
-                </div>
-              ))}
-
-              {latestRequests.length === 0 ? (
-                <p className="text-sm text-gray-500">
-                  Requests sent to this worker will appear here.
+                ))
+              ) : (
+                <p className="rounded-2xl bg-[var(--sendio-soft)] p-3 text-sm font-bold text-slate-500">
+                  No requests yet.
                 </p>
-              ) : null}
+              )}
             </div>
-            <div className="mt-5 h-3 rounded-b-2xl bg-[#c7f7f1]" />
+
+            <div className="mt-5 h-3 rounded-b-2xl bg-[var(--sendio-accent)]" />
           </div>
 
-          <div id="services-list" className="overflow-hidden rounded-2xl bg-white p-6 shadow-sm">
-            <h3 className="text-xl font-semibold">Services List</h3>
+          <div id="profile-completion" className={cardClass()}>
+            <h2 className="text-xl font-black">Profile Completion</h2>
+            <p className="mt-1 text-sm font-bold text-slate-600">
+              Current profile readiness.
+            </p>
 
-            <div className="mt-5 grid max-h-[430px] gap-2 overflow-y-auto pr-1">
-              {services.map((service) => (
+            <div className="mt-5 rounded-[24px] bg-[var(--sendio-soft)] p-5">
+              <p className="text-4xl font-black text-slate-950">
+                {profileCompletionPercent}%
+              </p>
+
+              <div className="mt-4 h-3 overflow-hidden rounded-full bg-white">
                 <div
-                  key={service.id}
-                  className="rounded-[24px] bg-[#e8f9f2] px-4 py-3"
-                >
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="min-w-0">
-                      <h4 className="font-semibold">{service.title}</h4>
-
-                      {service.description ? (
-                        <p className="mt-1 break-words text-sm text-gray-600">
-                          {service.description}
-                        </p>
-                      ) : null}
-
-                      {service.price ? (
-                        <p className="mt-2 text-sm font-medium text-green-700">
-                          {service.price}
-                        </p>
-                      ) : null}
-                    </div>
-
-                    <button
-                      type="button"
-                      onClick={() => handleDeleteService(service.id)}
-                      className="shrink-0 rounded-full bg-white px-3 py-1 text-xs font-semibold text-red-600 hover:bg-red-50"
-                    >
-                      Delete
-                    </button>
-                  </div>
-                </div>
-              ))}
-
-              {services.length === 0 ? (
-                <p className="text-sm text-gray-500">
-                  No services added yet.
-                </p>
-              ) : null}
+                  className="h-full rounded-full bg-[var(--sendio-button)]"
+                  style={{ width: `${profileCompletionPercent}%` }}
+                />
+              </div>
             </div>
-            <div className="mt-5 h-3 rounded-b-2xl bg-[#c7f7f1]" />
+
+            <div className="mt-5 space-y-2">
+              {missingProfileItems.length > 0 ? (
+                missingProfileItems.slice(0, 5).map((item) => (
+                  <p
+                    key={item.label}
+                    className="rounded-2xl bg-[var(--sendio-soft)] px-3 py-2 text-xs font-black text-slate-600"
+                  >
+                    Missing: {item.label}
+                  </p>
+                ))
+              ) : (
+                <p className="rounded-2xl bg-[var(--sendio-soft)] px-3 py-2 text-sm font-black text-green-700">
+                  Profile is ready.
+                </p>
+              )}
+            </div>
+
+            <div className="mt-5 h-3 rounded-b-2xl bg-[var(--sendio-accent)]" />
+          </div>
+        </section>
+      </div>
+
+      {previewItem ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4">
+          <div className="relative flex h-[88vh] w-full max-w-5xl flex-col rounded-[28px] bg-white p-4">
+            <div className="mb-3 flex items-center justify-between gap-3">
+              <p className="text-sm font-black text-slate-700">
+                Gallery Preview
+              </p>
+
+              <button
+                type="button"
+                onClick={() => setPreviewItem(null)}
+                className="rounded-full bg-slate-100 px-4 py-2 text-sm font-black text-slate-700"
+              >
+                Close
+              </button>
+            </div>
+
+            <div className="relative min-h-0 flex-1 overflow-hidden rounded-[24px] bg-slate-950">
+              {previewItem.type === 'video' ? (
+                <video
+                  src={previewItem.url}
+                  controls
+                  playsInline
+                  className="h-full w-full object-contain"
+                />
+              ) : (
+                <Image
+                  src={previewItem.url}
+                  alt="Gallery preview"
+                  fill
+                  className="object-contain"
+                  sizes="90vw"
+                />
+              )}
+            </div>
           </div>
         </div>
-      </section>
-
-      <footer className="flex items-center justify-between gap-4 rounded-2xl bg-[#c7f7f1] px-5 py-4 shadow-sm">
-        <div>
-          <p className="text-xs font-bold uppercase text-gray-600">SENDIO</p>
-          <h2 className="text-xl font-bold text-gray-900">
-            Built to connect opportunity
-          </h2>
-          <p className="mt-1 max-w-2xl text-sm text-gray-700">
-            All Sendio services are free. Keep your worker profile ready for
-            better opportunities and stronger client connections.
-          </p>
-        </div>
-
-        <Image
-          src="/logo.png"
-          alt="Sendio logo"
-          width={92}
-          height={92}
-          className="h-20 w-20 shrink-0 object-contain"
-          sizes="92px"
-        />
-      </footer>
-    </div>
+      ) : null}
+    </main>
   );
 }
-

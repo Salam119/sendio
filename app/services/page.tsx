@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { FormEvent, useEffect, useState } from 'react';
+import { FormEvent, useEffect, useRef, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 
 type ServiceCategoryRow = {
@@ -230,6 +230,7 @@ function shortDescription(value: string) {
 
 export default function ServicesPage() {
   const router = useRouter();
+  const heroSearchRef = useRef<HTMLFormElement | null>(null);
 
   const [services, setServices] = useState<ServiceCategoryRow[]>([]);
   const [providers, setProviders] = useState<FeaturedProvider[]>([]);
@@ -242,6 +243,7 @@ export default function ServicesPage() {
   const [subscriberEmail, setSubscriberEmail] = useState('');
   const [subscriberLocation, setSubscriberLocation] = useState('');
   const [subscribeStatus, setSubscribeStatus] = useState('');
+  const [isUserLoggedIn, setIsUserLoggedIn] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -278,6 +280,35 @@ export default function ServicesPage() {
 
     return () => {
       active = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+
+    async function loadAuthState() {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
+      if (!active) {
+        return;
+      }
+
+      setIsUserLoggedIn(Boolean(user));
+    }
+
+    loadAuthState();
+
+    const { data: authListener } = supabase.auth.onAuthStateChange(
+      (_event, session) => {
+        setIsUserLoggedIn(Boolean(session?.user));
+      }
+    );
+
+    return () => {
+      active = false;
+      authListener.subscription.unsubscribe();
     };
   }, []);
 
@@ -550,7 +581,17 @@ export default function ServicesPage() {
             Join as Provider
           </Link>
 
-          <button type="button" className="topIconButton" aria-label="Search">
+          <button
+            type="button"
+            className="topIconButton"
+            aria-label="Search"
+            onClick={() =>
+              heroSearchRef.current?.scrollIntoView({
+                behavior: 'smooth',
+                block: 'center',
+              })
+            }
+          >
             ⌕
           </button>
 
@@ -600,9 +641,19 @@ export default function ServicesPage() {
               </Link>
             </nav>
 
-            <button type="button" className="logoutButton" onClick={handleLogout}>
-              Logout →
-            </button>
+            {isUserLoggedIn ? (
+              <button type="button" className="logoutButton" onClick={handleLogout}>
+                Logout →
+              </button>
+            ) : (
+              <Link
+                href="/login"
+                className="logoutButton"
+                onClick={() => setMenuOpen(false)}
+              >
+                Sign in →
+              </Link>
+            )}
           </aside>
         </div>
       ) : null}
@@ -619,7 +670,7 @@ export default function ServicesPage() {
         <div className="heroBox">
           <p className="heroTitle">Find trusted providers near you.</p>
 
-          <form className="heroSearch" onSubmit={handleSearch}>
+          <form ref={heroSearchRef} className="heroSearch" onSubmit={handleSearch}>
             <input
               value={searchText}
               onChange={(event) => setSearchText(event.target.value)}
@@ -660,9 +711,11 @@ export default function ServicesPage() {
         <div className="cvText">
           <span>FOR SKILLED WORKERS</span>
           <p>Upload your CV and optional recommendation letters to join Sendio as a worker.</p>
-          <Link href="/register">Upload CV</Link>
+       
         </div>
-
+<Link href="/upload-cv" className="cvUploadButton">
+          Upload CV
+        </Link>
         {cvImages.length > 0 ? (
           <div className="cvFaces" aria-label="Provider photos">
             {cvImages.map((provider) => (
@@ -802,16 +855,19 @@ export default function ServicesPage() {
 
                         <div className="providerTinyActions">
                           {item.phone ? (
-                            <a href={`tel:${cleanPhone(item.phone)}`} aria-label="Call provider">
+                            <a
+                              href={isUserLoggedIn ? `tel:${cleanPhone(item.phone)}` : '/login'}
+                              aria-label="Call provider"
+                            >
                               ☎
                             </a>
                           ) : null}
 
                           {whatsappHref ? (
                             <a
-                              href={whatsappHref}
-                              target="_blank"
-                              rel="noreferrer"
+                              href={isUserLoggedIn ? whatsappHref : '/login'}
+                              target={isUserLoggedIn ? '_blank' : undefined}
+                              rel={isUserLoggedIn ? 'noreferrer' : undefined}
                               aria-label="Open WhatsApp"
                             >
                               ●
@@ -958,6 +1014,10 @@ export default function ServicesPage() {
           font-size: 13px;
           font-weight: 900;
           cursor: pointer;
+          text-decoration: none;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
         }
 
         .heroSection {
@@ -1126,18 +1186,30 @@ export default function ServicesPage() {
           font-weight: 700;
         }
 
-        .cvText a {
-          min-width: 190px;
-          min-height: 42px;
-          border-radius: 5px;
+        .cvUploadButton {
+          min-width: 108px;
+          min-height: 30px;
+          border-radius: 999px;
           background: var(--sendio-button-bg);
           color: var(--sendio-text);
+          border: 1px solid var(--sendio-border);
           text-decoration: none;
           display: inline-flex;
           align-items: center;
           justify-content: center;
-          font-size: 13px;
+          padding: 7px 13px;
+          font-size: 11px;
           font-weight: 900;
+          box-shadow: 0 8px 18px rgba(17, 24, 39, 0.08);
+          transition:
+            background 0.18s ease,
+            transform 0.18s ease,
+            border-color 0.18s ease;
+        }
+
+        .cvUploadButton:hover {
+          background: var(--sendio-button-hover);
+          transform: translateY(-1px);
         }
 
         .cvFaces {
@@ -1610,8 +1682,8 @@ export default function ServicesPage() {
             display: grid;
           }
 
-          .cvText a {
-            width: 100%;
+          .cvUploadButton {
+            width: fit-content;
           }
 
           .cvFaces {

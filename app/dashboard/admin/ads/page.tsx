@@ -117,6 +117,8 @@ export default function AdminAdsPage() {
   const [pageError, setPageError] = useState<string | null>(null);
   const [pageMessage, setPageMessage] = useState<string | null>(null);
 
+  const [currentRole, setCurrentRole] = useState<string | null>(null);
+
   async function checkAdminAccess() {
     const {
       data: { user },
@@ -143,6 +145,7 @@ export default function AdminAdsPage() {
       router.replace('/');
       return false;
     }
+    setCurrentRole(profile.role);
 
     return true;
   }
@@ -219,25 +222,78 @@ export default function AdminAdsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  async function writeAdAuditLog(
+    action: string,
+    description: string,
+    adId: string
+  ) {
+    const {
+      data: { user },
+      error: userError,
+    } = await supabase.auth.getUser();
+
+    if (userError || !user) {
+      return userError?.message || 'Admin user was not found for audit log.';
+    }
+
+    const { data: profileData, error: profileError } = await supabase
+      .from('profiles')
+      .select('role')
+      .eq('id', user.id)
+      .maybeSingle();
+
+    if (profileError) {
+      return profileError.message;
+    }
+
+    const profile = profileData as { role: string | null } | null;
+
+    const { error: auditError } = await supabase
+  .from('admin_audit_logs')
+  .insert({
+    actor_id: user.id,
+    actor_role: profile?.role ?? currentRole,
+    action,
+    target_table: 'company_ads',
+    target_id: adId,
+    description,
+    category: 'ads',
+    status: 'success',
+  });
+
+    if (auditError) {
+      return auditError.message;
+    }
+
+    return null;
+  }
+
   async function updateAd(
-    adId: string,
+    ad: AdminAd,
     values: Partial<AdminAd>,
     successMessage: string,
-    actionName: string
+    actionName: string,
+    auditDescription: string
   ) {
-    setActionLoadingId(`${actionName}-${adId}`);
+    setActionLoadingId(`${actionName}-${ad.id}`);
     setPageError(null);
     setPageMessage(null);
 
     const { error } = await supabase
       .from('company_ads')
       .update(values)
-      .eq('id', adId);
+      .eq('id', ad.id);
 
     if (error) {
       setPageError(error.message);
       setActionLoadingId(null);
       return;
+    }
+
+    const auditError = await writeAdAuditLog(actionName, auditDescription, ad.id);
+
+    if (auditError) {
+      setPageError(`Ad was updated, but activity log was not saved: ${auditError}`);
     }
 
     await loadAds();
@@ -254,14 +310,15 @@ export default function AdminAdsPage() {
     if (!confirmed) return;
 
     await updateAd(
-      ad.id,
+      ad,
       {
         active: false,
         status: 'paused',
         paused_at: new Date().toISOString(),
       },
       'Ad paused successfully.',
-      'pause'
+      'ads_pause',
+      `Paused ad "${ad.title}" for company "${ad.companies?.name || 'Unknown company'}".`
     );
   }
 
@@ -273,7 +330,7 @@ export default function AdminAdsPage() {
     if (!confirmed) return;
 
     await updateAd(
-      ad.id,
+      ad,
       {
         active: true,
         status: 'active',
@@ -283,7 +340,10 @@ export default function AdminAdsPage() {
       ad.status === 'rejected'
         ? 'Rejected ad restored successfully.'
         : 'Ad reactivated successfully.',
-      'reactivate'
+      ad.status === 'rejected' ? 'ads_restore_rejected' : 'ads_reactivate',
+      ad.status === 'rejected'
+        ? `Restored rejected ad "${ad.title}" for company "${ad.companies?.name || 'Unknown company'}".`
+        : `Reactivated ad "${ad.title}" for company "${ad.companies?.name || 'Unknown company'}".`
     );
   }
 
@@ -295,14 +355,15 @@ export default function AdminAdsPage() {
     if (!confirmed) return;
 
     await updateAd(
-      ad.id,
+      ad,
       {
         active: false,
         status: 'rejected',
         paused_at: new Date().toISOString(),
       },
       'Ad rejected successfully.',
-      'reject'
+      'ads_reject',
+      `Rejected ad "${ad.title}" for company "${ad.companies?.name || 'Unknown company'}".`
     );
   }
 

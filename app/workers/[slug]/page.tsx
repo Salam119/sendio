@@ -73,6 +73,41 @@ type WorkerReview = {
   created_at: string | null;
 };
 
+type WorkerCv = {
+  id: string;
+  worker_id: string | null;
+  cv_mode: 'manual' | 'file' | string | null;
+  cv_file_url: string | null;
+  cv_file_name: string | null;
+  cv_file_type: string | null;
+  cv_file_mime_type: string | null;
+  cv_file_uploaded_at: string | null;
+  first_name: string | null;
+  last_name: string | null;
+  age: string | number | null;
+  nationality: string | null;
+  profession: string | null;
+  specialty: string | null;
+  experience: string | null;
+  work_type: string | null;
+  availability: string | null;
+  working_hours: string | null;
+  education: string | null;
+  certificates: string | null;
+  licenses: string | null;
+  training: string | null;
+  languages: string | null;
+  skills: string | null;
+  tools_equipment: string | null;
+  previous_work: string | null;
+  work_areas: string | null;
+  professional_summary: string | null;
+  full_address: string | null;
+  phone: string | null;
+  created_at: string | null;
+  updated_at: string | null;
+};
+
 type ContactChannel =
   | 'whatsapp'
   | 'phone'
@@ -81,7 +116,8 @@ type ContactChannel =
   | 'facebook'
   | 'instagram'
   | 'linkedin'
-  | 'x';
+  | 'x'
+  | 'maps';
 
 type ContactItem = {
   channel: ContactChannel;
@@ -150,6 +186,61 @@ function getMailUrl(value: string | null) {
   return `mailto:${email}`;
 }
 
+function getMapsUrl(value: string | null) {
+  if (!value) return null;
+
+  const address = value.trim();
+
+  if (!address) return null;
+
+  return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
+    address
+  )}`;
+}
+
+function isValidEmail(value: string) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(value.trim());
+}
+
+function getPhoneDigits(value: string) {
+  return value.replace(/\D/g, '');
+}
+
+function isValidPhone(value: string) {
+  const digits = getPhoneDigits(value);
+  return digits.length >= 8 && digits.length <= 15;
+}
+
+function isWeakRequestMessage(value: string) {
+  const cleanValue = value.trim();
+
+  if (cleanValue.length < 6) {
+    return true;
+  }
+
+  const words = cleanValue
+    .split(/\s+/)
+    .filter((word) => word.replace(/[^a-zA-ZÀ-ÿ0-9]/g, '').length >= 2);
+
+  if (words.length < 1) {
+    return true;
+  }
+
+  const compactLetters = cleanValue.replace(/[^a-zA-ZÀ-ÿ]/g, '').toLowerCase();
+
+  if (compactLetters.length >= 5 && /^([a-zà-ÿ])\1+$/.test(compactLetters)) {
+    return true;
+  }
+
+  return false;
+}
+
+function hasText(value: string | number | null | undefined) {
+  if (value === null || value === undefined) return false;
+
+  return String(value).trim().length > 0;
+}
+
 function formatStatus(value: string | null) {
   if (!value) return null;
 
@@ -206,6 +297,9 @@ export default function PublicWorkerProfilePage() {
     null
   );
   const [reviews, setReviews] = useState<WorkerReview[]>([]);
+  const [workerCv, setWorkerCv] = useState<WorkerCv | null>(null);
+  const [isCvOpen, setIsCvOpen] = useState(false);
+  const [previewMedia, setPreviewMedia] = useState<WorkerGalleryItem | null>(null);
 
   const [contactClicksCount, setContactClicksCount] = useState<number | null>(
     null
@@ -394,6 +488,7 @@ export default function PublicWorkerProfilePage() {
 
       if (!workerData) {
         setWorker(null);
+        setWorkerCv(null);
         setLoading(false);
         setNotFound(true);
         return;
@@ -410,6 +505,7 @@ export default function PublicWorkerProfilePage() {
         socialLinksResult,
         reviewsResult,
         contactClicksResult,
+        workerCvResult,
       ] = await Promise.all([
         supabase
           .from('worker_services')
@@ -446,6 +542,12 @@ export default function PublicWorkerProfilePage() {
           .select('id', { count: 'exact', head: true })
           .eq('worker_id', selectedWorker.id)
           .eq('event_type', 'contact_click'),
+
+        supabase
+          .from('worker_cv')
+          .select('*')
+          .eq('worker_id', selectedWorker.id)
+          .maybeSingle(),
       ]);
 
       if (!isMounted) return;
@@ -457,9 +559,20 @@ export default function PublicWorkerProfilePage() {
         (socialLinksResult.data as WorkerSocialLinks | null) ?? null
       );
       setReviews((reviewsResult.data ?? []) as WorkerReview[]);
+      setWorkerCv((workerCvResult.data as WorkerCv | null) ?? null);
       setContactClicksCount(
         contactClicksResult.error ? null : contactClicksResult.count ?? 0
       );
+
+      const nextViews = (selectedWorker.views ?? 0) + 1;
+      setWorker((currentWorker) =>
+        currentWorker ? { ...currentWorker, views: nextViews } : currentWorker
+      );
+      await supabase
+        .from('workers')
+        .update({ views: nextViews })
+        .eq('id', selectedWorker.id);
+
       setLoading(false);
     }
 
@@ -614,12 +727,27 @@ export default function PublicWorkerProfilePage() {
     setRequestStatus(null);
 
     const cleanName = requestName.trim();
-    const cleanEmail = requestEmail.trim();
+    const cleanEmail = requestEmail.trim().toLowerCase();
     const cleanPhone = requestPhone.trim();
     const cleanMessage = requestMessage.trim();
 
-    if (!cleanName || !cleanEmail || !cleanMessage) {
-      setRequestStatus('Please fill in your name, email, and message.');
+    if (cleanName.length < 2) {
+      setRequestStatus('Please enter your real name.');
+      return;
+    }
+
+    if (!isValidEmail(cleanEmail)) {
+      setRequestStatus('Please enter a valid email address.');
+      return;
+    }
+
+    if (!isValidPhone(cleanPhone)) {
+      setRequestStatus('Please enter a valid phone number with at least 8 digits.');
+      return;
+    }
+
+    if (isWeakRequestMessage(cleanMessage)) {
+      setRequestStatus('Please describe your request clearly.');
       return;
     }
 
@@ -632,7 +760,7 @@ export default function PublicWorkerProfilePage() {
       client_id: currentUserId,
       name: cleanName,
       email: cleanEmail,
-      phone: cleanPhone || null,
+      phone: cleanPhone,
       message: cleanMessage,
       status: 'new',
       worker_seen: false,
@@ -669,7 +797,9 @@ export default function PublicWorkerProfilePage() {
     setRequestEmail('');
     setRequestPhone('');
     setRequestMessage('');
-    setRequestStatus('Request sent successfully.');
+    setRequestStatus(
+      '✅ Your request was sent successfully. The worker can now see it in their dashboard.'
+    );
   }
 
   async function handleSubmitReview(event: FormEvent<HTMLFormElement>) {
@@ -769,6 +899,7 @@ export default function PublicWorkerProfilePage() {
   const whatsappUrl = getWhatsappUrl(worker?.whatsapp ?? null);
   const phoneUrl = getPhoneUrl(worker?.phone ?? null);
   const emailUrl = getMailUrl(worker?.email ?? null);
+  const mapsUrl = getMapsUrl(worker?.address ?? null);
 
   const facebookUrl = normalizeUrl(socialLinks?.facebook ?? null);
   const instagramUrl = normalizeUrl(socialLinks?.instagram ?? null);
@@ -776,15 +907,50 @@ export default function PublicWorkerProfilePage() {
   const xUrl = normalizeUrl(socialLinks?.x ?? null);
 
   const statusLabel = formatStatus(worker?.status ?? null);
-  const createdDate = formatDate(worker?.created_at ?? null);
-  const featuredMedia = gallery[0] ?? null;
-  const compactServices = services.slice(0, 4);
-  const visibleSkills = skills.slice(0, 6);
-  const ratingValue =
-    typeof worker?.rating === 'number' && !Number.isNaN(worker.rating)
+
+  const achievementMedia =
+    gallery.find((item) => item.url !== worker?.avatar) ?? null;
+ 
+const ratingValue =
+  reviews.length > 0
+    ? reviews.reduce((total, review) => total + review.rating, 0) / reviews.length
+    : typeof worker?.rating === 'number' && !Number.isNaN(worker.rating)
       ? worker.rating
       : 0;
   const isAvailable = worker?.status === 'available';
+
+  const cvFileUrl = workerCv?.cv_file_url?.trim() || null;
+  const cvMode = workerCv?.cv_mode ?? null;
+  const manualCvRows = workerCv
+    ? [
+        ['Personal Information', [workerCv.first_name, workerCv.last_name].filter(Boolean).join(' ')],
+        ['Age', workerCv.age],
+        ['Nationality', workerCv.nationality],
+        ['Profession', workerCv.profession],
+        ['Specialty', workerCv.specialty],
+        ['Experience', workerCv.experience],
+        ['Work Type', workerCv.work_type],
+        ['Availability', workerCv.availability],
+        ['Working Hours', workerCv.working_hours],
+        ['Education', workerCv.education],
+        ['Certificates', workerCv.certificates],
+        ['Licenses', workerCv.licenses],
+        ['Training', workerCv.training],
+        ['Languages', workerCv.languages],
+        ['Skills', workerCv.skills],
+        ['Tools & Equipment', workerCv.tools_equipment],
+        ['Previous Work', workerCv.previous_work],
+        ['Work Areas', workerCv.work_areas],
+        ['Professional Summary', workerCv.professional_summary],
+        ['Contact Address', workerCv.full_address],
+        ['Phone', workerCv.phone],
+      ].filter(([, value]) => hasText(value))
+    : [];
+  const hasManualCv = manualCvRows.length > 0;
+  const hasFileCv = Boolean(cvFileUrl);
+  const shouldShowFileCv = hasFileCv && cvMode !== 'manual';
+  const shouldShowManualCv = hasManualCv && !shouldShowFileCv;
+  const hasAnyCv = Boolean(shouldShowFileCv || shouldShowManualCv);
 
   const contactItems: ContactItem[] = [
     {
@@ -818,6 +984,14 @@ export default function PublicWorkerProfilePage() {
       url: websiteUrl,
       displayValue: websiteUrl,
       lockedMessage: 'Sign in to unlock this website link.',
+    },
+    {
+      channel: 'maps',
+      label: 'Google Maps',
+      icon: '📍',
+      url: mapsUrl,
+      displayValue: worker?.address ?? null,
+      lockedMessage: 'Sign in to unlock Google Maps.',
     },
     {
       channel: 'facebook',
@@ -865,8 +1039,8 @@ export default function PublicWorkerProfilePage() {
         key={item.channel}
         type="button"
         className={`contact-icon-button ${
-          !isLoggedIn ? 'contact-icon-locked' : ''
-        }`}
+          item.channel === 'maps' ? 'contact-icon-maps' : ''
+        } ${!isLoggedIn ? 'contact-icon-locked' : ''}`}
         aria-label={item.label}
         title={item.label}
         onClick={() => {
@@ -1099,198 +1273,77 @@ export default function PublicWorkerProfilePage() {
         </section>
       ) : null}
 
-      <section className="content-grid">
-        <div className="main-column">
-          {featuredMedia ? (
-            <section className="card featured-card">
-              <div className="section-heading compact-heading">
-                <h2>Achievements</h2>
-              </div>
-
-              <div className="featured-media-frame">
-                {featuredMedia.type === 'video' ? (
-                  <video src={featuredMedia.url} controls />
-                ) : (
-                  <Image
-                    src={featuredMedia.url}
-                    alt={`${worker.name} achievement`}
-                    width={774}
-                    height={348}
-                    style={{ width: '100%', height: '100%', objectFit: 'contain' }}
-                    sizes="387px"
-                  />
-                )}
-              </div>
-            </section>
-          ) : null}
-
-          {compactServices.length > 0 ? (
-            <section className="card services-card">
-              <div className="section-heading compact-heading">
-                <h2>Services</h2>
-              </div>
-
-              <div className="compact-services-list">
-                {compactServices.map((service) => (
-                  <article key={service.id} className="service-pill">
-                    <span>{service.title}</span>
-                    {service.price ? <strong>{service.price}</strong> : null}
-                  </article>
-                ))}
-              </div>
-            </section>
-          ) : null}
-
-          {visibleSkills.length > 0 ? (
-            <section className="card skills-card">
-              <div className="section-heading compact-heading">
-                <h2>Skills</h2>
-              </div>
-
-              <div className="compact-skills-list">
-                {visibleSkills.map((skill) => (
-                  <span key={skill.id}>{skill.title}</span>
-                ))}
-              </div>
-            </section>
-          ) : null}
-
-          <section className="card compact-reviews-card">
+      <section className="worker-profile-shell">
+        <div className="profile-layer profile-layer-one">
+          <section className="card request-card compact-request-card">
             <div className="section-heading compact-heading">
-              <h2>Reviews</h2>
-            </div>
-
-            {isLoggedIn ? (
-              <form onSubmit={handleSubmitReview} className="compact-review-form">
-                <div className="small-star-picker" aria-label="Review rating">
-                  {[1, 2, 3, 4, 5].map((star) => (
-                    <button
-                      key={star}
-                      type="button"
-                      onClick={() => setReviewRating(star)}
-                      className={reviewRating >= star ? 'star-active' : ''}
-                      aria-label={`${star} star${star > 1 ? 's' : ''}`}
-                    >
-                      ★
-                    </button>
-                  ))}
-                </div>
-
-                <textarea
-                  value={reviewComment}
-                  onChange={(event) => setReviewComment(event.target.value)}
-                  placeholder="Write a short comment..."
-                  rows={2}
-                />
-
-                <div className="review-form-footer">
-                  <button type="submit" disabled={reviewSubmitting}>
-                    {reviewSubmitting
-                      ? 'Saving...'
-                      : currentUserReview
-                        ? 'Update'
-                        : 'Add'}
-                  </button>
-
-                  {reviewStatus ? <p>{reviewStatus}</p> : null}
-                </div>
-              </form>
-            ) : (
-              <div className="login-review-box">
-                <p>Sign in to add a rating and review.</p>
-
-                <button
-                  type="button"
-                  onClick={() =>
-                    showLockedMessage('Register to rate and review this worker.')
-                  }
-                >
-                  Unlock
-                </button>
-              </div>
-            )}
-
-            <div className="compact-reviews-list">
-              {reviews.map((review) => (
-                <article key={review.id} className="compact-review-card">
-                  <div className="compact-review-top">
-                    <strong>{review.user_name}</strong>
-
-                    <span>{getStars(review.rating)}</span>
-
-                    {review.created_at ? (
-                      <small>{formatDate(review.created_at)}</small>
-                    ) : null}
-                  </div>
-
-                  {review.comment ? <p>{review.comment}</p> : null}
-
-                  {review.user_id === currentUserId ? (
-                    <button
-                      type="button"
-                      onClick={() => handleDeleteReview(review.id)}
-                      className="delete-review-button"
-                    >
-                      Delete
-                    </button>
-                  ) : null}
-                </article>
-              ))}
-
-              {reviews.length === 0 ? (
-                <p className="empty-review-text">No reviews yet.</p>
-              ) : null}
-            </div>
-          </section>
-        </div>
-
-        <aside className="side-column">
-          <section className="card request-card">
-            <div className="section-heading">
               <h2>Request Service</h2>
+              <span>Free request</span>
             </div>
 
             {isLoggedIn ? (
-              <form onSubmit={handleSendRequest} className="request-form">
-                <input
-                  type="text"
-                  value={requestName}
-                  onChange={(event) => setRequestName(event.target.value)}
-                  placeholder="Your name"
-                />
+              <form onSubmit={handleSendRequest} className="request-form mini-request-form">
+                <div className="request-two-fields">
+                  <input
+                    type="text"
+                    value={requestName}
+                    onChange={(event) => {
+                      setRequestName(event.target.value);
+                      setRequestStatus(null);
+                    }}
+                    placeholder="Your name"
+                  />
 
-                <input
-                  type="email"
-                  value={requestEmail}
-                  onChange={(event) => setRequestEmail(event.target.value)}
-                  placeholder="Your email"
-                />
+                  <input
+                    type="email"
+                    value={requestEmail}
+                    onChange={(event) => {
+                      setRequestEmail(event.target.value);
+                      setRequestStatus(null);
+                    }}
+                    placeholder="Your email"
+                  />
+                </div>
 
                 <input
                   type="text"
                   value={requestPhone}
-                  onChange={(event) => setRequestPhone(event.target.value)}
+                  onChange={(event) => {
+                  setRequestPhone(event.target.value);
+                  setRequestStatus(null);
+                }}
                   placeholder="Your phone"
                 />
 
                 <textarea
                   value={requestMessage}
-                  onChange={(event) => setRequestMessage(event.target.value)}
+                  onChange={(event) => {
+                  setRequestMessage(event.target.value);
+                  setRequestStatus(null);
+                }}
                   placeholder="Describe what you need"
-                  rows={5}
+                  rows={2}
                 />
 
                 <button type="submit" disabled={requestSending}>
-                  {requestSending ? 'Sending...' : 'Send Request'}
+                  {requestSending ? 'Sending...' : 'Send Free Request'}
                 </button>
 
                 {requestStatus ? (
-                  <p className="request-status">{requestStatus}</p>
+                  <div
+                    className={`request-status-box ${
+                      requestStatus.startsWith('✅')
+                        ? 'request-status-success'
+                        : 'request-status-error'
+                    }`}
+                  >
+                    {requestStatus}
+                  </div>
                 ) : null}
               </form>
             ) : (
-              <div className="locked-request-box">
-                <p>Sign in to request this service.</p>
+              <div className="locked-request-box compact-locked-box">
+                <p>Sign in to request this worker for free.</p>
 
                 <button
                   type="button"
@@ -1304,18 +1357,62 @@ export default function PublicWorkerProfilePage() {
             )}
           </section>
 
-          <section className="card details-card">
-            <div className="section-heading">
-              <h2>Worker Details</h2>
+          <section className="card cv-card">
+            <div className="section-heading compact-heading">
+              <h2>CV</h2>
+              <span>{hasAnyCv ? 'Available' : 'Waiting'}</span>
             </div>
 
-            <div className="details-grid">
-              {worker.profession ? (
-                <div>
-                  <span>Profession</span>
-                  <strong>{worker.profession}</strong>
-                </div>
-              ) : null}
+            <div className="cv-actions">
+              {shouldShowFileCv && cvFileUrl ? (
+                <a
+                  href={cvFileUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="cv-button cv-button-green"
+                >
+                  CV PDF
+                </a>
+              ) : (
+                <button type="button" className="cv-button cv-button-red" disabled>
+                  CV PDF
+                </button>
+              )}
+
+              <button
+                type="button"
+                className={`cv-button ${
+                  shouldShowManualCv ? 'cv-button-green' : 'cv-button-red'
+                }`}
+                disabled={!shouldShowManualCv}
+                onClick={() => setIsCvOpen((current) => !current)}
+              >
+                {isCvOpen ? 'Close CV' : 'Read CV'}
+              </button>
+            </div>
+
+            {isCvOpen && shouldShowManualCv ? (
+              <div className="manual-cv-panel">
+                {manualCvRows.map(([label, value]) => (
+                  <div key={String(label)} className="manual-cv-row">
+                    <span>{label}</span>
+                    <strong>{String(value)}</strong>
+                  </div>
+                ))}
+              </div>
+            ) : null}
+          </section>
+
+          <section className="card adresse-card">
+            <div className="section-heading compact-heading">
+              <h2>Adresse</h2>
+            </div>
+
+            <div className="adresse-list">
+              <div>
+                <span>Name</span>
+                <strong>{worker.name}</strong>
+              </div>
 
               {worker.city ? (
                 <div>
@@ -1337,39 +1434,162 @@ export default function PublicWorkerProfilePage() {
                   <strong>{worker.working_hours}</strong>
                 </div>
               ) : null}
-
-              {statusLabel ? (
-                <div>
-                  <span>Status</span>
-                  <strong>{statusLabel}</strong>
-                </div>
-              ) : null}
-
-              {worker.experience_years !== null ? (
-                <div>
-                  <span>Experience</span>
-                  <strong>{worker.experience_years} years</strong>
-                </div>
-              ) : null}
-
-              {createdDate ? (
-                <div>
-                  <span>Joined</span>
-                  <strong>{createdDate}</strong>
-                </div>
-              ) : null}
-
-              {worker.requests_count !== null ? (
-                <div>
-                  <span>Requests</span>
-                  <strong>{worker.requests_count}</strong>
-                </div>
-              ) : null}
             </div>
-          </section>
-        </aside>
-      </section>
 
+            {activeContactItems.length > 0 ? (
+              <div className="adresse-icons">
+                {activeContactItems.map((item) => renderContactIcon(item))}
+              </div>
+            ) : null}
+          </section>
+        </div>
+
+        <div className="profile-layer profile-layer-two">
+          <section className="card services-card compact-card-box">
+            <div className="section-heading compact-heading">
+              <h2>Services</h2>
+            </div>
+
+            {services.length > 0 ? (
+              <div className="compact-services-list">
+                {services.slice(0, 6).map((service) => (
+                  <article key={service.id} className="service-pill">
+                    <span>{service.title}</span>
+                    {service.price ? <strong>{service.price}</strong> : null}
+                  </article>
+                ))}
+              </div>
+            ) : (
+              <p className="empty-small-text">No services yet.</p>
+            )}
+          </section>
+
+          <section className="card skills-card compact-card-box">
+            <div className="section-heading compact-heading">
+              <h2>Skills</h2>
+            </div>
+
+            {skills.length > 0 ? (
+              <div className="compact-skills-list">
+                {skills.slice(0, 10).map((skill) => (
+                  <span key={skill.id}>{skill.title}</span>
+                ))}
+              </div>
+            ) : (
+              <p className="empty-small-text">No skills yet.</p>
+            )}
+          </section>
+
+          <section className="card achievement-card compact-card-box">
+            <div className="section-heading compact-heading">
+              <h2>Achievements</h2>
+            </div>
+
+            {achievementMedia ? (
+              <button
+                type="button"
+                className="achievement-mini-frame"
+                onClick={() => setPreviewMedia(achievementMedia)}
+              >
+                {achievementMedia.type === 'video' ? (
+                  <video src={achievementMedia.url} muted playsInline />
+                ) : (
+                  <Image
+                    src={achievementMedia.url}
+                    alt={`${worker.name} achievement`}
+                    fill
+                    className="achievement-mini-image"
+                    sizes="160px"
+                  />
+                )}
+              </button>
+            ) : (
+              <div className="achievement-mini-empty">No media</div>
+            )}
+          </section>
+        </div>
+
+        <section className="card compact-reviews-card">
+          <div className="section-heading compact-heading">
+            <h2>Reviews</h2>
+            <span>{reviews.length}</span>
+          </div>
+
+          {isLoggedIn ? (
+            <form onSubmit={handleSubmitReview} className="compact-review-form">
+              <div className="small-star-picker" aria-label="Review rating">
+                {[1, 2, 3, 4, 5].map((star) => (
+                  <button
+                    key={star}
+                    type="button"
+                    onClick={() => setReviewRating(star)}
+                    className={reviewRating >= star ? 'star-active' : ''}
+                    aria-label={`${star} star${star > 1 ? 's' : ''}`}
+                  >
+                    ★
+                  </button>
+                ))}
+              </div>
+
+              <textarea
+                value={reviewComment}
+                onChange={(event) => setReviewComment(event.target.value)}
+                placeholder="Short review..."
+                rows={1}
+              />
+
+              <div className="review-form-footer">
+                <button type="submit" disabled={reviewSubmitting}>
+                  {reviewSubmitting ? 'Saving...' : currentUserReview ? 'Update' : 'Add'}
+                </button>
+
+                {reviewStatus ? <p>{reviewStatus}</p> : null}
+              </div>
+            </form>
+          ) : (
+            <div className="login-review-box compact-login-review-box">
+              <p>Sign in to add stars.</p>
+
+              <button
+                type="button"
+                onClick={() =>
+                  showLockedMessage('Register to rate and review this worker.')
+                }
+              >
+                Unlock
+              </button>
+            </div>
+          )}
+
+          <div className="compact-reviews-list">
+            {reviews.slice(0, 4).map((review) => (
+              <article key={review.id} className="compact-review-card">
+                <div className="compact-review-top">
+                  <strong>{review.user_name}</strong>
+                  <span>{getStars(review.rating)}</span>
+                  {review.created_at ? <small>{formatDate(review.created_at)}</small> : null}
+                </div>
+
+                {review.comment ? <p>{review.comment}</p> : null}
+
+                {review.user_id === currentUserId ? (
+                  <button
+                    type="button"
+                    onClick={() => handleDeleteReview(review.id)}
+                    className="delete-review-button"
+                  >
+                    Delete
+                  </button>
+                ) : null}
+              </article>
+            ))}
+
+            {reviews.length === 0 ? (
+              <p className="empty-review-text">No reviews yet.</p>
+            ) : null}
+          </div>
+        </section>
+      </section>
       <footer className="worker-footer">
         <div className="footer-brand">
           <Image
@@ -1383,11 +1603,37 @@ export default function PublicWorkerProfilePage() {
         </div>
 
         <p>
-          Sendio connects clients with independent workers. Each worker is
-          responsible for their own service, pricing, communication, and final
-          agreement with the client.
+          Request trusted local service for free with Sendio. Sendio helps you
+          connect, compare, and start your service request with confidence.
         </p>
       </footer>
+
+      {previewMedia ? (
+        <div className="media-preview-overlay">
+          <div className="media-preview-box">
+            <div className="media-preview-top">
+              <strong>Achievement Preview</strong>
+              <button type="button" onClick={() => setPreviewMedia(null)}>
+                Close
+              </button>
+            </div>
+
+            <div className="media-preview-frame">
+              {previewMedia.type === 'video' ? (
+                <video src={previewMedia.url} controls playsInline />
+              ) : (
+                <Image
+                  src={previewMedia.url}
+                  alt="Achievement preview"
+                  fill
+                  className="media-preview-image"
+                  sizes="90vw"
+                />
+              )}
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       {unlockNotice ? (
         <div className="unlock-toast">
@@ -1760,6 +2006,12 @@ export default function PublicWorkerProfilePage() {
           line-height: 1;
         }
 
+        .contact-icon-maps {
+          background: #fee2e2;
+          color: #dc2626;
+          border-color: #fecaca;
+        }
+
         .contact-icon-locked {
           background: #f3f4f6;
           color: #6b7280;
@@ -1806,30 +2058,29 @@ export default function PublicWorkerProfilePage() {
           cursor: pointer;
         }
 
-        .content-grid {
+        .worker-profile-shell {
           width: calc(100% - var(--page-side-padding) * 2);
           max-width: var(--shell-width);
           margin: 14px auto 0;
-          display: grid;
-          grid-template-columns: minmax(0, 1fr) 330px;
-          gap: 16px;
-          align-items: start;
-        }
-
-        .main-column,
-        .side-column {
-          min-width: 0;
           display: flex;
           flex-direction: column;
           gap: 12px;
+        }
+
+        .profile-layer {
+          display: grid;
+          grid-template-columns: repeat(3, minmax(0, 1fr));
+          gap: 12px;
+          align-items: stretch;
         }
 
         .card {
           background: var(--card-bg);
           border: 1px solid var(--border);
           border-radius: 22px;
-          padding: 15px;
+          padding: 13px;
           box-shadow: 0 10px 22px rgba(17, 24, 39, 0.045);
+          min-width: 0;
         }
 
         .section-heading {
@@ -1837,86 +2088,257 @@ export default function PublicWorkerProfilePage() {
           align-items: center;
           justify-content: space-between;
           gap: 10px;
-          margin-bottom: 11px;
+          margin-bottom: 9px;
         }
 
         .section-heading h2 {
           margin: 0;
           color: var(--text);
-          font-size: 19px;
-          letter-spacing: -0.3px;
+          font-size: 16px;
+          letter-spacing: -0.2px;
         }
 
-        .compact-heading {
-          margin-bottom: 9px;
-        }
-
-        .compact-heading h2 {
-          font-size: 17px;
-        }
-
-        .featured-card {
-          width: 100%;
-          max-width: 100%;
-        }
-
-        .featured-media-frame {
-          width: 100%;
-          max-width: 100%;
-          height: var(--featured-media-height);
-          border-radius: 18px;
-          background: var(--soft-card-bg);
+        .section-heading span {
+          border-radius: 999px;
+          background: var(--button-bg);
           border: 1px solid var(--border);
-          overflow: hidden;
+          color: var(--primary-blue-dark);
+          padding: 4px 8px;
+          font-size: 10px;
+          font-weight: 900;
+        }
+
+        .compact-request-card {
+          min-height: 218px;
+        }
+
+        .request-form,
+        .mini-request-form {
           display: flex;
+          flex-direction: column;
+          gap: 7px;
+        }
+
+        .request-two-fields {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 7px;
+        }
+
+        .request-form input,
+        .request-form textarea {
+          width: 100%;
+          border: 1px solid var(--border);
+          border-radius: 13px;
+          padding: 8px 9px;
+          font-size: 12px;
+          outline: none;
+          color: var(--text);
+          background: var(--soft-card-bg);
+          resize: vertical;
+        }
+
+        .request-form textarea {
+          min-height: 54px;
+        }
+
+        .request-form input:focus,
+        .request-form textarea:focus {
+          border-color: var(--primary-blue);
+          background: var(--card-bg);
+        }
+
+        .request-form button,
+        .locked-request-box button {
+          border: 0;
+          background: var(--primary-blue);
+          color: white;
+          border-radius: 999px;
+          padding: 9px 12px;
+          font-size: 12px;
+          font-weight: 900;
+          cursor: pointer;
+          transition: 0.2s ease;
+        }
+
+        .request-form button:hover,
+        .locked-request-box button:hover {
+          background: var(--primary-blue-dark);
+        }
+
+        .request-form button:disabled {
+          opacity: 0.65;
+          cursor: not-allowed;
+        }
+
+        .request-status-box {
+          margin: 2px 0 0;
+          border-radius: 14px;
+          padding: 9px 10px;
+          font-size: 11px;
+          line-height: 1.45;
+          font-weight: 900;
+        }
+
+        .request-status-success {
+          border: 1px solid #bbf7d0;
+          background: #dcfce7;
+          color: #166534;
+        }
+
+        .request-status-error {
+          border: 1px solid #fecaca;
+          background: #fee2e2;
+          color: #991b1b;
+        }
+
+        .locked-request-box {
+          border: 1px dashed var(--border);
+          background: var(--soft-card-bg);
+          border-radius: 18px;
+          padding: 12px;
+          display: flex;
+          flex-direction: column;
+          gap: 10px;
+        }
+
+        .locked-request-box p {
+          margin: 0;
+          color: var(--muted);
+          font-size: 12px;
+          font-weight: 800;
+        }
+
+        .cv-actions {
+          display: flex;
+          gap: 8px;
+          flex-wrap: wrap;
+        }
+
+        .cv-button {
+          min-width: 92px;
+          height: 34px;
+          border: 0;
+          border-radius: 999px;
+          display: inline-flex;
           align-items: center;
           justify-content: center;
+          padding: 0 13px;
+          color: white;
+          font-size: 12px;
+          font-weight: 900;
+          text-decoration: none;
+          cursor: pointer;
         }
-.featured-media-frame img {
-  width: 100%;
-  height: 100%;
-  object-fit: contain;
-  object-position: center;
-  display: block;
-  background: var(--soft-card-bg);
-}
 
-.featured-media-frame video {
-  width: auto;
-  max-width: 100%;
-  height: 100%;
-  object-fit: contain;
-  object-position: center;
-  display: block;
-  background: #ffffff;
-}
-        
+        .cv-button-green {
+          background: #16a34a;
+        }
+
+        .cv-button-red {
+          background: #dc2626;
+          cursor: not-allowed;
+        }
+
+        .manual-cv-panel {
+          margin-top: 10px;
+          max-height: 265px;
+          overflow: auto;
+          border-radius: 16px;
+          background: var(--soft-card-bg);
+          border: 1px solid var(--border);
+          padding: 9px;
+          display: grid;
+          gap: 7px;
+        }
+
+        .manual-cv-row {
+          border-radius: 12px;
+          background: white;
+          border: 1px solid #e5e7eb;
+          padding: 7px 8px;
+        }
+
+        .manual-cv-row span {
+          display: block;
+          color: var(--soft-muted);
+          font-size: 10px;
+          font-weight: 900;
+        }
+
+        .manual-cv-row strong {
+          display: block;
+          margin-top: 2px;
+          color: var(--text);
+          font-size: 12px;
+          line-height: 1.4;
+          font-weight: 800;
+          white-space: pre-wrap;
+        }
+
+        .adresse-list {
+          display: grid;
+          gap: 7px;
+        }
+
+        .adresse-list div {
+          min-height: 40px;
+          border-radius: 14px;
+          background: var(--soft-card-bg);
+          border: 1px solid #e5e7eb;
+          padding: 7px 9px;
+        }
+
+        .adresse-list span {
+          color: var(--soft-muted);
+          font-size: 10px;
+          font-weight: 900;
+          display: block;
+        }
+
+        .adresse-list strong {
+          color: var(--text);
+          font-size: 12px;
+          line-height: 1.35;
+          font-weight: 900;
+          display: block;
+          margin-top: 2px;
+        }
+
+        .adresse-icons {
+          margin-top: 9px;
+          display: flex;
+          flex-wrap: wrap;
+          gap: 7px;
+        }
+
+        .compact-card-box {
+          min-height: 166px;
         }
 
         .compact-services-list {
           display: flex;
           flex-direction: column;
-          gap: 8px;
-          width: min(100%, var(--service-card-width));
+          gap: 7px;
         }
 
         .service-pill {
           width: 100%;
-          min-height: var(--service-card-height);
-          border-radius: 15px;
+          min-height: 36px;
+          border-radius: 14px;
           background: var(--button-bg);
           border: 1px solid var(--border);
           display: flex;
           align-items: center;
           justify-content: space-between;
           gap: 10px;
-          padding: 8px 11px;
+          padding: 7px 10px;
           overflow: hidden;
         }
 
         .service-pill span {
           color: var(--text);
-          font-size: 13px;
+          font-size: 12px;
           font-weight: 900;
           white-space: nowrap;
           overflow: hidden;
@@ -1925,7 +2347,7 @@ export default function PublicWorkerProfilePage() {
 
         .service-pill strong {
           color: var(--primary-blue);
-          font-size: 12px;
+          font-size: 11px;
           font-weight: 900;
           white-space: nowrap;
         }
@@ -1946,140 +2368,81 @@ export default function PublicWorkerProfilePage() {
           font-weight: 900;
         }
 
-        .request-card {
-          position: sticky;
-          top: 14px;
-        }
-
-        .request-form {
-          display: flex;
-          flex-direction: column;
-          gap: 9px;
-        }
-
-        .request-form input,
-        .request-form textarea {
-          width: 100%;
+        .achievement-mini-frame,
+        .achievement-mini-empty {
+          position: relative;
+          width: 128px;
+          height: 128px;
           border: 1px solid var(--border);
-          border-radius: 14px;
-          padding: 10px 11px;
-          font-size: 13px;
-          outline: none;
-          color: var(--text);
+          border-radius: 20px;
           background: var(--soft-card-bg);
-          resize: vertical;
-        }
-
-        .request-form input:focus,
-        .request-form textarea:focus {
-          border-color: var(--primary-blue);
-          background: var(--card-bg);
-        }
-
-        .request-form button,
-        .locked-request-box button {
-          border: 0;
-          background: var(--primary-blue);
-          color: white;
-          border-radius: 999px;
-          padding: 11px 14px;
-          font-size: 14px;
-          font-weight: 900;
-          cursor: pointer;
-          transition: 0.2s ease;
-        }
-
-        .request-form button:hover,
-        .locked-request-box button:hover {
-          background: var(--primary-blue-dark);
-        }
-
-        .request-form button:disabled {
-          opacity: 0.65;
-          cursor: not-allowed;
-        }
-
-        .request-status {
-          margin: 0;
-          font-size: 12px;
-          color: var(--muted);
-          font-weight: 800;
-        }
-
-        .locked-request-box {
-          border: 1px dashed var(--border);
-          background: var(--soft-card-bg);
-          border-radius: 18px;
-          padding: 14px;
+          overflow: hidden;
           display: flex;
-          flex-direction: column;
-          gap: 11px;
-        }
-
-        .locked-request-box p {
-          margin: 0;
-          color: var(--muted);
-          font-size: 13px;
-          font-weight: 800;
-        }
-
-        .details-grid {
-          display: grid;
-          grid-template-columns: 1fr;
-          gap: 8px;
-        }
-
-        .details-grid div {
-          min-height: 47px;
-          border-radius: 15px;
-          background: var(--soft-card-bg);
-          border: 1px solid #e5e7eb;
-          padding: 8px 10px;
-          display: flex;
-          flex-direction: column;
+          align-items: center;
           justify-content: center;
-          gap: 3px;
+          margin: 0 auto;
+          padding: 0;
+          cursor: pointer;
         }
 
-        .details-grid span {
+        .achievement-mini-frame video {
+          width: 100%;
+          height: 100%;
+          object-fit: contain;
+          background: #ffffff;
+        }
+
+        .achievement-mini-image {
+          object-fit: contain;
+          background: #ffffff;
+        }
+
+        .achievement-mini-empty {
           color: var(--soft-muted);
-          font-size: 10px;
+          font-size: 12px;
           font-weight: 900;
+          cursor: default;
         }
 
-        .details-grid strong {
-          color: var(--text);
+        .empty-small-text {
+          margin: 0;
+          color: var(--soft-muted);
           font-size: 12px;
-          line-height: 1.35;
-          font-weight: 900;
+          font-weight: 800;
+        }
+
+        .compact-reviews-card {
+          width: min(100%, 700px);
+          margin: 0 auto;
         }
 
         .compact-review-form {
           border: 1px solid var(--border);
           background: var(--soft-card-bg);
-          border-radius: 16px;
-          padding: 10px;
-          display: flex;
-          flex-direction: column;
-          gap: 8px;
-          margin-bottom: 10px;
+          border-radius: 15px;
+          padding: 8px;
+          display: grid;
+          grid-template-columns: auto minmax(0, 1fr) auto;
+          gap: 7px;
+          align-items: center;
+          margin-bottom: 8px;
         }
 
         .small-star-picker {
           display: flex;
           align-items: center;
-          gap: 3px;
+          gap: 2px;
         }
 
         .small-star-picker button {
-          width: 21px;
-          height: 21px;
+          width: 19px;
+          height: 19px;
           border: 1px solid #fed7aa;
-          border-radius: 8px;
+          border-radius: 7px;
           background: #fff7ed;
           color: #d1d5db;
           padding: 0;
-          font-size: 13px;
+          font-size: 12px;
           line-height: 1;
           cursor: pointer;
         }
@@ -2090,10 +2453,10 @@ export default function PublicWorkerProfilePage() {
 
         .compact-review-form textarea {
           width: 100%;
-          min-height: 50px;
+          min-height: 34px;
           border: 1px solid var(--border);
-          border-radius: 13px;
-          padding: 9px 10px;
+          border-radius: 12px;
+          padding: 7px 9px;
           font-size: 12px;
           outline: none;
           color: var(--text);
@@ -2104,7 +2467,7 @@ export default function PublicWorkerProfilePage() {
         .review-form-footer {
           display: flex;
           align-items: center;
-          gap: 8px;
+          gap: 6px;
           flex-wrap: wrap;
         }
 
@@ -2114,8 +2477,8 @@ export default function PublicWorkerProfilePage() {
           background: var(--primary-blue);
           color: white;
           border-radius: 999px;
-          padding: 7px 12px;
-          font-size: 12px;
+          padding: 7px 11px;
+          font-size: 11px;
           font-weight: 900;
           cursor: pointer;
         }
@@ -2128,16 +2491,16 @@ export default function PublicWorkerProfilePage() {
         .review-form-footer p {
           margin: 0;
           color: var(--muted);
-          font-size: 11px;
+          font-size: 10px;
           font-weight: 800;
         }
 
         .login-review-box {
           border: 1px solid var(--border);
           background: var(--soft-card-bg);
-          border-radius: 15px;
-          padding: 10px;
-          margin-bottom: 10px;
+          border-radius: 14px;
+          padding: 8px;
+          margin-bottom: 8px;
           display: flex;
           align-items: center;
           justify-content: space-between;
@@ -2152,60 +2515,60 @@ export default function PublicWorkerProfilePage() {
         }
 
         .compact-reviews-list {
-          display: flex;
-          flex-direction: column;
-          gap: 8px;
+          display: grid;
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+          gap: 7px;
         }
 
         .compact-review-card {
           position: relative;
           border: 1px solid #e5e7eb;
           background: var(--soft-card-bg);
-          border-radius: 15px;
-          padding: 9px 10px;
+          border-radius: 14px;
+          padding: 8px 9px;
         }
 
         .compact-review-top {
           display: flex;
           align-items: center;
           flex-wrap: wrap;
-          gap: 8px;
-          margin-bottom: 5px;
+          gap: 6px;
+          margin-bottom: 4px;
         }
 
         .compact-review-top strong {
           color: var(--text);
-          font-size: 12px;
+          font-size: 11px;
           font-weight: 900;
         }
 
         .compact-review-top span {
           color: var(--star);
-          font-size: 10px;
-          letter-spacing: 0.5px;
+          font-size: 9px;
+          letter-spacing: 0.4px;
         }
 
         .compact-review-top small {
           color: var(--soft-muted);
-          font-size: 10px;
+          font-size: 9px;
           font-weight: 800;
         }
 
         .compact-review-card p {
           margin: 0;
           color: var(--muted);
-          font-size: 12px;
-          line-height: 1.45;
+          font-size: 11px;
+          line-height: 1.35;
         }
 
         .delete-review-button {
-          margin-top: 7px;
+          margin-top: 6px;
           border: 0;
           background: var(--unavailable-bg);
           color: #b91c1c;
           border-radius: 999px;
-          padding: 5px 9px;
-          font-size: 10px;
+          padding: 4px 8px;
+          font-size: 9px;
           font-weight: 900;
           cursor: pointer;
         }
@@ -2215,6 +2578,72 @@ export default function PublicWorkerProfilePage() {
           color: var(--soft-muted);
           font-size: 12px;
           font-weight: 800;
+        }
+
+        .media-preview-overlay {
+          position: fixed;
+          inset: 0;
+          z-index: 60;
+          background: rgba(0, 0, 0, 0.78);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          padding: 18px;
+        }
+
+        .media-preview-box {
+          width: min(100%, 900px);
+          height: min(86vh, 660px);
+          border-radius: 24px;
+          background: white;
+          padding: 12px;
+          display: flex;
+          flex-direction: column;
+          gap: 10px;
+        }
+
+        .media-preview-top {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 12px;
+        }
+
+        .media-preview-top strong {
+          color: var(--text);
+          font-size: 14px;
+          font-weight: 900;
+        }
+
+        .media-preview-top button {
+          border: 0;
+          border-radius: 999px;
+          background: var(--button-bg);
+          color: var(--primary-blue-dark);
+          padding: 8px 12px;
+          font-size: 12px;
+          font-weight: 900;
+          cursor: pointer;
+        }
+
+        .media-preview-frame {
+          position: relative;
+          flex: 1;
+          min-height: 0;
+          border-radius: 18px;
+          overflow: hidden;
+          background: #111827;
+        }
+
+        .media-preview-frame video {
+          width: 100%;
+          height: 100%;
+          object-fit: contain;
+          background: #111827;
+        }
+
+        .media-preview-image {
+          object-fit: contain;
         }
 
         .worker-footer {
@@ -2308,12 +2737,12 @@ export default function PublicWorkerProfilePage() {
             min-height: auto;
           }
 
-          .content-grid {
+          .profile-layer {
             grid-template-columns: 1fr;
           }
 
-          .request-card {
-            position: static;
+          .compact-reviews-card {
+            width: 100%;
           }
 
           .contact-strip,
