@@ -961,11 +961,18 @@ export default function PublicCompanyPage() {
   const createdDate = formatDate(company?.created_at ?? null);
   const statusLabel = formatStatus(company?.status ?? null);
   const statusClass = getStatusClass(company?.status ?? null);
-  const ratingValue =
-    company?.rating !== null && company?.rating !== undefined
-      ? Number(company.rating).toFixed(1)
-      : '0.0';
-  const reviewsCount = company?.reviews_count ?? reviews.length;
+  const validReviews = reviews.filter((review) => {
+  const rating = Number(review.rating);
+  return Number.isFinite(rating) && rating > 0;
+});
+
+  const calculatedRating = validReviews.length
+  ? validReviews.reduce((sum, review) => sum + Number(review.rating), 0) /
+    validReviews.length
+  : 0;
+
+  const ratingValue = calculatedRating.toFixed(1);
+  const reviewsCount = reviews.length;
   const companyLocationAddress = getCompanyLocationAddress();
   const companyMapUrl = companyLocationAddress
     ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
