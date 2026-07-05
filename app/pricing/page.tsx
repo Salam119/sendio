@@ -161,12 +161,23 @@ export default function PricingPage() {
 
       <style>{`
         .pricingPage {
+          --sendio-page-bg: var(--sendio-page-background, #ffffff);
+          --sendio-soft-bg: var(--sendio-soft-background, #f8fbff);
+          --sendio-hero-bg: var(--sendio-hero-background, #eef6ff);
+          --sendio-hero-alt: var(--sendio-hero-alt, #f4edff);
+          --sendio-card-bg: var(--sendio-card-background, #ffffff);
+          --sendio-accent: var(--sendio-accent-color, #23a7f1);
+          --sendio-accent-hover: var(--sendio-accent-hover, #168ed1);
+          --sendio-border: var(--sendio-border-color, #dbeafe);
+          --sendio-text: var(--sendio-text-color, #111827);
+          --sendio-muted: var(--sendio-muted-color, #374151);
+
           min-height: 100vh;
           background:
-            radial-gradient(circle at top left, rgba(196, 151, 103, 0.18), transparent 34%),
-            linear-gradient(180deg, #fffaf1 0%, #f7efe2 100%);
-          color: #102b24;
-          padding: 44px 20px 70px;
+            radial-gradient(circle at top left, rgba(35, 167, 241, 0.12), transparent 34%),
+            linear-gradient(180deg, var(--sendio-page-bg) 0%, var(--sendio-soft-bg) 100%);
+          color: var(--sendio-text);
+          padding: 40px 20px 64px;
         }
 
         .hero,
@@ -178,88 +189,102 @@ export default function PricingPage() {
         }
 
         .hero {
-          background: linear-gradient(135deg, #0c2f28, #105640);
-          color: #ffffff;
-          border-radius: 34px;
-          padding: 56px;
-          box-shadow: 0 24px 70px rgba(16, 43, 36, 0.22);
+          background:
+            radial-gradient(circle at top right, rgba(35, 167, 241, 0.2), transparent 32%),
+            linear-gradient(135deg, var(--sendio-hero-bg), var(--sendio-hero-alt));
+          color: var(--sendio-text);
+          border: 1px solid var(--sendio-border);
+          border-radius: 32px;
+          padding: 28px;
+          box-shadow: 0 18px 46px rgba(17, 24, 39, 0.08);
         }
 
         .eyebrow,
         .sectionLabel {
           margin: 0 0 14px;
-          color: #9a6b39;
+          color: var(--sendio-accent);
           font-size: 12px;
-          letter-spacing: 0.22em;
+          letter-spacing: 0.2em;
           font-weight: 900;
           text-transform: uppercase;
         }
 
         .eyebrow,
         .sectionLabel.light {
-          color: #e9c896;
+          color: var(--sendio-accent);
         }
 
         h1 {
           max-width: 850px;
           margin: 0;
-          font-size: clamp(38px, 6vw, 70px);
-          line-height: 0.96;
+          font-size: clamp(36px, 6vw, 66px);
+          line-height: 0.98;
           letter-spacing: -0.055em;
         }
 
         .intro {
           max-width: 760px;
           margin: 22px 0 0;
-          color: rgba(255, 255, 255, 0.82);
+          color: var(--sendio-muted);
           font-size: 18px;
           line-height: 1.75;
+          font-weight: 600;
         }
 
         .heroActions,
         .panelActions {
           display: flex;
           flex-wrap: wrap;
-          gap: 14px;
-          margin-top: 34px;
+          gap: 12px;
+          margin-top: 30px;
         }
 
         .primaryButton,
         .secondaryButton,
         .smallButton {
+          min-height: 44px;
           display: inline-flex;
           align-items: center;
           justify-content: center;
           text-decoration: none;
-          border-radius: 999px;
-          padding: 13px 22px;
-          font-weight: 900;
-          transition: transform 0.2s ease, box-shadow 0.2s ease;
-        }
-
-        .primaryButton {
-          background: #c49767;
-          color: #ffffff;
-          box-shadow: 0 12px 28px rgba(196, 151, 103, 0.32);
-        }
-
-        .secondaryButton {
-          background: rgba(255, 255, 255, 0.12);
-          color: #ffffff;
-          border: 1px solid rgba(255, 255, 255, 0.22);
-        }
-
-        .smallButton {
-          background: #c49767;
-          color: #ffffff;
-          padding: 11px 18px;
+          border-radius: 24px;
+          padding: 0 22px;
           font-size: 14px;
+          font-weight: 900;
+          transition:
+            transform 0.2s ease,
+            box-shadow 0.2s ease,
+            background-color 0.2s ease,
+            border-color 0.2s ease;
         }
 
+        .primaryButton,
+        .smallButton {
+          background: var(--sendio-accent);
+          color: #ffffff;
+          border: 1px solid var(--sendio-accent);
+          box-shadow: 0 12px 26px rgba(35, 167, 241, 0.24);
+        }
+
+        .primaryButton:hover,
+        .smallButton:hover {
+          background: var(--sendio-accent-hover);
+          border-color: var(--sendio-accent-hover);
+          box-shadow: 0 14px 30px rgba(35, 167, 241, 0.28);
+        }
+
+        .secondaryButton,
         .lightButton {
-          background: rgba(196, 151, 103, 0.16);
-          color: #8b5e2f;
-          border: 1px solid rgba(196, 151, 103, 0.2);
+          background: #eef6ff;
+          color: var(--sendio-text);
+          border: 1px solid var(--sendio-border);
+          box-shadow: 0 10px 24px rgba(17, 24, 39, 0.04);
+        }
+
+        .secondaryButton:hover,
+        .lightButton:hover {
+          background: #e3efff;
+          border-color: #bfdbfe;
         }
 
         .primaryButton:hover,
@@ -269,18 +294,18 @@ export default function PricingPage() {
         }
 
         .section {
-          margin-top: 28px;
-          background: rgba(255, 255, 255, 0.76);
-          border: 1px solid rgba(196, 151, 103, 0.18);
-          border-radius: 30px;
-          padding: 34px;
-          box-shadow: 0 18px 50px rgba(16, 43, 36, 0.08);
+          margin-top: 24px;
+          background: rgba(255, 255, 255, 0.86);
+          border: 1px solid var(--sendio-border);
+          border-radius: 24px;
+          padding: 28px;
+          box-shadow: 0 14px 36px rgba(17, 24, 39, 0.06);
         }
 
         .split {
           display: grid;
           grid-template-columns: repeat(2, minmax(0, 1fr));
-          gap: 18px;
+          gap: 16px;
           background: transparent;
           border: 0;
           box-shadow: none;
@@ -289,17 +314,18 @@ export default function PricingPage() {
 
         .panel,
         .card {
-          background: rgba(255, 255, 255, 0.82);
-          border: 1px solid rgba(196, 151, 103, 0.18);
-          border-radius: 26px;
-          padding: 28px;
-          box-shadow: 0 16px 40px rgba(16, 43, 36, 0.08);
+          background: rgba(255, 255, 255, 0.92);
+          border: 1px solid var(--sendio-border);
+          border-radius: 24px;
+          padding: 24px;
+          box-shadow: 0 12px 30px rgba(17, 24, 39, 0.055);
         }
 
         .panel h2,
         .section h2,
         .trustSection h2 {
           margin: 0;
+          color: var(--sendio-text);
           font-size: clamp(28px, 4vw, 42px);
           line-height: 1.08;
           letter-spacing: -0.04em;
@@ -307,22 +333,22 @@ export default function PricingPage() {
 
         .panel p,
         .card p {
-          margin: 18px 0 0;
-          color: #536560;
+          margin: 16px 0 0;
+          color: var(--sendio-muted);
           line-height: 1.75;
           font-size: 15px;
-          font-weight: 650;
+          font-weight: 600;
         }
 
         .sectionHeader {
           max-width: 760px;
-          margin-bottom: 24px;
+          margin-bottom: 22px;
         }
 
         .cardsGrid {
           display: grid;
           grid-template-columns: repeat(4, minmax(0, 1fr));
-          gap: 16px;
+          gap: 14px;
         }
 
         .card span {
@@ -332,14 +358,16 @@ export default function PricingPage() {
           width: 44px;
           height: 44px;
           border-radius: 50%;
-          background: rgba(196, 151, 103, 0.18);
-          color: #9a6b39;
+          background: #eef6ff;
+          color: var(--sendio-accent);
+          border: 1px solid var(--sendio-border);
           font-weight: 900;
           margin-bottom: 18px;
         }
 
         .card h3 {
           margin: 0;
+          color: var(--sendio-text);
           font-size: 19px;
           letter-spacing: -0.02em;
         }
@@ -349,28 +377,36 @@ export default function PricingPage() {
         }
 
         .trustSection {
-          margin-top: 30px;
-          background: #102b24;
-          color: #ffffff;
-          border-radius: 30px;
-          padding: 34px;
+          margin-top: 24px;
+          background:
+            radial-gradient(circle at top right, rgba(35, 167, 241, 0.16), transparent 30%),
+            linear-gradient(135deg, #f4edff, #eef6ff);
+          color: var(--sendio-text);
+          border: 1px solid var(--sendio-border);
+          border-radius: 24px;
+          padding: 28px;
           display: flex;
           align-items: center;
           justify-content: space-between;
           gap: 24px;
-          box-shadow: 0 22px 58px rgba(16, 43, 36, 0.18);
+          box-shadow: 0 16px 42px rgba(17, 24, 39, 0.07);
         }
 
         .trustSection p {
           max-width: 760px;
-          margin: 18px 0 0;
-          color: rgba(255, 255, 255, 0.78);
+          margin: 16px 0 0;
+          color: var(--sendio-muted);
           line-height: 1.75;
+          font-weight: 600;
         }
 
         @media (max-width: 950px) {
+          .pricingPage {
+            padding: 28px 14px 54px;
+          }
+
           .hero {
-            padding: 38px 24px;
+            padding: 24px;
           }
 
           .split,
