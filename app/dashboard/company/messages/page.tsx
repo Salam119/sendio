@@ -365,52 +365,73 @@ export default function MessagesPage() {
     };
   }, []);
 
+  
   async function updateServiceRequestStatus(
-    matchId: string,
-    status: 'viewed' | 'accepted' | 'declined'
-  ) {
-    setUpdatingId(matchId);
-    setPageStatus(null);
+  matchId: string,
+  status: 'viewed' | 'accepted' | 'declined'
+) {
+  setUpdatingId(matchId);
+  setPageStatus(null);
 
-    const updateData =
-      status === 'declined'
+  const responseTime = new Date().toISOString();
+
+  const updateData =
+    status === 'accepted'
+      ? {
+          status,
+          provider_seen: true,
+          client_seen: false,
+          responded_at: responseTime,
+        }
+      : status === 'declined'
         ? {
             status,
             provider_seen: true,
+            client_seen: false,
             declined_reason: 'Declined by company',
+            responded_at: responseTime,
           }
         : {
             status,
             provider_seen: true,
           };
 
-    const { error } = await supabase
-      .from('service_request_matches')
-      .update(updateData)
-      .eq('id', matchId);
+  const { error } = await supabase
+    .from('service_request_matches')
+    .update(updateData)
+    .eq('id', matchId);
 
-    setUpdatingId(null);
+  setUpdatingId(null);
 
-    if (error) {
-      setPageStatus(error.message);
-      return;
-    }
+  if (error) {
+    setPageStatus(error.message);
+    return;
+  }
 
-    setServiceRequests((currentRequests) =>
-      currentRequests.map((request) =>
-        request.id === matchId
-          ? {
-              ...request,
-              status,
-              provider_seen: true,
-              declined_reason:
-                status === 'declined'
-                  ? 'Declined by company'
-                  : request.declined_reason,
-            }
-          : request
-      )
-    );
+  setServiceRequests((currentRequests) =>
+    currentRequests.map((request) =>
+      request.id === matchId
+        ? {
+            ...request,
+            status,
+            provider_seen: true,
+            client_seen:
+              status === 'accepted' || status === 'declined'
+                ? false
+                : request.client_seen,
+            declined_reason:
+              status === 'declined'
+                ? 'Declined by company'
+                : request.declined_reason,
+            responded_at:
+              status === 'accepted' || status === 'declined'
+                ? responseTime
+                : request.responded_at,
+          }
+        : request
+    )
+  );
+
   }
 
   async function markMessageAsRead(messageId: string) {

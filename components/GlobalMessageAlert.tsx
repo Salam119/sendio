@@ -1,12 +1,23 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useMemo, useState } from 'react';
-import { usePathname } from 'next/navigation';
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  type MouseEvent,
+} from 'react';
+import { usePathname, useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
+
+type AlertRole = 'company' | 'worker' | 'client';
 
 type AlertTarget = {
   href: string;
+  role: AlertRole;
+  ownerId?: string;
+  requestIds?: string[];
 };
 
 type ProfileRow = {
@@ -17,8 +28,13 @@ type OwnerRow = {
   id: string;
 };
 
+type ServiceRequestRow = {
+  id: string;
+};
+
 export default function GlobalMessageAlert() {
   const pathname = usePathname();
+  const router = useRouter();
   const [target, setTarget] = useState<AlertTarget | null>(null);
 
   const isHomePage = pathname === '/';
@@ -28,7 +44,19 @@ export default function GlobalMessageAlert() {
       isHomePage
         ? 'sendio-global-message-alert sendio-global-message-alert-home'
         : 'sendio-global-message-alert sendio-global-message-alert-floating',
-    [isHomePage],
+    [isHomePage]
+  );
+
+      const setAlertTarget = useCallback(
+    (nextTarget: AlertTarget) => {
+      if (pathname === nextTarget.href) {
+        setTarget(null);
+        return;
+      }
+
+      setTarget(nextTarget);
+    },
+    [pathname]
   );
 
   useEffect(() => {
@@ -78,7 +106,7 @@ export default function GlobalMessageAlert() {
 
         const company = companyData as OwnerRow;
 
-        const { count, error } = await supabase
+        const { count: messagesCount, error: messagesError } = await supabase
           .from('company_messages')
           .select('id', { count: 'exact', head: true })
           .eq('company_id', company.id)
@@ -87,8 +115,39 @@ export default function GlobalMessageAlert() {
 
         if (!isMounted) return;
 
-        if (!error && typeof count === 'number' && count > 0) {
-          setTarget({ href: '/dashboard/company/messages' });
+        if (
+          !messagesError &&
+          typeof messagesCount === 'number' &&
+          messagesCount > 0
+        ) {
+          setAlertTarget({
+            href: '/dashboard/company/messages',
+            role: 'company',
+            ownerId: company.id,
+          });
+          return;
+        }
+
+        const { count: serviceRequestsCount, error: serviceRequestsError } =
+          await supabase
+            .from('service_request_matches')
+            .select('id', { count: 'exact', head: true })
+            .eq('company_id', company.id)
+            .eq('provider_seen', false)
+            .neq('status', 'cancelled');
+
+        if (!isMounted) return;
+
+        if (
+          !serviceRequestsError &&
+          typeof serviceRequestsCount === 'number' &&
+          serviceRequestsCount > 0
+        ) {
+          setAlertTarget({
+            href: '/dashboard/company/messages',
+            role: 'company',
+            ownerId: company.id,
+          });
           return;
         }
 
@@ -112,17 +171,91 @@ export default function GlobalMessageAlert() {
 
         const worker = workerData as OwnerRow;
 
+        const { count: workerRequestsCount, error: workerRequestsError } =
+          await supabase
+            .from('worker_requests')
+            .select('id', { count: 'exact', head: true })
+            .eq('worker_id', worker.id)
+            .eq('worker_seen', false)
+            .eq('is_archived', false);
+
+        if (!isMounted) return;
+
+        if (
+          !workerRequestsError &&
+          typeof workerRequestsCount === 'number' &&
+          workerRequestsCount > 0
+        ) {
+          setAlertTarget({
+            href: '/dashboard/worker/requests',
+            role: 'worker',
+            ownerId: worker.id,
+          });
+          return;
+        }
+
+        const { count: serviceRequestsCount, error: serviceRequestsError } =
+          await supabase
+            .from('service_request_matches')
+            .select('id', { count: 'exact', head: true })
+            .eq('worker_id', worker.id)
+            .eq('provider_seen', false)
+            .neq('status', 'cancelled');
+
+        if (!isMounted) return;
+
+        if (
+          !serviceRequestsError &&
+          typeof serviceRequestsCount === 'number' &&
+          serviceRequestsCount > 0
+        ) {
+          setAlertTarget({
+            href: '/dashboard/worker/requests',
+            role: 'worker',
+            ownerId: worker.id,
+          });
+          return;
+        }
+
+        setTarget(null);
+        return;
+      }
+
+      if (userType === 'client') {
+        const { data: clientRequests, error: clientRequestsError } =
+          await supabase
+            .from('service_requests')
+            .select('id')
+            .eq('client_id', user.id)
+            .limit(50);
+
+        if (!isMounted) return;
+
+        if (clientRequestsError || !clientRequests?.length) {
+          setTarget(null);
+          return;
+        }
+
+        const requestIds = (clientRequests as ServiceRequestRow[]).map(
+          (request) => request.id
+        );
+
         const { count, error } = await supabase
-          .from('worker_requests')
+          .from('service_request_matches')
           .select('id', { count: 'exact', head: true })
-          .eq('worker_id', worker.id)
-          .eq('worker_seen', false)
-          .eq('is_archived', false);
+          .in('request_id', requestIds)
+          .eq('client_seen', false)
+          .neq('status', 'pending')
+          .neq('status', 'cancelled');
 
         if (!isMounted) return;
 
         if (!error && typeof count === 'number' && count > 0) {
-          setTarget({ href: '/dashboard/worker/requests' });
+          setAlertTarget({
+            href: '/clients',
+            role: 'client',
+            requestIds,
+          });
           return;
         }
 
@@ -143,7 +276,91 @@ export default function GlobalMessageAlert() {
       isMounted = false;
       authListener.subscription.unsubscribe();
     };
-  }, [pathname]);
+    }, [pathname, setAlertTarget]);
+
+  async function markCompanyAlertSeen(ownerId: string) {
+    await Promise.all([
+      supabase
+        .from('company_messages')
+        .update({
+          company_seen: true,
+          status: 'seen',
+        })
+        .eq('company_id', ownerId)
+        .eq('company_seen', false)
+        .eq('is_archived', false),
+
+      supabase
+        .from('service_request_matches')
+        .update({
+          provider_seen: true,
+        })
+        .eq('company_id', ownerId)
+        .eq('provider_seen', false)
+        .neq('status', 'cancelled'),
+    ]);
+  }
+
+  async function markWorkerAlertSeen(ownerId: string) {
+    await Promise.all([
+      supabase
+        .from('worker_requests')
+        .update({
+          worker_seen: true,
+          status: 'seen',
+        })
+        .eq('worker_id', ownerId)
+        .eq('worker_seen', false)
+        .eq('is_archived', false),
+
+      supabase
+        .from('service_request_matches')
+        .update({
+          provider_seen: true,
+        })
+        .eq('worker_id', ownerId)
+        .eq('provider_seen', false)
+        .neq('status', 'cancelled'),
+    ]);
+  }
+
+  async function markClientAlertSeen(requestIds: string[]) {
+    if (requestIds.length === 0) return;
+
+    await supabase
+      .from('service_request_matches')
+      .update({
+        client_seen: true,
+      })
+      .in('request_id', requestIds)
+      .eq('client_seen', false)
+      .neq('status', 'pending')
+      .neq('status', 'cancelled');
+  }
+
+  async function handleOpenAlert(event: MouseEvent<HTMLAnchorElement>) {
+    if (!target) return;
+
+    event.preventDefault();
+
+    const selectedTarget = target;
+
+    setTarget(null);
+
+    if (selectedTarget.role === 'company' && selectedTarget.ownerId) {
+      await markCompanyAlertSeen(selectedTarget.ownerId);
+    }
+
+    if (selectedTarget.role === 'worker' && selectedTarget.ownerId) {
+      await markWorkerAlertSeen(selectedTarget.ownerId);
+    }
+
+    if (selectedTarget.role === 'client' && selectedTarget.requestIds) {
+      await markClientAlertSeen(selectedTarget.requestIds);
+    }
+
+    router.push(selectedTarget.href);
+  }
 
   if (!target) {
     return null;
@@ -156,6 +373,7 @@ export default function GlobalMessageAlert() {
         className={className}
         aria-label="Message waiting"
         title="Message waiting"
+        onClick={handleOpenAlert}
       >
         <span className="sendio-global-message-alert-icon">✉</span>
         <span className="sendio-global-message-alert-text">Message waiting</span>

@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import Image from 'next/image';
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
@@ -1429,21 +1429,11 @@ export default function HomePage() {
   }, [resultTypeFilter, sortFilter, workerScoreItems]);
 
   const workerGridItems = useMemo(() => {
-    const workersToShow = filteredPublicWorkers.slice(0, 24);
-
-    return Array.from(
-      { length: 24 },
-      (_, index) => workersToShow[index] ?? null
-    );
+  return filteredPublicWorkers;
   }, [filteredPublicWorkers]);
 
   const companyGridItems = useMemo(() => {
-    const companiesToShow = filteredPublicCompanies.slice(0, 24);
-
-    return Array.from(
-      { length: 24 },
-      (_, index) => companiesToShow[index] ?? null
-    );
+  return filteredPublicCompanies;
   }, [filteredPublicCompanies]);
 
   const activeFilterCount = useMemo(() => {

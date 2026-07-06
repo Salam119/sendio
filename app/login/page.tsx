@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import Image from 'next/image';
 import { supabase } from '@/lib/supabase';
 import { useRouter } from 'next/navigation';
 
@@ -79,116 +80,100 @@ export default function LoginPage() {
   }
 
   return (
-    <main className="relative min-h-screen overflow-hidden bg-gradient-to-br from-[#f8fbff] via-[#f4f7ff] to-[#eef6ff] px-4 py-8 text-[var(--sendio-text)]">
-      <div className="pointer-events-none absolute left-[-120px] top-[-120px] h-80 w-80 rounded-full bg-[#45cfe7]/20 blur-3xl" />
-      <div className="pointer-events-none absolute bottom-[-140px] right-[-120px] h-96 w-96 rounded-full bg-[#e8e1f1]/70 blur-3xl" />
-      <div className="pointer-events-none absolute left-1/2 top-1/3 h-72 w-72 -translate-x-1/2 rounded-full bg-white/70 blur-3xl" />
+    <main className="min-h-screen bg-gradient-to-br from-[#f8fbff] via-white to-[#eef6ff] px-4 py-8 text-[var(--sendio-text)]">
+      <div className="pointer-events-none fixed left-[-90px] top-[-90px] h-72 w-72 rounded-full bg-[#45cfe7]/20 blur-3xl" />
+      <div className="pointer-events-none fixed bottom-[-120px] right-[-90px] h-80 w-80 rounded-full bg-[#e8e1f1]/70 blur-3xl" />
 
       <div className="relative z-10 flex min-h-[calc(100vh-64px)] items-center justify-center">
-        <section className="w-full max-w-[430px]">
-          <div className="mb-5 text-center">
+        <section className="w-full max-w-[330px]">
+          <button
+            type="button"
+            onClick={() => router.push('/')}
+            className="mx-auto mb-5 flex h-10 items-center justify-center rounded-full border border-[var(--sendio-border)] bg-white/75 px-4 text-xs font-black text-[var(--sendio-muted)] shadow-sm backdrop-blur-xl transition hover:bg-white"
+          >
+            ← Back to Sendio
+          </button>
+
+          <div className="rounded-[26px] border border-white/80 bg-white/72 p-4 shadow-[0_20px_60px_rgba(15,23,42,0.10)] backdrop-blur-2xl">
+            <div className="mb-4 text-center">
+              <div className="mb-3 flex items-center justify-center gap-2">
+                <Image
+                  src="/logo.png"
+                  alt="Sendio"
+                  width={26}
+                  height={26}
+                  className="rounded-md"
+                  priority
+                />
+
+                <span className="text-2xl font-black tracking-tight text-[var(--sendio-text)]">
+                  Sendio
+                </span>
+              </div>
+
+              <h1 className="text-xl font-black tracking-tight text-[var(--sendio-text)]">
+                Welcome back
+              </h1>
+
+              <p className="mt-1 text-[11px] font-bold leading-5 text-[var(--sendio-muted)]">
+                Sign in to continue.
+              </p>
+            </div>
+
             <button
               type="button"
-              onClick={() => router.push('/')}
-              className="mb-5 inline-flex items-center justify-center rounded-full border border-white/70 bg-white/60 px-4 py-2 text-xs font-black text-[var(--sendio-muted)] shadow-sm backdrop-blur-xl transition hover:bg-white"
+              onClick={handleGoogleLogin}
+              disabled={googleLoading || loading}
+              className="mb-4 flex w-full items-center justify-center gap-3 rounded-full border border-[var(--sendio-border)] bg-white px-4 py-2.5 text-sm font-black text-[var(--sendio-text)] shadow-sm transition hover:bg-[var(--sendio-soft)] disabled:cursor-not-allowed disabled:opacity-60"
             >
-              ← Back to Sendio
+              <span className="flex h-6 w-6 items-center justify-center rounded-full bg-white text-base shadow-sm">
+                G
+              </span>
+              {googleLoading ? 'Connecting...' : 'Continue with Google'}
             </button>
 
-            <div className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-2xl border border-white/80 bg-white/70 text-lg font-black text-[var(--sendio-text)] shadow-sm backdrop-blur-xl">
-              S
+            <div className="mb-4 flex items-center gap-3">
+              <span className="h-px flex-1 bg-[var(--sendio-border)]" />
+              <span className="text-[10px] font-black uppercase tracking-[0.18em] text-[var(--sendio-muted)]">
+                or
+              </span>
+              <span className="h-px flex-1 bg-[var(--sendio-border)]" />
             </div>
 
-            <h1 className="text-3xl font-black tracking-tight text-[var(--sendio-text)]">
-              Welcome back
-            </h1>
+            <form onSubmit={handleLogin} className="space-y-3">
+              <input
+                name="email"
+                type="email"
+                placeholder="Email address"
+                className="w-full rounded-full border border-[var(--sendio-border)] bg-white px-4 py-2.5 text-sm font-bold text-[var(--sendio-text)] outline-none transition placeholder:text-slate-400 focus:border-[#45cfe7] focus:ring-4 focus:ring-[#45cfe7]/15"
+                required
+              />
 
-            <p className="mt-2 text-sm font-semibold text-[var(--sendio-muted)]">
-              Sign in and continue managing your Sendio account.
-            </p>
-          </div>
-
-          <div className="rounded-[34px] border border-white/70 bg-white/55 p-5 shadow-[0_24px_80px_rgba(15,23,42,0.12)] backdrop-blur-2xl">
-            <div className="rounded-[28px] border border-white/80 bg-white/70 p-5 shadow-sm">
-              <div className="mb-5 rounded-[24px] border border-[var(--sendio-border)] bg-[var(--sendio-soft)] px-4 py-4 text-center">
-                <p className="text-[10px] font-black uppercase tracking-[0.22em] text-[var(--sendio-muted)]">
-                  Secure login
-                </p>
-
-                <h2 className="mt-1 text-lg font-black text-[var(--sendio-text)]">
-                  Access your dashboard
-                </h2>
-              </div>
+              <input
+                name="password"
+                type="password"
+                placeholder="Password"
+                className="w-full rounded-full border border-[var(--sendio-border)] bg-white px-4 py-2.5 text-sm font-bold text-[var(--sendio-text)] outline-none transition placeholder:text-slate-400 focus:border-[#45cfe7] focus:ring-4 focus:ring-[#45cfe7]/15"
+                required
+              />
 
               <button
-                type="button"
-                onClick={handleGoogleLogin}
-                disabled={googleLoading || loading}
-                className="mb-4 flex w-full items-center justify-center gap-3 rounded-full border border-[var(--sendio-border)] bg-white/85 px-5 py-3 text-sm font-black text-[var(--sendio-text)] shadow-sm transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-60"
+                disabled={loading || googleLoading}
+                className="w-full rounded-full bg-[var(--sendio-accent)] px-4 py-2.5 text-sm font-black text-[var(--sendio-accent-text)] shadow-sm transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
               >
-                <span className="flex h-6 w-6 items-center justify-center rounded-full bg-white text-base shadow-sm">
-                  G
-                </span>
-                {googleLoading ? 'Connecting with Google...' : 'Continue with Google'}
+                {loading ? 'Signing in...' : 'Sign in →'}
               </button>
+            </form>
 
-              <div className="mb-4 flex items-center gap-3">
-                <span className="h-px flex-1 bg-[var(--sendio-border)]" />
-                <span className="text-[10px] font-black uppercase tracking-[0.18em] text-[var(--sendio-muted)]">
-                  or
-                </span>
-                <span className="h-px flex-1 bg-[var(--sendio-border)]" />
-              </div>
-
-              <form onSubmit={handleLogin} className="space-y-3">
-                <label className="block">
-                  <span className="mb-1 block text-xs font-black text-[var(--sendio-muted)]">
-                    Email address
-                  </span>
-
-                  <input
-                    name="email"
-                    type="email"
-                    placeholder="you@example.com"
-                    className="w-full rounded-full border border-[var(--sendio-border)] bg-white/85 px-5 py-3 text-sm font-bold text-[var(--sendio-text)] outline-none transition placeholder:text-slate-300 focus:border-[#45cfe7] focus:ring-4 focus:ring-[#45cfe7]/15"
-                    required
-                  />
-                </label>
-
-                <label className="block">
-                  <span className="mb-1 block text-xs font-black text-[var(--sendio-muted)]">
-                    Password
-                  </span>
-
-                  <input
-                    name="password"
-                    type="password"
-                    placeholder="Your password"
-                    className="w-full rounded-full border border-[var(--sendio-border)] bg-white/85 px-5 py-3 text-sm font-bold text-[var(--sendio-text)] outline-none transition placeholder:text-slate-300 focus:border-[#45cfe7] focus:ring-4 focus:ring-[#45cfe7]/15"
-                    required
-                  />
-                </label>
-
-                <button
-                  disabled={loading || googleLoading}
-                  className="mt-2 w-full rounded-full bg-[var(--sendio-accent)] px-5 py-3 text-sm font-black text-[var(--sendio-accent-text)] shadow-sm transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
-                >
-                  {loading ? 'Signing in...' : 'Sign in →'}
-                </button>
-              </form>
-
-              <div className="mt-5 rounded-2xl border border-[var(--sendio-border)] bg-white/70 px-4 py-3 text-center">
-                <p className="text-xs font-bold text-[var(--sendio-muted)]">
-                  Don&apos;t have an account?{' '}
-                  <a
-                    href="/register"
-                    className="font-black text-[var(--sendio-text)] underline decoration-[#45cfe7]/50 underline-offset-4"
-                  >
-                    Create account
-                  </a>
-                </p>
-              </div>
-            </div>
+            <p className="mt-5 text-center text-xs font-bold text-[var(--sendio-muted)]">
+              Don&apos;t have an account?{' '}
+              <a
+                href="/register"
+                className="font-black text-[var(--sendio-text)] underline decoration-[#45cfe7]/50 underline-offset-4"
+              >
+                Create account
+              </a>
+            </p>
           </div>
         </section>
       </div>
