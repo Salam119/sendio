@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useEffect, useState, type FormEvent } from 'react';
 import { useParams } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
-
+import { createSendioNotification } from '@/lib/notifications';
 type WorkerProfile = {
   id: string;
   user_id: string | null;
@@ -127,7 +127,9 @@ type ContactItem = {
   displayValue: string | null;
   lockedMessage: string;
 };
-
+  type WorkerRequestInsertResult = {
+  id: string;
+};
 function isUuid(value: string) {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
     value
@@ -616,7 +618,93 @@ export default function PublicWorkerProfilePage() {
       { onConflict: 'user_id' }
     );
   }
+      function getWorkerContactNotificationDetails(channel: ContactChannel) {
+    if (channel === 'email') {
+      return {
+        eventType: 'worker_contact_email',
+        title: 'New email contact',
+      };
+    }
 
+    if (channel === 'phone') {
+      return {
+        eventType: 'worker_contact_phone',
+        title: 'New phone contact',
+      };
+    }
+
+    if (channel === 'whatsapp') {
+      return {
+        eventType: 'worker_contact_whatsapp',
+        title: 'New WhatsApp contact',
+      };
+    }
+
+    if (channel === 'maps') {
+      return {
+        eventType: 'worker_contact_social',
+        title: 'New map contact',
+      };
+    }
+
+    if (channel === 'website') {
+      return {
+        eventType: 'worker_contact_social',
+        title: 'New website contact',
+      };
+    }
+
+    return {
+      eventType: 'worker_contact_social',
+      title: `New ${channel} contact`,
+    };
+  }
+
+  async function createWorkerContactNotification({
+    requestId,
+    channel,
+    sourceUrl,
+    messageBody,
+    clientName,
+    clientEmail,
+  }: {
+    requestId: string;
+    channel: ContactChannel | 'sendio';
+    sourceUrl: string | null;
+    messageBody: string | null;
+    clientName: string;
+    clientEmail: string;
+  }) {
+    if (!worker?.user_id || !currentUserId) return false;
+
+    const notificationDetails =
+      channel === 'sendio'
+        ? {
+            eventType: 'worker_contact_message',
+            title: 'New Sendio request',
+          }
+        : getWorkerContactNotificationDetails(channel);
+
+    return createSendioNotification(supabase, {
+      recipientId: worker.user_id,
+      actorId: currentUserId,
+      recipientType: 'worker',
+      eventType: notificationDetails.eventType,
+      sourceTable: 'worker_requests',
+      sourceId: requestId,
+      title: notificationDetails.title,
+      body: messageBody,
+      targetUrl: '/dashboard/worker/requests',
+      metadata: {
+        worker_id: worker.id,
+        worker_name: worker.name,
+        source_channel: channel,
+        source_url: sourceUrl,
+        client_name: clientName,
+        client_email: clientEmail,
+      },
+    });
+  }
   function openContactUrl(url: string) {
     const isExternalUrl =
       url.startsWith('http://') || url.startsWith('https://');
@@ -667,26 +755,47 @@ export default function PublicWorkerProfilePage() {
 
     await ensureClientRecord(user.id, clientName, clientEmail);
 
-    const { error } = await supabase.from('worker_requests').insert({
-      worker_id: worker.id,
-      client_id: user.id,
-      name: clientName,
-      email: clientEmail,
-      phone: null,
-      message: `Client attempted to contact this worker by ${label}.`,
-      status: 'new',
-      worker_seen: false,
-      admin_seen: false,
-      is_archived: false,
-      moderation_status: 'normal',
-      source_channel: channel,
-      source_url: url,
-      event_type: 'contact_click',
-    });
+        const messageBody = `Client attempted to contact this worker by ${label}.`;
 
-    if (!error) {
+    const { data, error } = await supabase
+      .from('worker_requests')
+      .insert({
+        worker_id: worker.id,
+        client_id: user.id,
+        name: clientName,
+        email: clientEmail,
+        phone: null,
+        message: messageBody,
+        status: 'new',
+        worker_seen: false,
+        admin_seen: false,
+        is_archived: false,
+        moderation_status: 'normal',
+        source_channel: channel,
+        source_url: url,
+        event_type: 'contact_click',
+      })
+      .select('id')
+      .maybeSingle();
+
+    if (!error && data) {
+      const insertedRequest = data as WorkerRequestInsertResult;
+
+      await createWorkerContactNotification({
+        requestId: insertedRequest.id,
+        channel,
+        sourceUrl: url,
+        messageBody,
+        clientName,
+        clientEmail,
+      });
+
       setContactClicksCount((currentCount) =>
         typeof currentCount === 'number' ? currentCount + 1 : currentCount
+      );
+    } else {
+      setUnlockNotice(
+        'Contact will open, but Sendio could not save the notification.'
       );
     }
 
@@ -755,32 +864,45 @@ export default function PublicWorkerProfilePage() {
 
     await ensureClientRecord(currentUserId, cleanName, cleanEmail);
 
-    const { error } = await supabase.from('worker_requests').insert({
-      worker_id: worker.id,
-      client_id: currentUserId,
-      name: cleanName,
-      email: cleanEmail,
-      phone: cleanPhone,
-      message: cleanMessage,
-      status: 'new',
-      worker_seen: false,
-      admin_seen: false,
-      is_archived: false,
-      moderation_status: 'normal',
-      source_channel: 'sendio',
-      source_url: null,
-      event_type: 'request',
-    });
+         const { data, error } = await supabase
+      .from('worker_requests')
+      .insert({
+        worker_id: worker.id,
+        client_id: currentUserId,
+        name: cleanName,
+        email: cleanEmail,
+        phone: cleanPhone,
+        message: cleanMessage,
+        status: 'new',
+        worker_seen: false,
+        admin_seen: false,
+        is_archived: false,
+        moderation_status: 'normal',
+        source_channel: 'sendio',
+        source_url: null,
+        event_type: 'request',
+      })
+      .select('id')
+      .maybeSingle();
 
     setRequestSending(false);
 
-    if (error) {
+    if (error || !data) {
       setRequestStatus(
         'Request could not be sent. Please try another contact option.'
       );
       return;
     }
+         const insertedRequest = data as WorkerRequestInsertResult;
 
+    await createWorkerContactNotification({
+      requestId: insertedRequest.id,
+      channel: 'sendio',
+      sourceUrl: null,
+      messageBody: cleanMessage,
+      clientName: cleanName,
+      clientEmail: cleanEmail,
+    });
     setWorker((currentWorker) =>
       currentWorker
         ? {
