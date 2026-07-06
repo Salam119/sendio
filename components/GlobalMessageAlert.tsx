@@ -10,32 +10,20 @@ import {
 } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
-
-type AlertRole = 'company' | 'worker' | 'client';
-
-type AlertTarget = {
-  href: string;
-  role: AlertRole;
-  ownerId?: string;
-  requestIds?: string[];
-};
-
-type ProfileRow = {
-  user_type: string | null;
-};
-
-type OwnerRow = {
-  id: string;
-};
-
-type ServiceRequestRow = {
-  id: string;
-};
+import {
+  getFloatingNotificationsEnabled,
+  getUnreadSendioNotifications,
+  openSendioNotification,
+  type SendioNotification,
+} from '@/lib/notifications';
 
 export default function GlobalMessageAlert() {
   const pathname = usePathname();
   const router = useRouter();
-  const [target, setTarget] = useState<AlertTarget | null>(null);
+
+  const [notification, setNotification] =
+    useState<SendioNotification | null>(null);
+  const [floatingEnabled, setFloatingEnabled] = useState(true);
 
   const isHomePage = pathname === '/';
 
@@ -47,336 +35,178 @@ export default function GlobalMessageAlert() {
     [isHomePage]
   );
 
-      const setAlertTarget = useCallback(
-    (nextTarget: AlertTarget) => {
-      if (pathname === nextTarget.href) {
-        setTarget(null);
-        return;
-      }
+  const loadNotificationAlert = useCallback(async () => {
+    const enabled = getFloatingNotificationsEnabled();
+    setFloatingEnabled(enabled);
 
-      setTarget(nextTarget);
-    },
-    [pathname]
-  );
+    if (!enabled) {
+      setNotification(null);
+      return;
+    }
+
+    const {
+      data: { user },
+      error: userError,
+    } = await supabase.auth.getUser();
+
+    if (userError || !user) {
+      setNotification(null);
+      return;
+    }
+
+    const unreadNotifications = await getUnreadSendioNotifications(
+      supabase,
+      user.id,
+      1
+    );
+
+    const nextNotification = unreadNotifications[0] ?? null;
+
+    if (nextNotification && pathname === nextNotification.target_url) {
+      setNotification(null);
+      return;
+    }
+
+    setNotification(nextNotification);
+  }, [pathname]);
 
   useEffect(() => {
     let isMounted = true;
 
-    async function loadMessageAlert() {
-      setTarget(null);
-
-      const {
-        data: { user },
-        error: userError,
-      } = await supabase.auth.getUser();
-
-      if (!isMounted) return;
-
-      if (userError || !user) {
-        setTarget(null);
-        return;
+    async function safeLoadNotificationAlert() {
+      try {
+        if (!isMounted) return;
+        await loadNotificationAlert();
+      } catch {
+        if (!isMounted) return;
+        setNotification(null);
       }
-
-      const { data: profileData } = await supabase
-        .from('profiles')
-        .select('user_type')
-        .eq('id', user.id)
-        .maybeSingle();
-
-      if (!isMounted) return;
-
-      const userType =
-        (profileData as ProfileRow | null)?.user_type ??
-        user.user_metadata?.user_type ??
-        null;
-
-      if (userType === 'company') {
-        const { data: companyData } = await supabase
-          .from('companies')
-          .select('id')
-          .eq('user_id', user.id)
-          .maybeSingle();
-
-        if (!isMounted) return;
-
-        if (!companyData) {
-          setTarget(null);
-          return;
-        }
-
-        const company = companyData as OwnerRow;
-
-        const { count: messagesCount, error: messagesError } = await supabase
-          .from('company_messages')
-          .select('id', { count: 'exact', head: true })
-          .eq('company_id', company.id)
-          .eq('company_seen', false)
-          .eq('is_archived', false);
-
-        if (!isMounted) return;
-
-        if (
-          !messagesError &&
-          typeof messagesCount === 'number' &&
-          messagesCount > 0
-        ) {
-          setAlertTarget({
-            href: '/dashboard/company/messages',
-            role: 'company',
-            ownerId: company.id,
-          });
-          return;
-        }
-
-        const { count: serviceRequestsCount, error: serviceRequestsError } =
-          await supabase
-            .from('service_request_matches')
-            .select('id', { count: 'exact', head: true })
-            .eq('company_id', company.id)
-            .eq('provider_seen', false)
-            .neq('status', 'cancelled');
-
-        if (!isMounted) return;
-
-        if (
-          !serviceRequestsError &&
-          typeof serviceRequestsCount === 'number' &&
-          serviceRequestsCount > 0
-        ) {
-          setAlertTarget({
-            href: '/dashboard/company/messages',
-            role: 'company',
-            ownerId: company.id,
-          });
-          return;
-        }
-
-        setTarget(null);
-        return;
-      }
-
-      if (userType === 'worker') {
-        const { data: workerData } = await supabase
-          .from('workers')
-          .select('id')
-          .eq('user_id', user.id)
-          .maybeSingle();
-
-        if (!isMounted) return;
-
-        if (!workerData) {
-          setTarget(null);
-          return;
-        }
-
-        const worker = workerData as OwnerRow;
-
-        const { count: workerRequestsCount, error: workerRequestsError } =
-          await supabase
-            .from('worker_requests')
-            .select('id', { count: 'exact', head: true })
-            .eq('worker_id', worker.id)
-            .eq('worker_seen', false)
-            .eq('is_archived', false);
-
-        if (!isMounted) return;
-
-        if (
-          !workerRequestsError &&
-          typeof workerRequestsCount === 'number' &&
-          workerRequestsCount > 0
-        ) {
-          setAlertTarget({
-            href: '/dashboard/worker/requests',
-            role: 'worker',
-            ownerId: worker.id,
-          });
-          return;
-        }
-
-        const { count: serviceRequestsCount, error: serviceRequestsError } =
-          await supabase
-            .from('service_request_matches')
-            .select('id', { count: 'exact', head: true })
-            .eq('worker_id', worker.id)
-            .eq('provider_seen', false)
-            .neq('status', 'cancelled');
-
-        if (!isMounted) return;
-
-        if (
-          !serviceRequestsError &&
-          typeof serviceRequestsCount === 'number' &&
-          serviceRequestsCount > 0
-        ) {
-          setAlertTarget({
-            href: '/dashboard/worker/requests',
-            role: 'worker',
-            ownerId: worker.id,
-          });
-          return;
-        }
-
-        setTarget(null);
-        return;
-      }
-
-      if (userType === 'client') {
-        const { data: clientRequests, error: clientRequestsError } =
-          await supabase
-            .from('service_requests')
-            .select('id')
-            .eq('client_id', user.id)
-            .limit(50);
-
-        if (!isMounted) return;
-
-        if (clientRequestsError || !clientRequests?.length) {
-          setTarget(null);
-          return;
-        }
-
-        const requestIds = (clientRequests as ServiceRequestRow[]).map(
-          (request) => request.id
-        );
-
-        const { count, error } = await supabase
-          .from('service_request_matches')
-          .select('id', { count: 'exact', head: true })
-          .in('request_id', requestIds)
-          .eq('client_seen', false)
-          .neq('status', 'pending')
-          .neq('status', 'cancelled');
-
-        if (!isMounted) return;
-
-        if (!error && typeof count === 'number' && count > 0) {
-          setAlertTarget({
-            href: '/clients',
-            role: 'client',
-            requestIds,
-          });
-          return;
-        }
-
-        setTarget(null);
-        return;
-      }
-
-      setTarget(null);
     }
 
-    void loadMessageAlert();
+    void safeLoadNotificationAlert();
 
     const { data: authListener } = supabase.auth.onAuthStateChange(() => {
-      void loadMessageAlert();
+      void safeLoadNotificationAlert();
     });
+
+    let channel:
+      | ReturnType<typeof supabase.channel>
+      | null = null;
+
+    async function subscribeToRealtimeNotifications() {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
+      if (!isMounted || !user) {
+        return;
+      }
+
+      channel = supabase
+        .channel(`sendio-notifications-${user.id}`)
+        .on(
+          'postgres_changes',
+          {
+            event: 'INSERT',
+            schema: 'public',
+            table: 'sendio_notifications',
+            filter: `recipient_id=eq.${user.id}`,
+          },
+          () => {
+            void safeLoadNotificationAlert();
+          }
+        )
+        .on(
+          'postgres_changes',
+          {
+            event: 'UPDATE',
+            schema: 'public',
+            table: 'sendio_notifications',
+            filter: `recipient_id=eq.${user.id}`,
+          },
+          () => {
+            void safeLoadNotificationAlert();
+          }
+        )
+        .subscribe();
+    }
+
+    void subscribeToRealtimeNotifications();
+
+    function handleFloatingSettingChanged() {
+      void safeLoadNotificationAlert();
+    }
+
+    window.addEventListener(
+      'sendio-floating-notifications-changed',
+      handleFloatingSettingChanged
+    );
+
+    window.addEventListener('storage', handleFloatingSettingChanged);
 
     return () => {
       isMounted = false;
       authListener.subscription.unsubscribe();
+      window.removeEventListener(
+        'sendio-floating-notifications-changed',
+        handleFloatingSettingChanged
+      );
+      window.removeEventListener('storage', handleFloatingSettingChanged);
+
+      if (channel) {
+        void supabase.removeChannel(channel);
+      }
     };
-    }, [pathname, setAlertTarget]);
-
-  async function markCompanyAlertSeen(ownerId: string) {
-    await Promise.all([
-      supabase
-        .from('company_messages')
-        .update({
-          company_seen: true,
-          status: 'seen',
-        })
-        .eq('company_id', ownerId)
-        .eq('company_seen', false)
-        .eq('is_archived', false),
-
-      supabase
-        .from('service_request_matches')
-        .update({
-          provider_seen: true,
-        })
-        .eq('company_id', ownerId)
-        .eq('provider_seen', false)
-        .neq('status', 'cancelled'),
-    ]);
-  }
-
-  async function markWorkerAlertSeen(ownerId: string) {
-    await Promise.all([
-      supabase
-        .from('worker_requests')
-        .update({
-          worker_seen: true,
-          status: 'seen',
-        })
-        .eq('worker_id', ownerId)
-        .eq('worker_seen', false)
-        .eq('is_archived', false),
-
-      supabase
-        .from('service_request_matches')
-        .update({
-          provider_seen: true,
-        })
-        .eq('worker_id', ownerId)
-        .eq('provider_seen', false)
-        .neq('status', 'cancelled'),
-    ]);
-  }
-
-  async function markClientAlertSeen(requestIds: string[]) {
-    if (requestIds.length === 0) return;
-
-    await supabase
-      .from('service_request_matches')
-      .update({
-        client_seen: true,
-      })
-      .in('request_id', requestIds)
-      .eq('client_seen', false)
-      .neq('status', 'pending')
-      .neq('status', 'cancelled');
-  }
+  }, [loadNotificationAlert]);
 
   async function handleOpenAlert(event: MouseEvent<HTMLAnchorElement>) {
-    if (!target) return;
+    if (!notification) return;
 
     event.preventDefault();
 
-    const selectedTarget = target;
+    const selectedNotification = notification;
 
-    setTarget(null);
+    setNotification(null);
 
-    if (selectedTarget.role === 'company' && selectedTarget.ownerId) {
-      await markCompanyAlertSeen(selectedTarget.ownerId);
+    const {
+      data: { user },
+      error: userError,
+    } = await supabase.auth.getUser();
+
+    if (userError || !user) {
+      return;
     }
 
-    if (selectedTarget.role === 'worker' && selectedTarget.ownerId) {
-      await markWorkerAlertSeen(selectedTarget.ownerId);
-    }
+    try {
+      const targetUrl = await openSendioNotification(
+        supabase,
+        selectedNotification.id,
+        user.id
+      );
 
-    if (selectedTarget.role === 'client' && selectedTarget.requestIds) {
-      await markClientAlertSeen(selectedTarget.requestIds);
+      router.push(targetUrl || selectedNotification.target_url);
+    } catch {
+      router.push(selectedNotification.target_url);
     }
-
-    router.push(selectedTarget.href);
   }
 
-  if (!target) {
+  if (!floatingEnabled || !notification) {
     return null;
   }
 
   return (
     <>
       <Link
-        href={target.href}
+        href={notification.target_url}
         className={className}
-        aria-label="Message waiting"
-        title="Message waiting"
+        aria-label={notification.title || 'Message waiting'}
+        title={notification.title || 'Message waiting'}
         onClick={handleOpenAlert}
       >
         <span className="sendio-global-message-alert-icon">✉</span>
-        <span className="sendio-global-message-alert-text">Message waiting</span>
+        <span className="sendio-global-message-alert-text">
+          {notification.title || 'Message waiting'}
+        </span>
         <span className="sendio-global-message-alert-dot" />
       </Link>
 
@@ -449,7 +279,10 @@ export default function GlobalMessageAlert() {
         }
 
         .sendio-global-message-alert-text {
+          max-width: min(280px, 64vw);
+          overflow: hidden;
           white-space: nowrap;
+          text-overflow: ellipsis;
           letter-spacing: -0.01em;
         }
 
@@ -457,6 +290,7 @@ export default function GlobalMessageAlert() {
           position: relative;
           width: 9px;
           height: 9px;
+          flex: 0 0 auto;
           border-radius: 999px;
           background: #22c55e;
           box-shadow:

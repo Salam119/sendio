@@ -139,22 +139,19 @@ export async function createSendioNotification(
     seen_at: null,
   };
 
-  const { data, error } = await supabase
+    const { error } = await supabase
     .from('sendio_notifications')
     .upsert(payload, {
       onConflict: 'recipient_id,event_type,source_table,source_id',
       ignoreDuplicates: true,
-    })
-    .select('*')
-    .maybeSingle();
-
+    });
   if (error) {
-    throw error;
+    return false;
   }
 
-  return data as SendioNotification | null;
-}
-
+  return true;
+ 
+ }
 export async function getUnreadSendioNotifications(
   supabase: SupabaseClient,
   userId: string,

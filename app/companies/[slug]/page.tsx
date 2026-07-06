@@ -22,7 +22,7 @@ import {
   FaXTwitter,
 } from 'react-icons/fa6';
 import { supabase } from '@/lib/supabase';
-
+import { createSendioNotification } from '@/lib/notifications';
 type Company = {
   id: string;
   user_id: string | null;
@@ -177,7 +177,9 @@ type ClientProfile = {
   full_name: string | null;
   user_type: string | null;
 };
-
+type CompanyMessageInsertResult = {
+  id: string;
+};
 type ThemeVars = CSSProperties & {
   '--sendio-page-bg': string;
   '--sendio-hero-bg': string;
@@ -648,7 +650,83 @@ export default function PublicCompanyPage() {
   function getClientContactEmail() {
     return currentUser?.email?.trim() || 'client@sendio.local';
   }
+     function getCompanyContactNotificationDetails(sourceChannel: string) {
+    const cleanChannel = sourceChannel.trim().toLowerCase() || 'sendio';
 
+    if (cleanChannel === 'email') {
+      return {
+        eventType: 'company_contact_email',
+        title: 'New email contact',
+      };
+    }
+
+    if (cleanChannel === 'phone') {
+      return {
+        eventType: 'company_contact_phone',
+        title: 'New phone contact',
+      };
+    }
+
+    if (cleanChannel === 'whatsapp') {
+      return {
+        eventType: 'company_contact_whatsapp',
+        title: 'New WhatsApp contact',
+      };
+    }
+
+    if (cleanChannel === 'sendio') {
+      return {
+        eventType: 'company_contact_message',
+        title: 'New Sendio message',
+      };
+    }
+
+    return {
+      eventType: 'company_contact_social',
+      title: `New ${cleanChannel} contact`,
+    };
+  }
+
+  async function createCompanyContactNotification({
+    messageId,
+    sourceChannel,
+    sourceUrl,
+    messageBody,
+    clientName,
+    clientEmail,
+  }: {
+    messageId: string;
+    sourceChannel: string;
+    sourceUrl: string | null;
+    messageBody: string | null;
+    clientName: string;
+    clientEmail: string;
+  }) {
+    if (!company?.user_id || !currentUser) return;
+
+    const notificationDetails =
+      getCompanyContactNotificationDetails(sourceChannel);
+
+    await createSendioNotification(supabase, {
+      recipientId: company.user_id,
+      actorId: currentUser.id,
+      recipientType: 'company',
+      eventType: notificationDetails.eventType,
+      sourceTable: 'company_messages',
+      sourceId: messageId,
+      title: notificationDetails.title,
+      body: messageBody,
+      targetUrl: '/dashboard/company/messages',
+      metadata: {
+        company_id: company.id,
+        company_name: company.name,
+        source_channel: sourceChannel,
+        source_url: sourceUrl,
+        client_name: clientName,
+        client_email: clientEmail,
+      },
+    });
+  }
   function openContactUrl(url: string) {
     if (url.startsWith('http://') || url.startsWith('https://')) {
       window.open(url, '_blank', 'noopener,noreferrer');
@@ -658,35 +736,56 @@ export default function PublicCompanyPage() {
     window.location.assign(url);
   }
 
-  async function saveCompanyContactActivity(
+    async function saveCompanyContactActivity(
     sourceChannel: string,
     sourceUrl: string
   ) {
     if (!company || !currentUser) return false;
 
-    const cleanChannel = sourceChannel.trim() || 'sendio';
+    const cleanChannel = sourceChannel.trim().toLowerCase() || 'sendio';
     const readableChannel =
       cleanChannel.charAt(0).toUpperCase() + cleanChannel.slice(1);
+    const clientName = getClientContactName();
+    const clientEmail = getClientContactEmail();
+    const messageBody = `Client attempted to contact this company by ${readableChannel}.`;
 
-    const { error } = await supabase.from('company_messages').insert({
-      company_id: company.id,
-      client_id: currentUser.id,
-      name: getClientContactName(),
-      email: getClientContactEmail(),
-      message: `Client attempted to contact this company by ${readableChannel}.`,
-      status: 'new',
-      company_seen: false,
-      admin_seen: false,
-      is_archived: false,
-      moderation_status: 'normal',
-      source_channel: cleanChannel,
-      source_url: sourceUrl,
-      event_type: 'contact_click',
+    const { data, error } = await supabase
+      .from('company_messages')
+      .insert({
+        company_id: company.id,
+        client_id: currentUser.id,
+        name: clientName,
+        email: clientEmail,
+        message: messageBody,
+        status: 'new',
+        company_seen: false,
+        admin_seen: false,
+        is_archived: false,
+        moderation_status: 'normal',
+        source_channel: cleanChannel,
+        source_url: sourceUrl,
+        event_type: 'contact_click',
+      })
+      .select('id')
+      .maybeSingle();
+
+    if (error || !data) {
+      return false;
+    }
+    
+    const insertedMessage = data as CompanyMessageInsertResult;
+
+    await createCompanyContactNotification({
+      messageId: insertedMessage.id,
+      sourceChannel: cleanChannel,
+      sourceUrl,
+      messageBody,
+      clientName,
+      clientEmail,
     });
 
-    return !error;
+    return true;
   }
-
   async function handleProtectedContactClick(
     url: string | null,
     lockedMessage: string,
@@ -763,31 +862,44 @@ export default function PublicCompanyPage() {
 
     setMessageSending(true);
 
-    const { error } = await supabase.from('company_messages').insert({
-      company_id: company.id,
-      client_id: currentUser.id,
-      name: cleanName,
-      email: cleanEmail,
-      message: cleanMessage,
-      status: 'new',
-      company_seen: false,
-      admin_seen: false,
-      is_archived: false,
-      moderation_status: 'normal',
-      source_channel: 'sendio',
-      source_url: null,
-      event_type: 'message',
-    });
+       const { data, error } = await supabase
+      .from('company_messages')
+      .insert({
+        company_id: company.id,
+        client_id: currentUser.id,
+        name: cleanName,
+        email: cleanEmail,
+        message: cleanMessage,
+        status: 'new',
+        company_seen: false,
+        admin_seen: false,
+        is_archived: false,
+        moderation_status: 'normal',
+        source_channel: 'sendio',
+        source_url: null,
+        event_type: 'message',
+      })
+      .select('id')
+      .maybeSingle();
 
     setMessageSending(false);
 
-    if (error) {
+    if (error || !data) {
       setMessageStatus(
         'Message could not be sent. Please try another contact option.'
       );
       return;
     }
+        const insertedMessage = data as CompanyMessageInsertResult;
 
+    await createCompanyContactNotification({
+      messageId: insertedMessage.id,
+      sourceChannel: 'sendio',
+      sourceUrl: null,
+      messageBody: cleanMessage,
+      clientName: cleanName,
+      clientEmail: cleanEmail,
+    });
     setMessageName('');
     setMessageEmail('');
     setMessageText('');
