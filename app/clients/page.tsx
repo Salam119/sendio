@@ -82,6 +82,18 @@ type ClientRequestItem = ServiceRequestRow & {
   provider: ProviderInfo | null;
 };
 
+type ClientActivityRow = {
+  id: string;
+  title: string;
+  body: string | null;
+  event_type: string;
+  target_url: string;
+  metadata: Record<string, unknown> | null;
+  is_seen: boolean;
+  is_archived: boolean | null;
+  created_at: string;
+};
+
 function cleanPhone(phone: string | null) {
   return phone?.replace(/[^\d+]/g, '') ?? '';
 }
@@ -186,6 +198,9 @@ export default function ClientsPage() {
   const [currentUserId, setCurrentUserId] = useState('');
   const [loading, setLoading] = useState(true);
   const [requests, setRequests] = useState<ClientRequestItem[]>([]);
+  const [activities, setActivities] = useState<ClientActivityRow[]>([]);
+  const [showArchivedActivities, setShowArchivedActivities] = useState(false);
+  const [activityActionId, setActivityActionId] = useState('');
   const [warning, setWarning] = useState('');
   const [cancellingId, setCancellingId] = useState('');
 
@@ -211,12 +226,32 @@ export default function ClientsPage() {
         setCurrentUserEmail('');
         setCurrentUserId('');
         setRequests([]);
+        setActivities([]);
         setLoading(false);
         return;
       }
 
       setCurrentUserEmail(user.email ?? '');
       setCurrentUserId(user.id);
+
+      const { data: activityRows, error: activitiesError } = await supabase
+        .from('sendio_notifications')
+        .select('id, title, body, event_type, target_url, metadata, is_seen, is_archived, created_at')
+        .eq('recipient_id', user.id)
+        .eq('is_archived', showArchivedActivities)
+        .order('created_at', { ascending: false })
+        .limit(12);
+
+      if (!active) {
+        return;
+      }
+
+      if (activitiesError) {
+        setWarning(activitiesError.message);
+        setActivities([]);
+      } else {
+        setActivities((activityRows ?? []) as ClientActivityRow[]);
+      }
 
       const { data: requestRows, error: requestError } = await supabase
         .from('service_requests')
@@ -370,7 +405,7 @@ export default function ClientsPage() {
     return () => {
       active = false;
     };
-  }, []);
+  }, [showArchivedActivities]);
 
   const requestCounts = useMemo(() => {
     const accepted = requests.filter((request) => {
@@ -472,6 +507,113 @@ export default function ClientsPage() {
     setCancellingId('');
   }
 
+  function getActivityProviderHref(activity: ClientActivityRow) {
+    const metadata = activity.metadata ?? {};
+    const providerType =
+      typeof metadata.provider_type === 'string'
+        ? metadata.provider_type
+        : typeof metadata.recipient_type === 'string'
+          ? metadata.recipient_type
+          : '';
+
+    const companySlug =
+      typeof metadata.company_slug === 'string' ? metadata.company_slug : '';
+    const workerSlug =
+      typeof metadata.worker_slug === 'string' ? metadata.worker_slug : '';
+    const companyId =
+      typeof metadata.company_id === 'string' ? metadata.company_id : '';
+    const workerId =
+      typeof metadata.worker_id === 'string' ? metadata.worker_id : '';
+
+    if (providerType === 'company' && (companySlug || companyId)) {
+      return `/companies/${companySlug || companyId}`;
+    }
+
+    if (providerType === 'worker' && (workerSlug || workerId)) {
+      return `/workers/${workerSlug || workerId}`;
+    }
+
+    if (companySlug || companyId) {
+      return `/companies/${companySlug || companyId}`;
+    }
+
+    if (workerSlug || workerId) {
+      return `/workers/${workerSlug || workerId}`;
+    }
+
+    return '';
+  }
+
+  async function archiveActivity(activityId: string) {
+    if (!currentUserId) return;
+
+    setActivityActionId(activityId);
+    setWarning('');
+
+    const { error } = await supabase
+      .from('sendio_notifications')
+      .update({ is_archived: true, is_seen: true, seen_at: new Date().toISOString() })
+      .eq('id', activityId)
+      .eq('recipient_id', currentUserId);
+
+    if (error) {
+      setWarning(error.message);
+      setActivityActionId('');
+      return;
+    }
+
+    setActivities((current) => current.filter((activity) => activity.id !== activityId));
+    setActivityActionId('');
+  }
+
+  async function restoreActivity(activityId: string) {
+    if (!currentUserId) return;
+
+    setActivityActionId(activityId);
+    setWarning('');
+
+    const { error } = await supabase
+      .from('sendio_notifications')
+      .update({ is_archived: false })
+      .eq('id', activityId)
+      .eq('recipient_id', currentUserId);
+
+    if (error) {
+      setWarning(error.message);
+      setActivityActionId('');
+      return;
+    }
+
+    setActivities((current) => current.filter((activity) => activity.id !== activityId));
+    setActivityActionId('');
+  }
+
+  async function deleteActivity(activityId: string) {
+    if (!currentUserId) return;
+
+    const confirmed = window.confirm('Delete this activity permanently?');
+
+    if (!confirmed) return;
+
+    setActivityActionId(activityId);
+    setWarning('');
+
+    const { error } = await supabase
+      .from('sendio_notifications')
+      .delete()
+      .eq('id', activityId)
+      .eq('recipient_id', currentUserId);
+
+    if (error) {
+      setWarning(error.message);
+      setActivityActionId('');
+      return;
+    }
+
+    setActivities((current) => current.filter((activity) => activity.id !== activityId));
+    setActivityActionId('');
+  }
+
   return (
     <main className="clientsPage">
       <header className="clientTopBar">
@@ -480,6 +622,10 @@ export default function ClientsPage() {
         </Link>
 
         <div className="clientTopActions">
+          <Link href="/" className="accountLink">
+            Home
+          </Link>
+
           {currentUserId ? (
             <span className="clientEmail">{currentUserEmail || 'Client account'}</span>
           ) : (
@@ -522,9 +668,8 @@ export default function ClientsPage() {
             </div>
 
             <nav className="menuLinks">
-              <Link href="/">Home</Link>
               <Link href="/services">Services</Link>
-              <Link href="/contact">Contact</Link>
+              <Link href="/contact">Help</Link>
               {currentUserId ? (
                 <button type="button" onClick={handleLogout}>
                   Logout
@@ -596,6 +741,101 @@ export default function ClientsPage() {
               <strong>{requestCounts.closed}</strong>
             </article>
           </section>
+
+          {activities.length > 0 ? (
+            <section className="section activitySection">
+              <div className="sectionHeader">
+                <div>
+                  <p className="sectionLabel">RECENT ACTIVITY</p>
+                  <h2>{showArchivedActivities ? 'Activity archive' : 'Contact and request updates'}</h2>
+                </div>
+
+                <button
+                  type="button"
+                  className="archiveToggleButton"
+                  onClick={() => setShowArchivedActivities((current) => !current)}
+                >
+                  {showArchivedActivities ? 'Back to active' : 'View archive'}
+                </button>
+              </div>
+
+              <div className="activityList">
+                {activities.map((activity) => {
+                  const metadata = activity.metadata ?? {};
+                  const providerName =
+                    typeof metadata.provider_name === 'string'
+                      ? metadata.provider_name
+                      : typeof metadata.company_name === 'string'
+                        ? metadata.company_name
+                        : typeof metadata.worker_name === 'string'
+                          ? metadata.worker_name
+                          : '';
+
+                  const providerType =
+                    typeof metadata.provider_type === 'string'
+                      ? metadata.provider_type
+                      : '';
+
+                  return (
+                    <article
+                      className={`activityCard ${
+                        activity.is_seen ? 'activitySeen' : 'activityNew'
+                      }`}
+                      key={activity.id}
+                    >
+                      <div>
+                        <strong>{activity.title}</strong>
+
+                        <p>
+                          {activity.body ||
+                            (providerName
+                              ? `${providerName} ${providerType ? `(${providerType})` : ''}`
+                              : 'Sendio activity update')}
+                        </p>
+
+                        <span>{formatDateTime(activity.created_at)}</span>
+                      </div>
+
+                      <div className="activityActions">
+                        {getActivityProviderHref(activity) ? (
+                          <Link href={getActivityProviderHref(activity)}>
+                            Open provider
+                          </Link>
+                        ) : null}
+
+                        {showArchivedActivities ? (
+                          <button
+                            type="button"
+                            onClick={() => restoreActivity(activity.id)}
+                            disabled={activityActionId === activity.id}
+                          >
+                            {activityActionId === activity.id ? 'Restoring...' : 'Restore'}
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => archiveActivity(activity.id)}
+                            disabled={activityActionId === activity.id}
+                          >
+                            {activityActionId === activity.id ? 'Archiving...' : 'Archive'}
+                          </button>
+                        )}
+
+                        <button
+                          type="button"
+                          className="deleteActivityButton"
+                          onClick={() => deleteActivity(activity.id)}
+                          disabled={activityActionId === activity.id}
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    </article>
+                  );
+                })}
+              </div>
+            </section>
+          ) : null}
 
           <section className="section">
             <div className="sectionHeader">
@@ -853,27 +1093,31 @@ const styles = `
     position: fixed;
     inset: 0;
     z-index: 100;
+    pointer-events: none;
   }
 
   .menuShade {
     position: absolute;
     inset: 0;
     border: 0;
-    background: rgba(17, 24, 39, 0.22);
+    background: transparent;
+    pointer-events: auto;
   }
 
   .sideMenu {
-    position: relative;
+    position: fixed;
+    top: 72px;
+    right: max(20px, calc((100vw - 1120px) / 2 + 20px));
     z-index: 2;
-    width: min(280px, 78vw);
-    min-height: 100vh;
+    width: min(230px, calc(100vw - 40px));
     background: var(--sendio-card-bg, #ffffff);
-    border-right: 1px solid var(--sendio-border, #dbeafe);
-    padding: 18px;
-    box-shadow: 16px 0 44px rgba(17, 24, 39, 0.14);
+    border: 1px solid var(--sendio-border, #dbeafe);
+    border-radius: 22px;
+    padding: 14px;
+    box-shadow: 0 18px 44px rgba(17, 24, 39, 0.14);
     display: grid;
-    grid-template-rows: auto 1fr;
-    gap: 18px;
+    gap: 12px;
+    pointer-events: auto;
   }
 
   .menuHead {
@@ -1296,6 +1540,94 @@ const styles = `
     color: var(--sendio-muted, #374151);
     line-height: 1.7;
     font-weight: 700;
+  }
+
+  .activitySection {
+    background: var(--sendio-card-bg, #ffffff);
+  }
+
+  .activityList {
+    display: grid;
+    gap: 10px;
+  }
+
+  .activityCard {
+    border: 1px solid var(--sendio-border, #dbeafe);
+    border-radius: 18px;
+    background: var(--sendio-rectangle-bg, #eef6ff);
+    padding: 14px 16px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+  }
+
+  .activityCard strong {
+    display: block;
+    color: var(--sendio-text, #111827);
+    font-size: 14px;
+    font-weight: 950;
+  }
+
+  .activityCard p {
+    margin: 5px 0 0;
+    color: var(--sendio-muted, #374151);
+    font-size: 13px;
+    line-height: 1.45;
+    font-weight: 750;
+  }
+
+  .activityCard span {
+    display: block;
+    margin-top: 5px;
+    color: var(--sendio-muted, #374151);
+    font-size: 11px;
+    font-weight: 800;
+  }
+
+  .activityActions {
+    display: inline-flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 8px;
+    flex-wrap: wrap;
+    flex: 0 0 auto;
+  }
+
+  .activityActions a,
+  .activityActions button,
+  .archiveToggleButton {
+    min-height: 34px;
+    border-radius: 999px;
+    border: 1px solid var(--sendio-border, #dbeafe);
+    background: var(--sendio-card-bg, #ffffff);
+    color: var(--sendio-text, #111827);
+    text-decoration: none;
+    padding: 0 13px;
+    font-size: 12px;
+    font-weight: 950;
+    display: inline-flex;
+    align-items: center;
+    cursor: pointer;
+  }
+
+  .activityActions button:disabled {
+    opacity: 0.65;
+    cursor: wait;
+  }
+
+  .deleteActivityButton {
+    background: rgba(220, 38, 38, 0.08) !important;
+    border-color: rgba(220, 38, 38, 0.22) !important;
+  }
+
+  .activityNew {
+    border-color: rgba(41, 185, 243, 0.45);
+    box-shadow: 0 10px 24px rgba(41, 185, 243, 0.08);
+  }
+
+  .activitySeen {
+    opacity: 0.82;
   }
 
   @media (max-width: 920px) {
