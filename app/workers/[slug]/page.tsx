@@ -306,6 +306,10 @@ export default function PublicWorkerProfilePage() {
   const [contactClicksCount, setContactClicksCount] = useState<number | null>(
     null
   );
+  const [profileViewsCount, setProfileViewsCount] = useState<number | null>(null);
+  const [workerRequestsCount, setWorkerRequestsCount] = useState<number | null>(
+    null
+  );
   const [revealedContact, setRevealedContact] = useState<ContactChannel | null>(
     null
   );
@@ -436,6 +440,8 @@ export default function PublicWorkerProfilePage() {
       setLoading(true);
       setNotFound(false);
       setContactClicksCount(null);
+      setProfileViewsCount(null);
+      setWorkerRequestsCount(null);
       setRevealedContact(null);
 
       let workerData: WorkerProfile | null = null;
@@ -507,6 +513,7 @@ export default function PublicWorkerProfilePage() {
         socialLinksResult,
         reviewsResult,
         contactClicksResult,
+        workerRequestsResult,
         workerCvResult,
       ] = await Promise.all([
         supabase
@@ -546,6 +553,12 @@ export default function PublicWorkerProfilePage() {
           .eq('event_type', 'contact_click'),
 
         supabase
+          .from('worker_requests')
+          .select('id', { count: 'exact', head: true })
+          .eq('worker_id', selectedWorker.id)
+          .eq('event_type', 'request'),
+
+        supabase
           .from('worker_cv')
           .select('*')
           .eq('worker_id', selectedWorker.id)
@@ -565,8 +578,14 @@ export default function PublicWorkerProfilePage() {
       setContactClicksCount(
         contactClicksResult.error ? null : contactClicksResult.count ?? 0
       );
+      setWorkerRequestsCount(
+        workerRequestsResult.error
+          ? selectedWorker.requests_count ?? null
+          : workerRequestsResult.count ?? 0
+      );
 
       const nextViews = (selectedWorker.views ?? 0) + 1;
+      setProfileViewsCount(nextViews);
       setWorker((currentWorker) =>
         currentWorker ? { ...currentWorker, views: nextViews } : currentWorker
       );
@@ -845,13 +864,23 @@ export default function PublicWorkerProfilePage() {
       return;
     }
 
-    if (!isValidEmail(cleanEmail)) {
-      setRequestStatus('Please enter a valid email address.');
+    const hasRequestEmail = cleanEmail.length > 0;
+    const hasRequestPhone = cleanPhone.length > 0;
+
+    if (!hasRequestEmail && !hasRequestPhone) {
+      setRequestStatus('Please add either your email or your phone number.');
       return;
     }
 
-    if (!isValidPhone(cleanPhone)) {
-      setRequestStatus('Please enter a valid phone number with at least 8 digits.');
+    if (hasRequestEmail && !isValidEmail(cleanEmail)) {
+      setRequestStatus('Please enter a valid email address or leave it empty.');
+      return;
+    }
+
+    if (hasRequestPhone && !isValidPhone(cleanPhone)) {
+      setRequestStatus(
+        'Please enter a valid phone number with at least 8 digits or leave it empty.'
+      );
       return;
     }
 
@@ -862,7 +891,9 @@ export default function PublicWorkerProfilePage() {
 
     setRequestSending(true);
 
-    await ensureClientRecord(currentUserId, cleanName, cleanEmail);
+    const requestEmailForSave = cleanEmail || currentUserEmail.trim();
+
+    await ensureClientRecord(currentUserId, cleanName, requestEmailForSave);
 
          const { data, error } = await supabase
       .from('worker_requests')
@@ -870,8 +901,8 @@ export default function PublicWorkerProfilePage() {
         worker_id: worker.id,
         client_id: currentUserId,
         name: cleanName,
-        email: cleanEmail,
-        phone: cleanPhone,
+        email: requestEmailForSave || null,
+        phone: cleanPhone || null,
         message: cleanMessage,
         status: 'new',
         worker_seen: false,
@@ -901,8 +932,11 @@ export default function PublicWorkerProfilePage() {
       sourceUrl: null,
       messageBody: cleanMessage,
       clientName: cleanName,
-      clientEmail: cleanEmail,
+      clientEmail: requestEmailForSave,
     });
+    setWorkerRequestsCount((currentCount) =>
+      typeof currentCount === 'number' ? currentCount + 1 : 1
+    );
     setWorker((currentWorker) =>
       currentWorker
         ? {
@@ -1040,6 +1074,9 @@ const ratingValue =
       ? worker.rating
       : 0;
   const isAvailable = worker?.status === 'available';
+  const safeProfileViewsCount = profileViewsCount ?? worker?.views ?? 0;
+  const safeWorkerRequestsCount =
+    workerRequestsCount ?? worker?.requests_count ?? 0;
 
   const cvFileUrl = workerCv?.cv_file_url?.trim() || null;
   const cvMode = workerCv?.cv_mode ?? null;
@@ -1152,36 +1189,7 @@ const ratingValue =
   const activeContactItems = contactItems.filter((item) => item.url);
   const selectedContactItem =
     contactItems.find((item) => item.channel === revealedContact) ?? null;
-
-  function renderContactIcon(item: ContactItem) {
-    if (!item.url) return null;
-
-    return (
-      <button
-        key={item.channel}
-        type="button"
-        className={`contact-icon-button ${
-          item.channel === 'maps' ? 'contact-icon-maps' : ''
-        } ${!isLoggedIn ? 'contact-icon-locked' : ''}`}
-        aria-label={item.label}
-        title={item.label}
-        onClick={() => {
-          if (!item.url) return;
-
-          if (!isLoggedIn) {
-            showLockedMessage(item.lockedMessage);
-            return;
-          }
-
-          handleContactClick(item.label, item.url, item.channel);
-        }}
-      >
-        <span>{item.icon}</span>
-      </button>
-    );
-  }
-
-  if (loading) {
+if (loading) {
     return (
       <main className="public-worker-page">
         <div className="top-navigation">
@@ -1349,7 +1357,7 @@ const ratingValue =
               <div className="hero-stat">
                 <span className="stat-icon">👁</span>
                 <small>Views</small>
-                <strong>{formatProfileNumber(worker.views)}</strong>
+                <strong>{formatProfileNumber(safeProfileViewsCount)}</strong>
               </div>
 
               <div className="hero-stat">
@@ -1361,7 +1369,7 @@ const ratingValue =
               <div className="hero-stat">
                 <span className="stat-icon">💼</span>
                 <small>Requests</small>
-                <strong>{formatProfileNumber(worker.requests_count)}</strong>
+                <strong>{formatProfileNumber(safeWorkerRequestsCount)}</strong>
               </div>
             </div>
           </div>
@@ -1377,29 +1385,11 @@ const ratingValue =
         </div>
       </section>
 
-      {activeContactItems.length > 0 ? (
-        <section className="contact-zone">
-          <div className="contact-strip">
-            {activeContactItems.map((item) => renderContactIcon(item))}
-          </div>
-
-          {selectedContactItem?.displayValue && isLoggedIn ? (
-            <div className="contact-reveal-panel">
-              <span>{selectedContactItem.label}</span>
-              <strong>{selectedContactItem.displayValue}</strong>
-              <button type="button" onClick={() => setRevealedContact(null)}>
-                Close
-              </button>
-            </div>
-          ) : null}
-        </section>
-      ) : null}
-
-      <section className="worker-profile-shell">
+      <section className="worker-profile-shell refined-profile-shell">
         <div className="profile-layer profile-layer-one">
-          <section className="card request-card compact-request-card">
+          <section className="card profile-card request-card compact-request-card">
             <div className="section-heading compact-heading">
-              <h2>Request Service</h2>
+              <h2>1. Request Service</h2>
               <span>Free request</span>
             </div>
 
@@ -1423,7 +1413,7 @@ const ratingValue =
                       setRequestEmail(event.target.value);
                       setRequestStatus(null);
                     }}
-                    placeholder="Your email"
+                    placeholder="Your email (optional)"
                   />
                 </div>
 
@@ -1431,20 +1421,20 @@ const ratingValue =
                   type="text"
                   value={requestPhone}
                   onChange={(event) => {
-                  setRequestPhone(event.target.value);
-                  setRequestStatus(null);
-                }}
-                  placeholder="Your phone"
+                    setRequestPhone(event.target.value);
+                    setRequestStatus(null);
+                  }}
+                  placeholder="Your phone (optional)"
                 />
 
                 <textarea
                   value={requestMessage}
                   onChange={(event) => {
-                  setRequestMessage(event.target.value);
-                  setRequestStatus(null);
-                }}
+                    setRequestMessage(event.target.value);
+                    setRequestStatus(null);
+                  }}
                   placeholder="Describe what you need"
-                  rows={2}
+                  rows={3}
                 />
 
                 <button type="submit" disabled={requestSending}>
@@ -1479,13 +1469,25 @@ const ratingValue =
             )}
           </section>
 
-          <section className="card cv-card">
+          <section className="card profile-card cv-card">
             <div className="section-heading compact-heading">
-              <h2>CV</h2>
+              <h2>2. CV</h2>
               <span>{hasAnyCv ? 'Available' : 'Waiting'}</span>
             </div>
 
-            <div className="cv-actions">
+            <div className="cv-preview-frame">
+              <div className="cv-file-icon">PDF</div>
+              <strong>{workerCv?.cv_file_name || 'Worker CV'}</strong>
+              <span>
+                {shouldShowFileCv
+                  ? 'CV file is ready to open.'
+                  : shouldShowManualCv
+                    ? 'Manual CV is ready to read.'
+                    : 'No CV added yet.'}
+              </span>
+            </div>
+
+            <div className="cv-actions cv-actions-balanced">
               {shouldShowFileCv && cvFileUrl ? (
                 <a
                   href={cvFileUrl}
@@ -1525,12 +1527,12 @@ const ratingValue =
             ) : null}
           </section>
 
-          <section className="card adresse-card">
+          <section className="card profile-card adresse-card">
             <div className="section-heading compact-heading">
-              <h2>Adresse</h2>
+              <h2>3. Address</h2>
             </div>
 
-            <div className="adresse-list">
+            <div className="adresse-list profile-info-list">
               <div>
                 <span>Name</span>
                 <strong>{worker.name}</strong>
@@ -1557,24 +1559,19 @@ const ratingValue =
                 </div>
               ) : null}
             </div>
-
-            {activeContactItems.length > 0 ? (
-              <div className="adresse-icons">
-                {activeContactItems.map((item) => renderContactIcon(item))}
-              </div>
-            ) : null}
           </section>
         </div>
 
         <div className="profile-layer profile-layer-two">
-          <section className="card services-card compact-card-box">
+          <section className="card profile-card services-card compact-card-box">
             <div className="section-heading compact-heading">
-              <h2>Services</h2>
+              <h2>4. Services</h2>
+              <span>{services.length}</span>
             </div>
 
             {services.length > 0 ? (
               <div className="compact-services-list">
-                {services.slice(0, 6).map((service) => (
+                {services.slice(0, 8).map((service) => (
                   <article key={service.id} className="service-pill">
                     <span>{service.title}</span>
                     {service.price ? <strong>{service.price}</strong> : null}
@@ -1586,14 +1583,15 @@ const ratingValue =
             )}
           </section>
 
-          <section className="card skills-card compact-card-box">
+          <section className="card profile-card skills-card compact-card-box">
             <div className="section-heading compact-heading">
-              <h2>Skills</h2>
+              <h2>5. Skills</h2>
+              <span>{skills.length}</span>
             </div>
 
             {skills.length > 0 ? (
-              <div className="compact-skills-list">
-                {skills.slice(0, 10).map((skill) => (
+              <div className="compact-skills-list refined-skills-list">
+                {skills.slice(0, 12).map((skill) => (
                   <span key={skill.id}>{skill.title}</span>
                 ))}
               </div>
@@ -1602,12 +1600,39 @@ const ratingValue =
             )}
           </section>
 
-          <section className="card achievement-card compact-card-box">
+          <section className="card profile-card achievement-card compact-card-box">
             <div className="section-heading compact-heading">
-              <h2>Achievements</h2>
+              <h2>6. Achievements</h2>
+              <span>{gallery.length}</span>
             </div>
 
-            {achievementMedia ? (
+            {gallery.length > 0 ? (
+              <div className="achievement-media-grid">
+                {gallery.slice(0, 6).map((item) => (
+                  <button
+                    type="button"
+                    className="achievement-media-tile"
+                    onClick={() => setPreviewMedia(item)}
+                    key={item.id}
+                  >
+                    {item.type === 'video' ? (
+                      <>
+                        <video src={item.url} muted playsInline />
+                        <span className="achievement-play-mark">▶</span>
+                      </>
+                    ) : (
+                      <Image
+                        src={item.url}
+                        alt={`${worker.name} achievement`}
+                        fill
+                        className="achievement-mini-image"
+                        sizes="130px"
+                      />
+                    )}
+                  </button>
+                ))}
+              </div>
+            ) : achievementMedia ? (
               <button
                 type="button"
                 className="achievement-mini-frame"
@@ -1631,86 +1656,192 @@ const ratingValue =
           </section>
         </div>
 
-        <section className="card compact-reviews-card">
-          <div className="section-heading compact-heading">
-            <h2>Reviews</h2>
-            <span>{reviews.length}</span>
-          </div>
+        <div className="profile-layer profile-layer-three">
+          <section className="card profile-card compact-reviews-card">
+            <div className="section-heading compact-heading">
+              <h2>7. Reviews</h2>
+              <span>{reviews.length}</span>
+            </div>
 
-          {isLoggedIn ? (
-            <form onSubmit={handleSubmitReview} className="compact-review-form">
-              <div className="small-star-picker" aria-label="Review rating">
-                {[1, 2, 3, 4, 5].map((star) => (
+            <div className="review-summary-line">
+              <strong>{ratingValue.toFixed(1)}</strong>
+              <span>{getStars(ratingValue)}</span>
+            </div>
+
+            {isLoggedIn ? (
+              <form onSubmit={handleSubmitReview} className="compact-review-form refined-review-form">
+                <div className="small-star-picker" aria-label="Review rating">
+                  {[1, 2, 3, 4, 5].map((star) => (
+                    <button
+                      key={star}
+                      type="button"
+                      onClick={() => setReviewRating(star)}
+                      className={reviewRating >= star ? 'star-active' : ''}
+                      aria-label={`${star} star${star > 1 ? 's' : ''}`}
+                    >
+                      ★
+                    </button>
+                  ))}
+                </div>
+
+                <textarea
+                  value={reviewComment}
+                  onChange={(event) => setReviewComment(event.target.value)}
+                  placeholder="Short review..."
+                  rows={2}
+                />
+
+                <div className="review-form-footer">
+                  <button type="submit" disabled={reviewSubmitting}>
+                    {reviewSubmitting ? 'Saving...' : currentUserReview ? 'Update' : 'Add'}
+                  </button>
+
+                  {reviewStatus ? <p>{reviewStatus}</p> : null}
+                </div>
+              </form>
+            ) : (
+              <div className="login-review-box compact-login-review-box">
+                <p>Sign in to add stars.</p>
+
+                <button
+                  type="button"
+                  onClick={() =>
+                    showLockedMessage('Register to rate and review this worker.')
+                  }
+                >
+                  Unlock
+                </button>
+              </div>
+            )}
+
+            <div className="compact-reviews-list refined-reviews-list">
+              {reviews.slice(0, 3).map((review) => (
+                <article key={review.id} className="compact-review-card">
+                  <div className="compact-review-top">
+                    <strong>{review.user_name}</strong>
+                    <span>{getStars(review.rating)}</span>
+                    {review.created_at ? <small>{formatDate(review.created_at)}</small> : null}
+                  </div>
+
+                  {review.comment ? <p>{review.comment}</p> : null}
+
+                  {review.user_id === currentUserId ? (
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteReview(review.id)}
+                      className="delete-review-button"
+                    >
+                      Delete
+                    </button>
+                  ) : null}
+                </article>
+              ))}
+
+              {reviews.length === 0 ? (
+                <p className="empty-review-text">No reviews yet.</p>
+              ) : null}
+            </div>
+          </section>
+
+          <section className="card profile-card work-info-card">
+            <div className="section-heading compact-heading">
+              <h2>8. Work Info</h2>
+              <span>Live</span>
+            </div>
+
+            <div className="work-info-list">
+              <div>
+                <span>Profession</span>
+                <strong>{worker.profession || 'Not added'}</strong>
+              </div>
+
+              <div>
+                <span>Status</span>
+                <strong>{statusLabel || 'Not added'}</strong>
+              </div>
+
+              <div>
+                <span>Working Hours</span>
+                <strong>{worker.working_hours || 'Not added'}</strong>
+              </div>
+
+              <div>
+                <span>Experience</span>
+                <strong>
+                  {typeof worker.experience_years === 'number'
+                    ? `${worker.experience_years} years`
+                    : 'Not added'}
+                </strong>
+              </div>
+
+              <div>
+                <span>Availability</span>
+                <strong>{isAvailable ? 'Available' : 'Unavailable'}</strong>
+              </div>
+
+              <div>
+                <span>Views</span>
+                <strong>{formatProfileNumber(safeProfileViewsCount)}</strong>
+              </div>
+
+              <div>
+                <span>Requests</span>
+                <strong>{formatProfileNumber(safeWorkerRequestsCount)}</strong>
+              </div>
+
+              <div>
+                <span>Contacts</span>
+                <strong>{formatProfileNumber(contactClicksCount)}</strong>
+              </div>
+            </div>
+          </section>
+
+          <section className="card profile-card contact-social-card">
+            <div className="section-heading compact-heading">
+              <h2>9. Contact & Social</h2>
+              <span>{activeContactItems.length}</span>
+            </div>
+
+            {activeContactItems.length > 0 ? (
+              <div className="contact-social-grid">
+                {activeContactItems.map((item) => (
                   <button
-                    key={star}
+                    key={item.channel}
                     type="button"
-                    onClick={() => setReviewRating(star)}
-                    className={reviewRating >= star ? 'star-active' : ''}
-                    aria-label={`${star} star${star > 1 ? 's' : ''}`}
+                    className={`contact-social-action ${
+                      item.channel === 'maps' ? 'contact-social-maps' : ''
+                    } ${!isLoggedIn ? 'contact-social-locked' : ''}`}
+                    onClick={() => {
+                      if (!item.url) return;
+
+                      if (!isLoggedIn) {
+                        showLockedMessage(item.lockedMessage);
+                        return;
+                      }
+
+                      handleContactClick(item.label, item.url, item.channel);
+                    }}
                   >
-                    ★
+                    <span className="contact-social-icon">{item.icon}</span>
+                    <span>{item.label}</span>
                   </button>
                 ))}
               </div>
+            ) : (
+              <p className="empty-small-text">No contact links yet.</p>
+            )}
 
-              <textarea
-                value={reviewComment}
-                onChange={(event) => setReviewComment(event.target.value)}
-                placeholder="Short review..."
-                rows={1}
-              />
-
-              <div className="review-form-footer">
-                <button type="submit" disabled={reviewSubmitting}>
-                  {reviewSubmitting ? 'Saving...' : currentUserReview ? 'Update' : 'Add'}
+            {selectedContactItem?.displayValue && isLoggedIn ? (
+              <div className="contact-reveal-panel contact-card-reveal-panel">
+                <span>{selectedContactItem.label}</span>
+                <strong>{selectedContactItem.displayValue}</strong>
+                <button type="button" onClick={() => setRevealedContact(null)}>
+                  Close
                 </button>
-
-                {reviewStatus ? <p>{reviewStatus}</p> : null}
               </div>
-            </form>
-          ) : (
-            <div className="login-review-box compact-login-review-box">
-              <p>Sign in to add stars.</p>
-
-              <button
-                type="button"
-                onClick={() =>
-                  showLockedMessage('Register to rate and review this worker.')
-                }
-              >
-                Unlock
-              </button>
-            </div>
-          )}
-
-          <div className="compact-reviews-list">
-            {reviews.slice(0, 4).map((review) => (
-              <article key={review.id} className="compact-review-card">
-                <div className="compact-review-top">
-                  <strong>{review.user_name}</strong>
-                  <span>{getStars(review.rating)}</span>
-                  {review.created_at ? <small>{formatDate(review.created_at)}</small> : null}
-                </div>
-
-                {review.comment ? <p>{review.comment}</p> : null}
-
-                {review.user_id === currentUserId ? (
-                  <button
-                    type="button"
-                    onClick={() => handleDeleteReview(review.id)}
-                    className="delete-review-button"
-                  >
-                    Delete
-                  </button>
-                ) : null}
-              </article>
-            ))}
-
-            {reviews.length === 0 ? (
-              <p className="empty-review-text">No reviews yet.</p>
             ) : null}
-          </div>
-        </section>
+          </section>
+        </div>
       </section>
       <footer className="worker-footer">
         <div className="footer-brand">
@@ -2849,6 +2980,286 @@ const ratingValue =
           background: var(--soft-muted);
         }
 
+
+
+        /* Refined 3x3 profile layout inspired by the approved Figma direction */
+        .refined-profile-shell {
+          --profile-row-gap: 16px;
+          max-width: 1120px;
+          gap: var(--profile-row-gap);
+          margin-top: 18px;
+        }
+
+        .refined-profile-shell .profile-layer {
+          gap: 16px;
+        }
+
+        .profile-card {
+          min-height: 270px;
+          border-radius: 24px;
+          padding: 16px;
+          display: flex;
+          flex-direction: column;
+          background: linear-gradient(180deg, #ffffff 0%, #fbfdff 100%);
+          box-shadow: 0 14px 34px rgba(17, 24, 39, 0.055);
+        }
+
+        .profile-card .section-heading {
+          margin-bottom: 12px;
+        }
+
+        .profile-card .section-heading h2 {
+          font-size: 15px;
+          font-weight: 950;
+        }
+
+        .compact-request-card .request-form {
+          flex: 1;
+        }
+
+        .mini-request-form textarea {
+          min-height: 76px;
+        }
+
+        .cv-card {
+          justify-content: space-between;
+        }
+
+        .cv-preview-frame {
+          min-height: 132px;
+          border-radius: 18px;
+          border: 1px solid var(--border);
+          background: var(--soft-card-bg);
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          gap: 7px;
+          text-align: center;
+          padding: 14px;
+        }
+
+        .cv-file-icon {
+          width: 48px;
+          height: 48px;
+          border-radius: 14px;
+          background: #fee2e2;
+          color: #dc2626;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          font-size: 11px;
+          font-weight: 950;
+          border: 1px solid #fecaca;
+        }
+
+        .cv-preview-frame strong {
+          max-width: 100%;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+          color: var(--text);
+          font-size: 12px;
+          font-weight: 900;
+        }
+
+        .cv-preview-frame span {
+          color: var(--soft-muted);
+          font-size: 11px;
+          font-weight: 800;
+        }
+
+        .cv-actions-balanced {
+          margin-top: 12px;
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+        }
+
+        .cv-actions-balanced .cv-button {
+          width: 100%;
+        }
+
+        .profile-info-list div,
+        .work-info-list div {
+          min-height: 34px;
+        }
+
+        .compact-card-box {
+          min-height: 270px;
+        }
+
+        .refined-skills-list {
+          align-content: flex-start;
+        }
+
+        .achievement-media-grid {
+          display: grid;
+          grid-template-columns: repeat(3, minmax(0, 1fr));
+          gap: 8px;
+        }
+
+        .achievement-media-tile {
+          position: relative;
+          aspect-ratio: 1 / 0.82;
+          min-height: 72px;
+          border: 1px solid var(--border);
+          border-radius: 16px;
+          background: var(--soft-card-bg);
+          overflow: hidden;
+          padding: 0;
+          cursor: pointer;
+        }
+
+        .achievement-media-tile video,
+        .achievement-media-tile :global(img) {
+          width: 100%;
+          height: 100%;
+          object-fit: cover;
+        }
+
+        .achievement-play-mark {
+          position: absolute;
+          inset: 0;
+          margin: auto;
+          width: 30px;
+          height: 30px;
+          border-radius: 999px;
+          background: rgba(255, 255, 255, 0.86);
+          color: var(--primary-blue-dark);
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          font-size: 11px;
+          font-weight: 950;
+          box-shadow: 0 10px 20px rgba(17, 24, 39, 0.16);
+        }
+
+        .compact-reviews-card {
+          width: 100%;
+          margin: 0;
+        }
+
+        .review-summary-line {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          margin-bottom: 10px;
+        }
+
+        .review-summary-line strong {
+          color: var(--text);
+          font-size: 25px;
+          line-height: 1;
+          font-weight: 950;
+        }
+
+        .review-summary-line span {
+          color: var(--star);
+          font-size: 15px;
+          letter-spacing: 0.8px;
+        }
+
+        .refined-review-form {
+          grid-template-columns: 1fr;
+        }
+
+        .refined-review-form textarea {
+          min-height: 62px;
+        }
+
+        .refined-reviews-list {
+          grid-template-columns: 1fr;
+          max-height: 150px;
+          overflow: auto;
+        }
+
+        .work-info-list {
+          display: grid;
+          gap: 8px;
+          flex: 1;
+        }
+
+        .work-info-list div {
+          display: grid;
+          grid-template-columns: 110px 1fr;
+          gap: 10px;
+          align-items: center;
+          border-radius: 14px;
+          background: var(--soft-card-bg);
+          border: 1px solid #e5e7eb;
+          padding: 7px 9px;
+        }
+
+        .work-info-list span {
+          color: var(--soft-muted);
+          font-size: 10px;
+          font-weight: 950;
+        }
+
+        .work-info-list strong {
+          color: var(--text);
+          font-size: 11px;
+          font-weight: 900;
+        }
+
+        .contact-social-card {
+          min-height: 270px;
+        }
+
+        .contact-social-grid {
+          display: grid;
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+          gap: 8px;
+        }
+
+        .contact-social-action {
+          min-height: 40px;
+          border: 1px solid var(--border);
+          border-radius: 999px;
+          background: var(--soft-card-bg);
+          color: var(--text);
+          display: flex;
+          align-items: center;
+          gap: 9px;
+          padding: 0 10px;
+          cursor: pointer;
+          font-size: 11px;
+          font-weight: 950;
+          transition: 0.2s ease;
+        }
+
+        .contact-social-action:hover {
+          background: var(--button-bg);
+          transform: translateY(-1px);
+        }
+
+        .contact-social-icon {
+          width: 25px;
+          height: 25px;
+          border-radius: 999px;
+          background: var(--button-bg);
+          color: var(--primary-blue-dark);
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          flex: 0 0 auto;
+          font-size: 11px;
+          font-weight: 950;
+        }
+
+        .contact-social-maps .contact-social-icon {
+          background: #fee2e2;
+          color: #dc2626;
+        }
+
+        .contact-social-locked {
+          color: #6b7280;
+        }
+
+        .contact-card-reveal-panel {
+          width: 100%;
+          margin-top: 10px;
+        }
         @media (max-width: 900px) {
           .worker-hero {
             grid-template-columns: 1fr;
