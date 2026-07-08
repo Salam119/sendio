@@ -180,6 +180,7 @@ type ClientProfile = {
 type CompanyMessageInsertResult = {
   id: string;
 };
+
 type ThemeVars = CSSProperties & {
   '--sendio-page-bg': string;
   '--sendio-hero-bg': string;
@@ -371,6 +372,15 @@ export default function PublicCompanyPage() {
   const [messageText, setMessageText] = useState('');
   const [messageSending, setMessageSending] = useState(false);
   const [messageStatus, setMessageStatus] = useState<string | null>(null);
+
+  const [serviceRequestName, setServiceRequestName] = useState('');
+  const [serviceRequestEmail, setServiceRequestEmail] = useState('');
+  const [serviceRequestPhone, setServiceRequestPhone] = useState('');
+  const [serviceRequestText, setServiceRequestText] = useState('');
+  const [serviceRequestSending, setServiceRequestSending] = useState(false);
+  const [serviceRequestStatus, setServiceRequestStatus] = useState<
+    string | null
+  >(null);
 
   const [reviewRating, setReviewRating] = useState(5);
   const [reviewComment, setReviewComment] = useState('');
@@ -832,6 +842,102 @@ export default function PublicCompanyPage() {
         {icon}
       </button>
     );
+  }
+
+  async function handleSendServiceRequest(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    if (!company || serviceRequestSending) return;
+
+    if (!isLoggedIn || !currentUser) {
+      showLockedMessage('Sign in to request a service from this company.');
+      return;
+    }
+
+    setServiceRequestStatus(null);
+
+    const cleanName = serviceRequestName.trim();
+    const cleanEmail = serviceRequestEmail.trim() || currentUser.email?.trim() || '';
+    const cleanPhone = serviceRequestPhone.trim();
+    const cleanMessage = serviceRequestText.trim();
+
+    if (!cleanName || !cleanMessage) {
+      setServiceRequestStatus('Please add your name and request details.');
+      return;
+    }
+
+    if (!cleanEmail && !cleanPhone) {
+      setServiceRequestStatus('Please add your email or phone.');
+      return;
+    }
+
+    setServiceRequestSending(true);
+
+    await ensureClientRecord(currentUser.id, cleanName, cleanEmail || null);
+
+    const serviceName =
+      services[0]?.title || company.category || 'Company service request';
+
+    const requestMessage = [
+      `Service request: ${serviceName}`,
+      '',
+      `Client name: ${cleanName}`,
+      cleanEmail ? `Email: ${cleanEmail}` : null,
+      cleanPhone ? `Phone: ${cleanPhone}` : null,
+      '',
+      'Request details:',
+      cleanMessage,
+    ]
+      .filter(Boolean)
+      .join('\n');
+
+    const { data, error } = await supabase
+      .from('company_messages')
+      .insert({
+        company_id: company.id,
+        client_id: currentUser.id,
+        name: cleanName,
+        email: cleanEmail || getClientContactEmail(),
+        phone: cleanPhone || null,
+        message: requestMessage,
+        status: 'new',
+        request_status: 'new',
+        company_seen: false,
+        admin_seen: false,
+        is_archived: false,
+        moderation_status: 'normal',
+        source_channel: 'sendio_service_request',
+        source_url: null,
+        event_type: 'service_request',
+      })
+      .select('id')
+      .maybeSingle();
+
+    setServiceRequestSending(false);
+
+    if (error || !data) {
+      setServiceRequestStatus(
+        `Service request could not be sent: ${error?.message || 'Unknown error'}`
+      );
+      return;
+    }
+
+    const insertedMessage = data as CompanyMessageInsertResult;
+
+    await createCompanyContactNotification({
+      messageId: insertedMessage.id,
+      sourceChannel: 'sendio_service_request',
+      sourceUrl: null,
+      messageBody: requestMessage,
+      clientName: cleanName,
+      clientEmail: cleanEmail || getClientContactEmail(),
+    });
+
+    setServiceRequestName('');
+    setServiceRequestEmail('');
+    setServiceRequestPhone('');
+    setServiceRequestText('');
+    setServiceRequestStatus('Service request sent successfully.');
   }
 
   async function handleSendMessage(event: FormEvent<HTMLFormElement>) {
@@ -1313,192 +1419,78 @@ export default function PublicCompanyPage() {
       </section>
 
       <section className="profile-sections">
-        <section
-          className={`top-layout ${
-            compactMedia.length > 0 ? 'has-media' : 'no-media'
-          }`}
-        >
-          <section className="card area-about">
-            <SectionHeading title="About" />
-
-            <p className="clamped-text">
-              {company.description ||
-                'This company has not added a public description yet.'}
-            </p>
-          </section>
-
-          <section className="card area-details">
-            <SectionHeading title="Company Details" />
-
-            <div className="tiny-fields">
-              {companyLocationAddress ? (
-                <div>
-                  <span>Address</span>
-                  <strong>{companyLocationAddress}</strong>
-                </div>
-              ) : null}
-
-              {company.city ? (
-                <div>
-                  <span>City</span>
-                  <strong>{company.city}</strong>
-                </div>
-              ) : null}
-
-              {createdDate ? (
-                <div>
-                  <span>Joined</span>
-                  <strong>{createdDate}</strong>
-                </div>
-              ) : null}
-
-              <div>
-                <span>Legal</span>
-                <strong>Registered company</strong>
-              </div>
-            </div>
-          </section>
-
-          {compactMedia.length > 0 ? (
-            <section className="card area-media">
-              <SectionHeading title="Media" count={compactMedia.length} />
-
-              <div className="two-media-grid">
-                {compactMedia.map((item) => {
-                  const isVideo = item.type?.toLowerCase() === 'video';
-
-                  return (
-                    <button
-                      key={item.id}
-                      type="button"
-                      className="media-square"
-                      onClick={() => setSelectedMedia(item)}
-                      aria-label="Open media"
-                    >
-                      {isVideo ? (
-                        <video src={item.url} preload="metadata" muted />
-                      ) : (
-                        <Image
-                          src={item.url}
-                          alt={`${company.name} media`}
-                          width={120}
-                          height={120}
-                          className="media-image"
-                          sizes="120px"
-                        />
-                      )}
-                    </button>
-                  );
-                })}
-              </div>
-            </section>
-          ) : null}
-
-          {services.length > 0 ? (
-            <section className="card area-services">
-              <SectionHeading title="Services" count={services.length} />
-
-              <div className="chips-wrap">
-                {services.slice(0, 10).map((service) => (
-                  <span key={service.id}>{service.title}</span>
-                ))}
-              </div>
-            </section>
-          ) : null}
-
-          {projects.length > 0 ? (
-            <section className="card area-projects">
-              <SectionHeading title="Projects" count={projects.length} />
-
-              <div className="mini-list">
-                {projects.slice(0, 3).map((project) => (
-                  <article key={project.id}>
-                    <h3>{project.title}</h3>
-                    {project.description ? <p>{project.description}</p> : null}
-                  </article>
-                ))}
-              </div>
-            </section>
-          ) : null}
-        </section>
-
-        <section className="profile-row row-three">
-          <section className="card review-card">
-            <SectionHeading title="Review" count={reviews.length} />
+        <section className="profile-card-grid">
+          <section className="card profile-grid-card">
+            <SectionHeading title="Request Service" />
 
             {isLoggedIn ? (
-              <form onSubmit={handleSubmitReview} className="tiny-review-form">
-                <div className="tiny-stars">
-                  {[1, 2, 3, 4, 5].map((star) => (
-                    <button
-                      key={star}
-                      type="button"
-                      onClick={() => setReviewRating(star)}
-                      className={reviewRating >= star ? 'active-star' : ''}
-                      aria-label={`${star} star${star > 1 ? 's' : ''}`}
-                    >
-                      ★
-                    </button>
-                  ))}
-
-                  <span>{reviewRating}/5</span>
-                </div>
-
-                <textarea
-                  value={reviewComment}
-                  onChange={(event) => {
-                    setReviewComment(event.target.value);
-                    growReviewTextarea(event.currentTarget);
-                  }}
-                  placeholder="Write a short review..."
-                  rows={1}
+              <form
+                onSubmit={handleSendServiceRequest}
+                className="service-request-form"
+              >
+                <input
+                  type="text"
+                  value={serviceRequestName}
+                  onChange={(event) =>
+                    setServiceRequestName(event.target.value)
+                  }
+                  placeholder="Your name"
                 />
 
-                <button type="submit" disabled={reviewSubmitting}>
-                  {reviewSubmitting
-                    ? 'Saving...'
-                    : currentUserReview
-                      ? 'Update'
-                      : 'Submit'}
+                <input
+                  type="email"
+                  value={serviceRequestEmail}
+                  onChange={(event) =>
+                    setServiceRequestEmail(event.target.value)
+                  }
+                  placeholder="Your email (optional)"
+                />
+
+                <input
+                  type="tel"
+                  value={serviceRequestPhone}
+                  onChange={(event) =>
+                    setServiceRequestPhone(event.target.value)
+                  }
+                  placeholder="Your phone (optional)"
+                />
+
+                <textarea
+                  value={serviceRequestText}
+                  onChange={(event) =>
+                    setServiceRequestText(event.target.value)
+                  }
+                  placeholder="Describe what you need"
+                  rows={3}
+                />
+
+                <button type="submit" disabled={serviceRequestSending}>
+                  {serviceRequestSending ? 'Sending...' : 'Send Service Request'}
                 </button>
 
-                {reviewStatus ? (
-                  <p className="status-message">{reviewStatus}</p>
+                {serviceRequestStatus ? (
+                  <p className="status-message">{serviceRequestStatus}</p>
                 ) : null}
               </form>
             ) : (
               <div className="locked-box">
-                <p>Sign in to add a rating.</p>
+                <p>Sign in to request a service.</p>
 
                 <button
                   type="button"
                   onClick={() =>
-                    showLockedMessage('Register to add a rating and review.')
+                    showLockedMessage(
+                      'Register to request a service from this company.'
+                    )
                   }
                 >
                   Unlock
                 </button>
               </div>
             )}
-
-            {reviewPreview ? (
-              <div className="one-review">
-                <strong>{getStars(reviewPreview.rating)}</strong>
-                {reviewPreview.comment ? <p>{reviewPreview.comment}</p> : null}
-
-                {reviewPreview.user_id === currentUser?.id ? (
-                  <button
-                    type="button"
-                    onClick={() => handleDeleteReview(reviewPreview.id)}
-                  >
-                    delete
-                  </button>
-                ) : null}
-              </div>
-            ) : null}
           </section>
 
-          <section className="card message-card">
+          <section className="card profile-grid-card">
             <SectionHeading title="Sendio Message" />
 
             {isLoggedIn ? (
@@ -1548,14 +1540,131 @@ export default function PublicCompanyPage() {
             )}
           </section>
 
+          <section className="card profile-grid-card">
+            <SectionHeading title="About" />
+
+            <p className="clamped-text">
+              {company.description ||
+                'This company has not added a public description yet.'}
+            </p>
+          </section>
+
+          <section className="card profile-grid-card">
+            <SectionHeading title="Address" />
+
+            <div className="tiny-fields">
+              {company.name ? (
+                <div>
+                  <span>Name</span>
+                  <strong>{company.name}</strong>
+                </div>
+              ) : null}
+
+              {company.city ? (
+                <div>
+                  <span>City</span>
+                  <strong>{company.city}</strong>
+                </div>
+              ) : null}
+
+              {companyLocationAddress ? (
+                <div>
+                  <span>Address</span>
+                  <strong>{companyLocationAddress}</strong>
+                </div>
+              ) : null}
+
+              {company.working_hours ? (
+                <div>
+                  <span>Working Hours</span>
+                  <strong>{company.working_hours}</strong>
+                </div>
+              ) : null}
+
+              {createdDate ? (
+                <div>
+                  <span>Joined</span>
+                  <strong>{createdDate}</strong>
+                </div>
+              ) : null}
+
+              <div>
+                <span>Legal</span>
+                <strong>Registered company</strong>
+              </div>
+            </div>
+          </section>
+
+          {services.length > 0 ? (
+            <section className="card profile-grid-card">
+              <SectionHeading title="Services" count={services.length} />
+
+              <div className="chips-wrap compact-scroll">
+                {services.slice(0, 10).map((service) => (
+                  <span key={service.id}>{service.title}</span>
+                ))}
+              </div>
+            </section>
+          ) : null}
+
+          {projects.length > 0 ? (
+            <section className="card profile-grid-card">
+              <SectionHeading title="Projects" count={projects.length} />
+
+              <div className="mini-list compact-scroll">
+                {projects.slice(0, 3).map((project) => (
+                  <article key={project.id}>
+                    <h3>{project.title}</h3>
+                    {project.description ? <p>{project.description}</p> : null}
+                  </article>
+                ))}
+              </div>
+            </section>
+          ) : null}
+
+          {compactMedia.length > 0 ? (
+            <section className="card profile-grid-card">
+              <SectionHeading title="Media" count={compactMedia.length} />
+
+              <div className="two-media-grid compact-media-grid">
+                {compactMedia.map((item) => {
+                  const isVideo = item.type?.toLowerCase() === 'video';
+
+                  return (
+                    <button
+                      key={item.id}
+                      type="button"
+                      className="media-square"
+                      onClick={() => setSelectedMedia(item)}
+                      aria-label="Open media"
+                    >
+                      {isVideo ? (
+                        <video src={item.url} preload="metadata" muted />
+                      ) : (
+                        <Image
+                          src={item.url}
+                          alt={`${company.name} media`}
+                          width={120}
+                          height={120}
+                          className="media-image"
+                          sizes="120px"
+                        />
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            </section>
+          ) : null}
+
           {visibleBranchRows.length > 0 ? (
-            <section className="card branches-card">
+            <section className="card profile-grid-card">
               <SectionHeading
                 title="Branches & Partners"
                 count={visibleBranchRows.length}
               />
 
-              <div className="branches-grid">
+              <div className="branches-grid compact-scroll">
                 {visibleBranchRows.map(({ branchNumber, branch }) => {
                   const country = branch?.country?.trim() ?? '';
                   const city = branch?.city?.trim() ?? '';
@@ -1583,11 +1692,9 @@ export default function PublicCompanyPage() {
               </div>
             </section>
           ) : null}
-        </section>
 
-        <section className="profile-row row-four">
           {hasPublicShowcase && companyShowcase ? (
-            <section className="card showcase-card">
+            <section className="card profile-grid-card">
               <div className="showcase-title">
                 <span>{getShowcaseTypeLabel(companyShowcase.showcase_type)}</span>
                 <SectionHeading title="Showcase" />
@@ -1661,24 +1768,22 @@ export default function PublicCompanyPage() {
           ) : null}
 
           {features.length > 0 ? (
-            <section className="card features-card">
+            <section className="card profile-grid-card">
               <SectionHeading title="Features" count={features.length} />
 
-              <div className="chips-wrap">
+              <div className="chips-wrap compact-scroll">
                 {features.slice(0, 10).map((feature) => (
                   <span key={feature.id}>{feature.title}</span>
                 ))}
               </div>
             </section>
           ) : null}
-        </section>
 
-        {articles.length > 0 ? (
-          <section className="profile-row articles-row">
-            <section className="card articles-card">
+          {articles.length > 0 ? (
+            <section className="card profile-grid-card">
               <SectionHeading title="Articles" count={articles.length} />
 
-              <div className="mini-list">
+              <div className="mini-list compact-scroll">
                 {articles.slice(0, 2).map((article) => (
                   <article key={article.id}>
                     <h3>{article.title}</h3>
@@ -1687,14 +1792,103 @@ export default function PublicCompanyPage() {
                 ))}
               </div>
             </section>
+          ) : null}
+
+          <section className="card profile-grid-card">
+            <SectionHeading title="Review" count={reviews.length} />
+
+            {isLoggedIn ? (
+              <form onSubmit={handleSubmitReview} className="tiny-review-form">
+                <div className="tiny-stars">
+                  {[1, 2, 3, 4, 5].map((star) => (
+                    <button
+                      key={star}
+                      type="button"
+                      onClick={() => setReviewRating(star)}
+                      className={reviewRating >= star ? 'active-star' : ''}
+                      aria-label={`${star} star${star > 1 ? 's' : ''}`}
+                    >
+                      ★
+                    </button>
+                  ))}
+
+                  <span>{reviewRating}/5</span>
+                </div>
+
+                <textarea
+                  value={reviewComment}
+                  onChange={(event) => {
+                    setReviewComment(event.target.value);
+                    growReviewTextarea(event.currentTarget);
+                  }}
+                  placeholder="Write a short review..."
+                  rows={1}
+                />
+
+                <button type="submit" disabled={reviewSubmitting}>
+                  {reviewSubmitting
+                    ? 'Saving...'
+                    : currentUserReview
+                      ? 'Update'
+                      : 'Submit'}
+                </button>
+
+                {reviewStatus ? (
+                  <p className="status-message">{reviewStatus}</p>
+                ) : null}
+              </form>
+            ) : (
+              <div className="locked-box">
+                <p>Sign in to add a rating.</p>
+
+                <button
+                  type="button"
+                  onClick={() =>
+                    showLockedMessage('Register to add a rating and review.')
+                  }
+                >
+                  Unlock
+                </button>
+              </div>
+            )}
+
+            {reviewPreview ? (
+              <div className="one-review">
+                <strong>{getStars(reviewPreview.rating)}</strong>
+                {reviewPreview.comment ? <p>{reviewPreview.comment}</p> : null}
+
+                {reviewPreview.user_id === currentUser?.id ? (
+                  <button
+                    type="button"
+                    onClick={() => handleDeleteReview(reviewPreview.id)}
+                  >
+                    delete
+                  </button>
+                ) : null}
+              </div>
+            ) : null}
           </section>
-        ) : null}
+        </section>
       </section>
 
       <section className="sendio-strip">
-        <p>Sendio connects clients with trusted companies.</p>
+        <div className="sendio-brand">
+          <Image
+            src="/logo.png"
+            alt="Sendio logo"
+            width={38}
+            height={38}
+            className="sendio-footer-logo"
+            sizes="38px"
+          />
 
-        <div>
+          <p>
+            <strong>Sendio</strong>
+            <span>Connects clients with trusted companies.</span>
+          </p>
+        </div>
+
+        <div className="sendio-footer-actions">
           <Link href="/services">Services</Link>
           <Link href="/register">Join</Link>
         </div>
@@ -2057,69 +2251,59 @@ const pageStyles = `
 
   .profile-sections {
     margin-top: 14px;
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
   }
 
-  .top-layout {
+  .profile-card-grid {
     display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
     gap: 12px;
     align-items: stretch;
   }
 
-  .top-layout.has-media {
-    grid-template-columns: minmax(0, 0.95fr) minmax(0, 1.18fr) minmax(210px, 0.72fr);
-    grid-template-areas:
-      "about details media"
-      "services projects media";
-  }
-
-  .top-layout.no-media {
-    grid-template-columns: minmax(0, 0.95fr) minmax(0, 1.18fr);
-    grid-template-areas:
-      "about details"
-      "services projects";
-  }
-
-  .area-about {
-    grid-area: about;
-  }
-
-  .area-details {
-    grid-area: details;
-  }
-
-  .area-media {
-    grid-area: media;
+  .profile-grid-card {
+    min-width: 0;
+    height: 318px;
+    max-height: 318px;
+    overflow: hidden;
     display: flex;
     flex-direction: column;
   }
 
-  .area-services {
-    grid-area: services;
+  .profile-grid-card .service-request-form,
+  .profile-grid-card .message-form,
+  .profile-grid-card .tiny-review-form {
+    flex: 1;
+    min-height: 0;
   }
 
-  .area-projects {
-    grid-area: projects;
+  .profile-grid-card .compact-scroll,
+  .profile-grid-card .tiny-fields,
+  .profile-grid-card .mini-list,
+  .profile-grid-card .branches-grid {
+    overflow: auto;
+    min-height: 0;
+    padding-right: 2px;
   }
 
-  .profile-row {
-    display: grid;
-    gap: 12px;
-    align-items: start;
-  }
-
-  .row-three {
-    grid-template-columns: minmax(220px, 0.8fr) minmax(255px, 0.95fr) minmax(330px, 1.35fr);
-  }
-
-  .row-four {
-    grid-template-columns: minmax(0, 1.25fr) minmax(260px, 0.85fr);
-  }
-
-  .articles-row {
+  .profile-grid-card .tiny-fields,
+  .profile-grid-card .branches-grid {
     grid-template-columns: 1fr;
+  }
+
+  .profile-grid-card .two-media-grid,
+  .profile-grid-card .compact-media-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-content: start;
+  }
+
+  .profile-grid-card .media-square {
+    width: 100%;
+    max-height: 126px;
+  }
+
+  .profile-grid-card .showcase-compact {
+    grid-template-columns: minmax(0, 1fr) 76px;
+    overflow: hidden;
   }
 
   .card {
@@ -2242,20 +2426,6 @@ const pageStyles = `
     font-weight: 900;
   }
 
-  .area-media .two-media-grid {
-    display: grid;
-    grid-template-columns: 1fr;
-    gap: 8px;
-    flex: 1;
-    align-content: center;
-  }
-
-  .area-media .media-square {
-    width: min(132px, 100%);
-    aspect-ratio: 1 / 1;
-    justify-self: center;
-  }
-
   .two-media-grid {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -2282,7 +2452,8 @@ const pageStyles = `
   }
 
   .tiny-review-form,
-  .message-form {
+  .message-form,
+  .service-request-form {
     display: flex;
     flex-direction: column;
     gap: 7px;
@@ -2319,7 +2490,9 @@ const pageStyles = `
 
   .tiny-review-form textarea,
   .message-form input,
-  .message-form textarea {
+  .message-form textarea,
+  .service-request-form input,
+  .service-request-form textarea {
     width: 100%;
     min-height: 34px;
     max-height: 120px;
@@ -2335,7 +2508,8 @@ const pageStyles = `
     overflow: hidden;
   }
 
-  .message-form textarea {
+  .message-form textarea,
+  .service-request-form textarea {
     min-height: 72px;
     resize: vertical;
     overflow: auto;
@@ -2343,6 +2517,7 @@ const pageStyles = `
 
   .tiny-review-form button[type='submit'],
   .message-form button,
+  .service-request-form button,
   .locked-box button {
     min-height: 30px;
     border: 1px solid var(--sendio-border);
@@ -2700,6 +2875,7 @@ const pageStyles = `
     font-size: 24px;
   }
 
+
   @media (max-width: 980px) {
     .hero {
       grid-template-columns: 124px minmax(0, 1fr);
@@ -2712,31 +2888,10 @@ const pageStyles = `
       justify-content: space-between;
     }
 
-    .top-layout.has-media,
-    .top-layout.no-media {
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-      grid-template-areas:
-        "about details"
-        "services projects"
-        "media media";
-    }
-
-    .row-three {
+    .profile-card-grid {
       grid-template-columns: repeat(2, minmax(0, 1fr));
     }
 
-    .branches-card {
-      grid-column: 1 / -1;
-    }
-
-    .row-four {
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-    }
-
-    .area-media .two-media-grid {
-      grid-template-columns: repeat(2, minmax(0, 132px));
-      justify-content: center;
-    }
   }
 
   @media (max-width: 640px) {
@@ -2764,34 +2919,14 @@ const pageStyles = `
       flex-direction: column;
     }
 
-    .top-layout.has-media,
-    .top-layout.no-media {
-      grid-template-columns: 1fr;
-      grid-template-areas:
-        "about"
-        "details"
-        "media"
-        "services"
-        "projects";
-    }
-
-    .profile-row,
-    .row-three,
-    .row-four,
-    .articles-row {
+    .profile-card-grid {
       grid-template-columns: 1fr;
     }
 
-    .branches-card {
-      grid-column: auto;
-    }
-
-    .area-media .two-media-grid {
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-    }
-
-    .area-media .media-square {
-      width: 100%;
+    .profile-card-grid .card {
+      height: auto;
+      max-height: none;
+      min-height: 240px;
     }
 
     .showcase-compact {
@@ -2805,6 +2940,49 @@ const pageStyles = `
 
     .sendio-strip {
       align-items: flex-start;
+      flex-direction: column;
+    }
+  }
+
+
+  @media (max-width: 1180px) {
+    .profile-card-grid {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+  }
+
+  @media (max-width: 900px) {
+    .hero {
+      grid-template-columns: 1fr;
+      text-align: center;
+    }
+
+    .hero-title-row,
+    .hero-meta {
+      justify-content: center;
+    }
+
+    .profile-card-grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+  }
+
+  @media (max-width: 640px) {
+    .public-company-page {
+      padding: 14px 10px 36px;
+    }
+
+    .profile-card-grid {
+      grid-template-columns: 1fr;
+    }
+
+    .profile-grid-card {
+      height: auto;
+      max-height: none;
+    }
+
+    .sendio-strip {
+      align-items: stretch;
       flex-direction: column;
     }
   }
