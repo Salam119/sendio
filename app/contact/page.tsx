@@ -29,11 +29,11 @@ export default function ContactPage() {
       <PlatformNotice compact />
 
       <PageNavigation
-        backHref="/about"
-        backLabel="Back"
-        nextHref="/pricing"
-        nextLabel="Pricing"
-      />
+  backHref="/"
+  backLabel="Back"
+  nextHref="/pricing"
+  nextLabel="Pricing"
+/>
 
       <section className="section split">
         <article className="panel">

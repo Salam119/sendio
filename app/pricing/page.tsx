@@ -31,7 +31,7 @@ export default function PricingPage() {
       <PlatformNotice compact />
 
       <PageNavigation
-        backHref="/contact"
+       backHref="/"
         backLabel="Back"
         nextHref="/legal"
         nextLabel="Legal"

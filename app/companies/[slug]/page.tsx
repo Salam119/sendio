@@ -1915,16 +1915,24 @@ export default function PublicCompanyPage() {
             </button>
 
             {selectedMedia.type?.toLowerCase() === 'video' ? (
-              <video src={selectedMedia.url} controls autoPlay />
-            ) : (
-              <Image
+              <video
                 src={selectedMedia.url}
-                alt={`${company.name} media preview`}
-                width={900}
-                height={700}
-                className="lightbox-image"
-                sizes="90vw"
+                controls
+                autoPlay
+                playsInline
+                className="lightbox-video"
               />
+            ) : (
+               <Image
+  src={selectedMedia.url}
+  alt={`${company.name} media preview`}
+  width={900}
+  height={900}
+  quality={90}
+  priority
+  className="lightbox-image"
+  sizes="(max-width: 768px) 92vw, 720px"
+/>
             )}
           </div>
         </div>
@@ -2763,31 +2771,44 @@ const pageStyles = `
   .media-lightbox {
     position: fixed;
     inset: 0;
-    z-index: 80;
+    z-index: 120;
     display: flex;
     align-items: center;
     justify-content: center;
-    padding: 22px;
-    background: rgba(15, 23, 42, 0.72);
+    padding: 18px;
+    background: rgba(2, 6, 23, 0.88);
+    backdrop-filter: blur(10px);
   }
 
   .media-lightbox-content {
     position: relative;
-    width: min(920px, 100%);
-    max-height: 88vh;
+    width: min(1120px, 96vw);
+    max-height: 92vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
     border-radius: 24px;
-    background: #ffffff;
+    background: #050505;
     padding: 12px;
-    box-shadow: 0 22px 80px rgba(0, 0, 0, 0.28);
+    box-shadow: 0 28px 90px rgba(0, 0, 0, 0.46);
+    overflow: hidden;
   }
 
-  .media-lightbox-content video,
+  .media-lightbox-content :global(.lightbox-video),
   .media-lightbox-content :global(.lightbox-image) {
-    width: 100%;
-    max-height: 80vh;
+    display: block;
+    width: auto;
+    max-width: 100%;
+    height: auto;
+    max-height: calc(92vh - 24px);
     object-fit: contain;
     border-radius: 18px;
     background: #000000;
+  }
+
+  .media-lightbox-content :global(.lightbox-video) {
+    width: min(100%, 1120px);
+    aspect-ratio: 16 / 9;
   }
 
   .lightbox-close {
@@ -2984,6 +3005,61 @@ const pageStyles = `
     .sendio-strip {
       align-items: stretch;
       flex-direction: column;
+    }
+  }
+@media (max-width: 640px) {
+  .media-lightbox {
+    padding: 10px;
+    align-items: center;
+  }
+
+  .media-lightbox-content {
+    width: 94vw;
+    max-height: 86vh;
+    border-radius: 18px;
+    padding: 6px;
+  }
+
+  .media-lightbox-content :global(.lightbox-video),
+  .media-lightbox-content :global(.lightbox-image) {
+    max-width: 100%;
+    max-height: calc(86vh - 12px);
+    border-radius: 14px;
+  }
+}
+  
+ 
+    }
+.media-lightbox-content {
+  position: relative;
+  width: min(88vw, 680px);
+  max-height: 88vh;
+  border-radius: 20px;
+  padding: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+    
+    }
+.media-lightbox-content :global(.lightbox-video),
+.media-lightbox-content :global(.lightbox-image) {
+  width: auto;
+  height: auto;
+  max-width: 100%;
+  max-height: calc(88vh - 16px);
+  object-fit: contain;
+  border-radius: 16px;
+  background: #000000;
+}
+   
+    }
+
+    .lightbox-close {
+      right: 12px;
+      top: 12px;
+      width: 38px;
+      height: 38px;
     }
   }
 `;
