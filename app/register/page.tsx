@@ -16,6 +16,12 @@ type AccountOption = {
   chipClass: string;
 };
 
+type RegisterNotice = {
+  type: 'error' | 'pending';
+  title: string;
+  body?: string;
+};
+
 const accountOptions: AccountOption[] = [
   {
     value: 'client',
@@ -119,7 +125,7 @@ export default function RegisterPage() {
   const [userType, setUserType] = useState<UserType | null>(getInitialUserType);
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
-  const [message, setMessage] = useState('');
+  const [notice, setNotice] = useState<RegisterNotice | null>(null);
 
   const selectedAccount = useMemo(() => {
     return accountOptions.find((option) => option.value === userType) ?? null;
@@ -171,12 +177,17 @@ export default function RegisterPage() {
   function requireAccountType() {
     if (userType) return true;
 
-    setMessage('Please choose an account type first.');
+    setNotice({
+      type: 'error',
+      title: 'Please choose an account type first.',
+      body: 'Select Client, Worker, or Company before creating your account.',
+    });
+
     return false;
   }
 
   async function handleGoogleRegister() {
-    setMessage('');
+    setNotice(null);
 
     if (!requireAccountType()) return;
 
@@ -203,7 +214,10 @@ export default function RegisterPage() {
     });
 
     if (error) {
-      setMessage(error.message);
+      setNotice({
+        type: 'error',
+        title: error.message,
+      });
       setGoogleLoading(false);
     }
   }
@@ -211,7 +225,7 @@ export default function RegisterPage() {
   async function handleRegister(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setLoading(true);
-    setMessage('');
+    setNotice(null);
 
     if (!requireAccountType()) {
       setLoading(false);
@@ -233,7 +247,11 @@ export default function RegisterPage() {
     const fullName = String(formData.get('fullName') || '').trim();
 
     if (password !== confirmPassword) {
-      setMessage('Passwords do not match.');
+      setNotice({
+        type: 'error',
+        title: 'Passwords do not match.',
+        body: 'Please type the same password in both password fields.',
+      });
       setLoading(false);
       return;
     }
@@ -253,7 +271,11 @@ export default function RegisterPage() {
     });
 
     if (error) {
-      setMessage(error.message);
+      setNotice({
+        type: 'error',
+        title: error.message,
+        body: 'Please check your email address and try again.',
+      });
       setLoading(false);
       return;
     }
@@ -275,7 +297,11 @@ export default function RegisterPage() {
       ]);
 
       if (companyError) {
-        setMessage(companyError.message);
+        setNotice({
+          type: 'error',
+          title: companyError.message,
+          body: 'Your account was created, but the company profile could not be prepared.',
+        });
         setLoading(false);
         return;
       }
@@ -286,7 +312,11 @@ export default function RegisterPage() {
       return;
     }
 
-    setMessage('Account created. Please confirm your email.');
+    setNotice({
+      type: 'pending',
+      title: 'Waiting for email confirmation',
+      body: 'We sent a verification link if this email address is valid. Please check your inbox and Spam/Junk folder. After confirming your email, Sendio will continue from the confirmation link.',
+    });
 
     setLoading(false);
   }
@@ -300,6 +330,56 @@ export default function RegisterPage() {
       >
         ← Back
       </button>
+
+      {notice ? (
+        <div
+          className={`fixed inset-0 z-50 flex items-center justify-center px-4 backdrop-blur-sm ${
+            notice.type === 'pending' ? 'bg-white/70' : 'bg-white/60'
+          }`}
+        >
+          <div
+            className={`w-full max-w-[330px] rounded-[26px] border p-5 text-center shadow-2xl ${
+              notice.type === 'pending'
+                ? 'border-sky-100 bg-white text-sky-950'
+                : 'border-red-100 bg-white text-red-700'
+            }`}
+          >
+            {notice.type === 'pending' ? (
+              <div className="mx-auto mb-4 h-9 w-9 animate-spin rounded-full border-[3px] border-sky-100 border-t-sky-600" />
+            ) : (
+              <div className="mx-auto mb-4 flex h-10 w-10 items-center justify-center rounded-full bg-red-500 text-lg font-black text-white">
+                !
+              </div>
+            )}
+
+            <h2 className="text-sm font-black">{notice.title}</h2>
+
+            {notice.body ? (
+              <p
+                className={`mt-2 text-[11px] font-semibold leading-5 ${
+                  notice.type === 'pending' ? 'text-sky-700' : 'text-red-600'
+                }`}
+              >
+                {notice.body}
+              </p>
+            ) : null}
+
+            {notice.type === 'pending' ? (
+              <p className="mt-4 rounded-2xl bg-sky-50 px-3 py-2 text-[10px] font-bold leading-4 text-sky-800">
+                Keep this page open, then confirm your email from the link.
+              </p>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setNotice(null)}
+                className="mt-4 rounded-full bg-red-500 px-4 py-2 text-xs font-black text-white transition hover:bg-red-600"
+              >
+                Try again
+              </button>
+            )}
+          </div>
+        </div>
+      ) : null}
 
       <div className="mx-auto flex min-h-[calc(100vh-16px)] w-full items-center justify-center">
         <main className="w-full max-w-[305px]">
@@ -334,7 +414,7 @@ export default function RegisterPage() {
                     type="button"
                     onClick={() => {
                       setUserType(option.value);
-                      setMessage('');
+                      setNotice(null);
                     }}
                     className={`relative rounded-xl border px-1 py-1 text-center text-[10px] font-black transition hover:-translate-y-0.5 ${
                       isSelected ? option.activeClass : option.inactiveClass
@@ -402,7 +482,7 @@ export default function RegisterPage() {
                 disabled={loading || googleLoading}
                 className="h-8 w-full rounded-xl bg-blue-600 text-sm font-black text-white shadow-[0_14px_28px_-20px_rgba(37,99,235,0.9)] transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
               >
-                {loading ? 'Processing...' : 'Create account →'}
+                {loading ? 'Sending email...' : 'Create account →'}
               </button>
             </form>
 
@@ -433,12 +513,6 @@ export default function RegisterPage() {
                 Sign up with Facebook
               </button>
             </div>
-
-            {message && (
-              <p className="mt-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-center text-xs font-bold text-slate-700">
-                {message}
-              </p>
-            )}
 
             <p className="mt-2 text-center text-xs font-semibold text-slate-500">
               Already have an account?{' '}
