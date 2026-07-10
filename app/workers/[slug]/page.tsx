@@ -53,6 +53,14 @@ type WorkerGalleryItem = {
   created_at: string | null;
 };
 
+type MediaOrientation = 'portrait' | 'landscape' | 'square';
+
+type MediaPreviewLayout = {
+  orientation: MediaOrientation;
+  width: number;
+  height: number;
+};
+
 type WorkerSocialLinks = {
   id: string;
   worker_id: string | null;
@@ -284,6 +292,52 @@ function formatProfileNumber(value: number | null | undefined) {
   }).format(value);
 }
 
+function createMediaPreviewLayout(
+  sourceWidth: number,
+  sourceHeight: number
+): MediaPreviewLayout | null {
+  if (sourceWidth <= 0 || sourceHeight <= 0) return null;
+
+  const aspectRatio = sourceWidth / sourceHeight;
+  const orientation: MediaOrientation =
+    Math.abs(aspectRatio - 1) <= 0.08
+      ? 'square'
+      : aspectRatio > 1
+        ? 'landscape'
+        : 'portrait';
+
+  let frameWidth: number;
+  let frameHeight: number;
+
+  if (orientation === 'portrait') {
+    frameHeight = 740;
+    frameWidth = frameHeight * aspectRatio;
+  } else if (orientation === 'landscape') {
+    frameWidth = 740;
+    frameHeight = frameWidth / aspectRatio;
+  } else if (aspectRatio >= 1) {
+    frameWidth = 560;
+    frameHeight = frameWidth / aspectRatio;
+  } else {
+    frameHeight = 560;
+    frameWidth = frameHeight * aspectRatio;
+  }
+
+  const availableWidth = Math.max(280, window.innerWidth - 36);
+  const availableHeight = Math.max(280, window.innerHeight - 36);
+  const scale = Math.min(
+    1,
+    availableWidth / frameWidth,
+    availableHeight / frameHeight
+  );
+
+  return {
+    orientation,
+    width: Math.round(frameWidth * scale),
+    height: Math.round(frameHeight * scale),
+  };
+}
+
 export default function PublicWorkerProfilePage() {
   const params = useParams();
   const slugParam = params?.slug;
@@ -302,6 +356,8 @@ export default function PublicWorkerProfilePage() {
   const [workerCv, setWorkerCv] = useState<WorkerCv | null>(null);
   const [isCvOpen, setIsCvOpen] = useState(false);
   const [previewMedia, setPreviewMedia] = useState<WorkerGalleryItem | null>(null);
+  const [mediaPreviewLayout, setMediaPreviewLayout] =
+    useState<MediaPreviewLayout | null>(null);
 
   const [contactClicksCount, setContactClicksCount] = useState<number | null>(
     null
@@ -1048,6 +1104,24 @@ export default function PublicWorkerProfilePage() {
     setReviewStatus('Review deleted successfully.');
   }
 
+  function openMediaPreview(item: WorkerGalleryItem) {
+    setMediaPreviewLayout(null);
+    setPreviewMedia(item);
+  }
+
+  function closeMediaPreview() {
+    setPreviewMedia(null);
+    setMediaPreviewLayout(null);
+  }
+
+  function updateMediaPreviewLayout(width: number, height: number) {
+    const nextLayout = createMediaPreviewLayout(width, height);
+
+    if (nextLayout) {
+      setMediaPreviewLayout(nextLayout);
+    }
+  }
+
   const websiteUrl =
     normalizeUrl(worker?.website ?? null) ??
     normalizeUrl(socialLinks?.website ?? null);
@@ -1612,7 +1686,7 @@ if (loading) {
                   <button
                     type="button"
                     className="achievement-media-tile"
-                    onClick={() => setPreviewMedia(item)}
+                    onClick={() => openMediaPreview(item)}
                     key={item.id}
                   >
                     {item.type === 'video' ? (
@@ -1636,7 +1710,7 @@ if (loading) {
               <button
                 type="button"
                 className="achievement-mini-frame"
-                onClick={() => setPreviewMedia(achievementMedia)}
+                onClick={() => openMediaPreview(achievementMedia)}
               >
                 {achievementMedia.type === 'video' ? (
                   <video src={achievementMedia.url} muted playsInline />
@@ -1862,25 +1936,66 @@ if (loading) {
       </footer>
 
       {previewMedia ? (
-        <div className="media-preview-overlay">
-          <div className="media-preview-box">
-            <div className="media-preview-top">
-              <strong>Achievement Preview</strong>
-              <button type="button" onClick={() => setPreviewMedia(null)}>
-                Close
-              </button>
-            </div>
+        <div
+          className="media-preview-overlay"
+          role="dialog"
+          aria-modal="true"
+          onClick={closeMediaPreview}
+        >
+          <div
+            className={`media-preview-box ${
+              mediaPreviewLayout
+                ? `is-${mediaPreviewLayout.orientation}`
+                : 'is-loading'
+            }`}
+            style={
+              mediaPreviewLayout
+                ? {
+                    width: `${mediaPreviewLayout.width}px`,
+                    height: `${mediaPreviewLayout.height}px`,
+                  }
+                : undefined
+            }
+            onClick={(event) => event.stopPropagation()}
+          >
+            <button
+              type="button"
+              className="media-preview-close"
+              onClick={closeMediaPreview}
+              aria-label="Close media"
+            >
+              ×
+            </button>
 
             <div className="media-preview-frame">
-              {previewMedia.type === 'video' ? (
-                <video src={previewMedia.url} controls playsInline />
+              {previewMedia.type?.toLowerCase() === 'video' ? (
+                <video
+                  src={previewMedia.url}
+                  controls
+                  autoPlay
+                  playsInline
+                  onLoadedMetadata={(event) =>
+                    updateMediaPreviewLayout(
+                      event.currentTarget.videoWidth,
+                      event.currentTarget.videoHeight
+                    )
+                  }
+                />
               ) : (
                 <Image
                   src={previewMedia.url}
                   alt="Achievement preview"
                   fill
+                  quality={90}
+                  priority
                   className="media-preview-image"
-                  sizes="90vw"
+                  sizes="(max-width: 620px) 100vw, 740px"
+                  onLoad={(event) =>
+                    updateMediaPreviewLayout(
+                      event.currentTarget.naturalWidth,
+                      event.currentTarget.naturalHeight
+                    )
+                  }
                 />
               )}
             </div>
@@ -2837,66 +2952,76 @@ if (loading) {
           position: fixed;
           inset: 0;
           z-index: 60;
-          background: rgba(0, 0, 0, 0.78);
           display: flex;
           align-items: center;
           justify-content: center;
           padding: 18px;
+          background: transparent;
+          backdrop-filter: none;
         }
 
         .media-preview-box {
-          width: min(100%, 900px);
-          height: min(86vh, 660px);
-          border-radius: 24px;
-          background: white;
-          padding: 12px;
-          display: flex;
-          flex-direction: column;
-          gap: 10px;
-        }
-
-        .media-preview-top {
+          position: relative;
+          box-sizing: border-box;
+          flex: 0 0 auto;
+          max-width: calc(100vw - 36px);
+          max-height: calc(100vh - 36px);
           display: flex;
           align-items: center;
-          justify-content: space-between;
-          gap: 12px;
+          justify-content: center;
+          border: 1px solid rgba(255, 255, 255, 0.16);
+          border-radius: 28px;
+          background: #050505;
+          padding: 10px;
+          box-shadow: 0 28px 90px rgba(0, 0, 0, 0.48);
+          overflow: hidden;
+          transition: width 0.18s ease, height 0.18s ease;
         }
 
-        .media-preview-top strong {
-          color: var(--text);
-          font-size: 14px;
-          font-weight: 900;
-        }
-
-        .media-preview-top button {
-          border: 0;
-          border-radius: 999px;
-          background: var(--button-bg);
-          color: var(--primary-blue-dark);
-          padding: 8px 12px;
-          font-size: 12px;
-          font-weight: 900;
-          cursor: pointer;
+        .media-preview-box.is-loading {
+          width: min(520px, calc(100vw - 36px), calc(100vh - 36px));
+          aspect-ratio: 1 / 1;
         }
 
         .media-preview-frame {
           position: relative;
-          flex: 1;
+          width: 100%;
+          height: 100%;
+          min-width: 0;
           min-height: 0;
-          border-radius: 18px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
           overflow: hidden;
-          background: #111827;
+          border-radius: 20px;
+          background: #000000;
         }
 
-        .media-preview-frame video {
+        .media-preview-frame video,
+        .media-preview-frame :global(.media-preview-image) {
+          display: block;
           width: 100%;
           height: 100%;
           object-fit: contain;
-          background: #111827;
+          background: #000000;
         }
 
-        .media-preview-image {
-          object-fit: contain;
+        .media-preview-close {
+          position: absolute;
+          right: 14px;
+          top: 14px;
+          z-index: 3;
+          width: 36px;
+          height: 36px;
+          border: 0;
+          border-radius: 999px;
+          background: rgba(255, 255, 255, 0.94);
+          color: #111827;
+          font-size: 23px;
+          font-weight: 900;
+          line-height: 1;
+          cursor: pointer;
+          box-shadow: 0 8px 24px rgba(0, 0, 0, 0.22);
         }
 
         .worker-footer {
@@ -3338,6 +3463,36 @@ if (loading) {
           .hero-stat {
             flex: 1;
             min-width: 72px;
+          }
+
+          .media-preview-overlay {
+            padding: 0;
+            align-items: center;
+            background: #000000;
+          }
+
+          .media-preview-box,
+          .media-preview-box.is-loading {
+            width: 100vw !important;
+            height: 100dvh !important;
+            max-width: none;
+            max-height: none;
+            aspect-ratio: auto;
+            border: 0;
+            border-radius: 0;
+            padding: 0;
+            box-shadow: none;
+          }
+
+          .media-preview-frame {
+            border-radius: 0;
+          }
+
+          .media-preview-close {
+            right: 12px;
+            top: 12px;
+            width: 38px;
+            height: 38px;
           }
 
           .unlock-toast {

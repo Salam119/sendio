@@ -68,6 +68,14 @@ type CompanyGalleryItem = {
   type: string | null;
 };
 
+type MediaOrientation = 'portrait' | 'landscape' | 'square';
+
+type MediaPreviewLayout = {
+  orientation: MediaOrientation;
+  width: number;
+  height: number;
+};
+
 type CompanyFeature = {
   id: string;
   company_id: string | null;
@@ -333,6 +341,52 @@ function isUuid(value: string) {
   );
 }
 
+function createMediaPreviewLayout(
+  sourceWidth: number,
+  sourceHeight: number
+): MediaPreviewLayout | null {
+  if (sourceWidth <= 0 || sourceHeight <= 0) return null;
+
+  const aspectRatio = sourceWidth / sourceHeight;
+  const orientation: MediaOrientation =
+    Math.abs(aspectRatio - 1) <= 0.08
+      ? 'square'
+      : aspectRatio > 1
+        ? 'landscape'
+        : 'portrait';
+
+  let frameWidth: number;
+  let frameHeight: number;
+
+  if (orientation === 'portrait') {
+    frameHeight = 740;
+    frameWidth = frameHeight * aspectRatio;
+  } else if (orientation === 'landscape') {
+    frameWidth = 740;
+    frameHeight = frameWidth / aspectRatio;
+  } else if (aspectRatio >= 1) {
+    frameWidth = 560;
+    frameHeight = frameWidth / aspectRatio;
+  } else {
+    frameHeight = 560;
+    frameWidth = frameHeight * aspectRatio;
+  }
+
+  const availableWidth = Math.max(280, window.innerWidth - 36);
+  const availableHeight = Math.max(280, window.innerHeight - 36);
+  const scale = Math.min(
+    1,
+    availableWidth / frameWidth,
+    availableHeight / frameHeight
+  );
+
+  return {
+    orientation,
+    width: Math.round(frameWidth * scale),
+    height: Math.round(frameHeight * scale),
+  };
+}
+
 export default function PublicCompanyPage() {
   const params = useParams();
   const slugParam = params?.slug;
@@ -390,6 +444,8 @@ export default function PublicCompanyPage() {
   const [selectedMedia, setSelectedMedia] = useState<CompanyGalleryItem | null>(
     null
   );
+  const [mediaPreviewLayout, setMediaPreviewLayout] =
+    useState<MediaPreviewLayout | null>(null);
 
   const currentUserReview = currentUser
     ? reviews.find((review) => review.user_id === currentUser.id) ?? null
@@ -1162,6 +1218,24 @@ export default function PublicCompanyPage() {
     element.style.height = `${element.scrollHeight}px`;
   }
 
+  function openMediaPreview(item: CompanyGalleryItem) {
+    setMediaPreviewLayout(null);
+    setSelectedMedia(item);
+  }
+
+  function closeMediaPreview() {
+    setSelectedMedia(null);
+    setMediaPreviewLayout(null);
+  }
+
+  function updateMediaPreviewLayout(width: number, height: number) {
+    const nextLayout = createMediaPreviewLayout(width, height);
+
+    if (nextLayout) {
+      setMediaPreviewLayout(nextLayout);
+    }
+  }
+
   const companyWebsite = normalizeUrl(company?.website ?? null);
   const socialWebsite = normalizeUrl(socialLinks?.website ?? null);
   const websiteUrl = companyWebsite ?? socialWebsite;
@@ -1635,7 +1709,7 @@ export default function PublicCompanyPage() {
                       key={item.id}
                       type="button"
                       className="media-square"
-                      onClick={() => setSelectedMedia(item)}
+                      onClick={() => openMediaPreview(item)}
                       aria-label="Open media"
                     >
                       {isVideo ? (
@@ -1725,7 +1799,7 @@ export default function PublicCompanyPage() {
                     role="button"
                     tabIndex={0}
                     onClick={() =>
-                      setSelectedMedia({
+                      openMediaPreview({
                         id: activeShowcaseMedia.id,
                         company_id: activeShowcaseMedia.company_id,
                         url: activeShowcaseMedia.media_url,
@@ -1735,7 +1809,7 @@ export default function PublicCompanyPage() {
                     onKeyDown={(event) => {
                       if (event.key === 'Enter' || event.key === ' ') {
                         event.preventDefault();
-                        setSelectedMedia({
+                        openMediaPreview({
                           id: activeShowcaseMedia.id,
                           company_id: activeShowcaseMedia.company_id,
                           url: activeShowcaseMedia.media_url,
@@ -1899,41 +1973,66 @@ export default function PublicCompanyPage() {
           className="media-lightbox"
           role="dialog"
           aria-modal="true"
-          onClick={() => setSelectedMedia(null)}
+          onClick={closeMediaPreview}
         >
           <div
-            className="media-lightbox-content"
+            className={`media-lightbox-content ${
+              mediaPreviewLayout
+                ? `is-${mediaPreviewLayout.orientation}`
+                : 'is-loading'
+            }`}
+            style={
+              mediaPreviewLayout
+                ? {
+                    width: `${mediaPreviewLayout.width}px`,
+                    height: `${mediaPreviewLayout.height}px`,
+                  }
+                : undefined
+            }
             onClick={(event) => event.stopPropagation()}
           >
             <button
               type="button"
               className="lightbox-close"
-              onClick={() => setSelectedMedia(null)}
+              onClick={closeMediaPreview}
               aria-label="Close media"
             >
               ×
             </button>
 
-            {selectedMedia.type?.toLowerCase() === 'video' ? (
-              <video
-                src={selectedMedia.url}
-                controls
-                autoPlay
-                playsInline
-                className="lightbox-video"
-              />
-            ) : (
-               <Image
-  src={selectedMedia.url}
-  alt={`${company.name} media preview`}
-  width={900}
-  height={900}
-  quality={90}
-  priority
-  className="lightbox-image"
-  sizes="(max-width: 768px) 92vw, 720px"
-/>
-            )}
+            <div className="lightbox-media-stage">
+              {selectedMedia.type?.toLowerCase() === 'video' ? (
+                <video
+                  src={selectedMedia.url}
+                  controls
+                  autoPlay
+                  playsInline
+                  className="lightbox-video"
+                  onLoadedMetadata={(event) =>
+                    updateMediaPreviewLayout(
+                      event.currentTarget.videoWidth,
+                      event.currentTarget.videoHeight
+                    )
+                  }
+                />
+              ) : (
+                <Image
+                  src={selectedMedia.url}
+                  alt={`${company.name} media preview`}
+                  fill
+                  quality={90}
+                  priority
+                  className="lightbox-image"
+                  sizes="(max-width: 640px) 100vw, 740px"
+                  onLoad={(event) =>
+                    updateMediaPreviewLayout(
+                      event.currentTarget.naturalWidth,
+                      event.currentTarget.naturalHeight
+                    )
+                  }
+                />
+              )}
+            </div>
           </div>
         </div>
       ) : null}
@@ -2776,56 +2875,72 @@ const pageStyles = `
     align-items: center;
     justify-content: center;
     padding: 18px;
-    background: rgba(2, 6, 23, 0.88);
-    backdrop-filter: blur(10px);
+    background: transparent;
+    backdrop-filter: none;
   }
 
   .media-lightbox-content {
     position: relative;
-    width: min(1120px, 96vw);
-    max-height: 92vh;
+    box-sizing: border-box;
+    flex: 0 0 auto;
+    max-width: calc(100vw - 36px);
+    max-height: calc(100vh - 36px);
     display: flex;
     align-items: center;
     justify-content: center;
-    border-radius: 24px;
+    border: 1px solid rgba(255, 255, 255, 0.16);
+    border-radius: 28px;
     background: #050505;
-    padding: 12px;
-    box-shadow: 0 28px 90px rgba(0, 0, 0, 0.46);
+    padding: 10px;
+    box-shadow: 0 28px 90px rgba(0, 0, 0, 0.48);
     overflow: hidden;
+    transition: width 0.18s ease, height 0.18s ease;
   }
 
-  .media-lightbox-content :global(.lightbox-video),
-  .media-lightbox-content :global(.lightbox-image) {
-    display: block;
-    width: auto;
-    max-width: 100%;
-    height: auto;
-    max-height: calc(92vh - 24px);
-    object-fit: contain;
-    border-radius: 18px;
+  .media-lightbox-content.is-loading {
+    width: min(520px, calc(100vw - 36px), calc(100vh - 36px));
+    aspect-ratio: 1 / 1;
+  }
+
+  .lightbox-media-stage {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    min-width: 0;
+    min-height: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    border-radius: 20px;
     background: #000000;
   }
 
-  .media-lightbox-content :global(.lightbox-video) {
-    width: min(100%, 1120px);
-    aspect-ratio: 16 / 9;
+  .lightbox-media-stage :global(.lightbox-video),
+  .lightbox-media-stage :global(.lightbox-image) {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    background: #000000;
   }
 
   .lightbox-close {
     position: absolute;
-    right: 10px;
-    top: 10px;
-    z-index: 2;
-    width: 34px;
-    height: 34px;
+    right: 14px;
+    top: 14px;
+    z-index: 3;
+    width: 36px;
+    height: 36px;
     border: 0;
     border-radius: 999px;
-    background: #ffffff;
+    background: rgba(255, 255, 255, 0.94);
     color: #111827;
-    font-size: 22px;
+    font-size: 23px;
     font-weight: 900;
+    line-height: 1;
     cursor: pointer;
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.16);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.22);
   }
 
   .unlock-toast {
@@ -3007,52 +3122,28 @@ const pageStyles = `
       flex-direction: column;
     }
   }
-@media (max-width: 640px) {
-  .media-lightbox {
-    padding: 10px;
-    align-items: center;
-  }
-
-  .media-lightbox-content {
-    width: 94vw;
-    max-height: 86vh;
-    border-radius: 18px;
-    padding: 6px;
-  }
-
-  .media-lightbox-content :global(.lightbox-video),
-  .media-lightbox-content :global(.lightbox-image) {
-    max-width: 100%;
-    max-height: calc(86vh - 12px);
-    border-radius: 14px;
-  }
-}
-  
- 
+  @media (max-width: 640px) {
+    .media-lightbox {
+      padding: 0;
+      align-items: center;
+      background: #000000;
     }
-.media-lightbox-content {
-  position: relative;
-  width: min(88vw, 680px);
-  max-height: 88vh;
-  border-radius: 20px;
-  padding: 8px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-    
+
+    .media-lightbox-content,
+    .media-lightbox-content.is-loading {
+      width: 100vw !important;
+      height: 100dvh !important;
+      max-width: none;
+      max-height: none;
+      aspect-ratio: auto;
+      border: 0;
+      border-radius: 0;
+      padding: 0;
+      box-shadow: none;
     }
-.media-lightbox-content :global(.lightbox-video),
-.media-lightbox-content :global(.lightbox-image) {
-  width: auto;
-  height: auto;
-  max-width: 100%;
-  max-height: calc(88vh - 16px);
-  object-fit: contain;
-  border-radius: 16px;
-  background: #000000;
-}
-   
+
+    .lightbox-media-stage {
+      border-radius: 0;
     }
 
     .lightbox-close {
