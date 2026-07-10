@@ -68,10 +68,8 @@ const navItems = [
   { label: 'Projects', href: '/dashboard/company/projects' },
   { label: 'Gallery', href: '/dashboard/company/gallery' },
   { label: 'Articles', href: '/dashboard/company/articles' },
-  { label: 'Reviews', href: '/dashboard/company/reviews' },
   { label: 'Messages', href: '/dashboard/company/messages' },
   { label: 'Ads', href: '/dashboard/company/ads' },
-  { label: 'Analytics', href: '/dashboard/company/analytics' },
   { label: 'Settings', href: '/dashboard/company/settings' },
 ];
 

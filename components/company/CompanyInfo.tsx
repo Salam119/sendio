@@ -11,10 +11,6 @@ type CompanyInfoData = {
   city: string | null;
   address: string | null;
   category: string | null;
-  views: number | null;
-  connections: number | null;
-  rating: number | null;
-  reviews_count: number | null;
 };
 
 export default function CompanyInfo() {
@@ -25,10 +21,6 @@ export default function CompanyInfo() {
   const [city, setCity] = useState('');
   const [address, setAddress] = useState('');
   const [category, setCategory] = useState('');
-  const [views, setViews] = useState(0);
-  const [connections, setConnections] = useState(0);
-  const [rating, setRating] = useState(0);
-  const [reviewsCount, setReviewsCount] = useState(0);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
@@ -44,9 +36,7 @@ export default function CompanyInfo() {
 
       const { data, error } = await supabase
         .from('companies')
-        .select(
-          'phone, email, website, city, address, category, views, connections, rating, reviews_count'
-        )
+        .select('phone, email, website, city, address, category')
         .eq('id', id)
         .single();
 
@@ -66,10 +56,6 @@ export default function CompanyInfo() {
       setCity(company.city || '');
       setAddress(company.address || '');
       setCategory(company.category || '');
-      setViews(company.views || 0);
-      setConnections(company.connections || 0);
-      setRating(Number(company.rating || 0));
-      setReviewsCount(company.reviews_count || 0);
     });
 
     return () => {
@@ -80,9 +66,7 @@ export default function CompanyInfo() {
   async function reloadCompanyInfo(id: string) {
     const { data, error } = await supabase
       .from('companies')
-      .select(
-        'phone, email, website, city, address, category, views, connections, rating, reviews_count'
-      )
+      .select('phone, email, website, city, address, category')
       .eq('id', id)
       .single();
 
@@ -99,10 +83,6 @@ export default function CompanyInfo() {
     setCity(company.city || '');
     setAddress(company.address || '');
     setCategory(company.category || '');
-    setViews(company.views || 0);
-    setConnections(company.connections || 0);
-    setRating(Number(company.rating || 0));
-    setReviewsCount(company.reviews_count || 0);
   }
 
   async function saveCompanyInfo() {
@@ -142,6 +122,7 @@ export default function CompanyInfo() {
           <p className="text-[10px] font-black uppercase tracking-[0.18em] text-[var(--sendio-muted)]">
             Company info
           </p>
+
           <h2 className="mt-1 text-base font-black text-[var(--sendio-text)]">
             Basic contact and profile data
           </h2>
@@ -160,29 +141,26 @@ export default function CompanyInfo() {
       <div className="grid gap-3 md:grid-cols-2">
         <CompactInput value={phone} onChange={setPhone} placeholder="Phone" />
         <CompactInput value={email} onChange={setEmail} placeholder="Email" />
+
         <CompactInput
           value={website}
           onChange={setWebsite}
           placeholder="Website"
         />
+
         <CompactInput value={city} onChange={setCity} placeholder="City" />
+
         <CompactInput
           value={address}
           onChange={setAddress}
           placeholder="Address"
         />
+
         <CompactInput
           value={category}
           onChange={setCategory}
           placeholder="Category"
         />
-      </div>
-
-      <div className="mt-4 grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
-        <InsightCard label="Views" value={views} />
-        <InsightCard label="Connections" value={connections} />
-        <InsightCard label="Rating" value={`${rating} / 5`} />
-        <InsightCard label="Reviews" value={reviewsCount} />
       </div>
     </section>
   );
@@ -200,28 +178,9 @@ function CompactInput({
   return (
     <input
       value={value}
-      onChange={(e) => onChange(e.target.value)}
+      onChange={(event) => onChange(event.target.value)}
       placeholder={placeholder}
       className="w-full rounded-2xl border border-[var(--sendio-border)] bg-white px-3 py-2.5 text-sm font-semibold text-[var(--sendio-text)] outline-none transition placeholder:text-gray-400 focus:border-[var(--sendio-accent)]"
     />
-  );
-}
-
-function InsightCard({
-  label,
-  value,
-}: {
-  label: string;
-  value: string | number;
-}) {
-  return (
-    <div className="rounded-2xl border border-[var(--sendio-border)] bg-[var(--sendio-soft)] px-3 py-2">
-      <p className="text-[10px] font-black uppercase tracking-[0.14em] text-[var(--sendio-muted)]">
-        {label}
-      </p>
-      <p className="mt-1 text-sm font-black text-[var(--sendio-text)]">
-        {value}
-      </p>
-    </div>
   );
 }
