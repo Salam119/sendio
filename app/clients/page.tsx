@@ -262,13 +262,25 @@ function canComplainAboutRequest(request: ClientRequestItem) {
 export default function ClientsPage() {
   const router = useRouter();
   const [menuOpen, setMenuOpen] = useState(false);
+  const [logoutConfirmSource, setLogoutConfirmSource] = useState<'hero' | 'menu' | ''>('');
+  const [loggingOut, setLoggingOut] = useState(false);
   const [currentUserEmail, setCurrentUserEmail] = useState('');
   const [currentUserId, setCurrentUserId] = useState('');
   const [loading, setLoading] = useState(true);
   const [requests, setRequests] = useState<ClientRequestItem[]>([]);
   const [activities, setActivities] = useState<ClientActivityRow[]>([]);
-  const [showArchivedActivities, setShowArchivedActivities] = useState(false);
+  const [archivedActivities, setArchivedActivities] = useState<ClientActivityRow[]>([]);
+  const [archiveOpen, setArchiveOpen] = useState(false);
+  const [archiveLoading, setArchiveLoading] = useState(false);
   const [activityActionId, setActivityActionId] = useState('');
+  const [activitySectionOpen, setActivitySectionOpen] = useState(false);
+  const [expandedActivityId, setExpandedActivityId] = useState('');
+  const [expandedRequestId, setExpandedRequestId] = useState('');
+  const [showAllActivities, setShowAllActivities] = useState(false);
+  const [showAllRequests, setShowAllRequests] = useState(false);
+  const [deleteConfirmId, setDeleteConfirmId] = useState('');
+  const [deleteAllArchiveConfirm, setDeleteAllArchiveConfirm] = useState(false);
+  const [deletingAllArchive, setDeletingAllArchive] = useState(false);
   const [warning, setWarning] = useState('');
   const [notice, setNotice] = useState('');
   const [cancellingId, setCancellingId] = useState('');
@@ -337,9 +349,9 @@ export default function ClientsPage() {
         .from('sendio_notifications')
         .select('id, title, body, event_type, target_url, metadata, is_seen, is_archived, created_at')
         .eq('recipient_id', user.id)
-        .eq('is_archived', showArchivedActivities)
+        .eq('is_archived', false)
         .order('created_at', { ascending: false })
-        .limit(12);
+        .limit(50);
 
       if (!active) {
         return;
@@ -530,7 +542,7 @@ export default function ClientsPage() {
     return () => {
       active = false;
     };
-  }, [showArchivedActivities]);
+  }, []);
 
   const requestCounts = useMemo(() => {
     const accepted = requests.filter((request) => {
@@ -574,7 +586,22 @@ export default function ClientsPage() {
   }, [requests]);
 
   async function handleLogout() {
-    await supabase.auth.signOut();
+    if (loggingOut) {
+      return;
+    }
+
+    setLoggingOut(true);
+    setWarning('');
+
+    const { error } = await supabase.auth.signOut();
+
+    if (error) {
+      setWarning(error.message);
+      setLoggingOut(false);
+      return;
+    }
+
+    setLogoutConfirmSource('');
     router.push('/login');
   }
 
@@ -862,11 +889,49 @@ export default function ClientsPage() {
     return '';
   }
 
+  async function openArchive() {
+    if (!currentUserId || archiveLoading) {
+      return;
+    }
+
+    setArchiveOpen(true);
+    setArchiveLoading(true);
+    setDeleteConfirmId('');
+    setDeleteAllArchiveConfirm(false);
+    setWarning('');
+
+    const { data, error } = await supabase
+      .from('sendio_notifications')
+      .select('id, title, body, event_type, target_url, metadata, is_seen, is_archived, created_at')
+      .eq('recipient_id', currentUserId)
+      .eq('is_archived', true)
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      setWarning(error.message);
+      setArchivedActivities([]);
+      setArchiveLoading(false);
+      return;
+    }
+
+    setArchivedActivities((data ?? []) as ClientActivityRow[]);
+    setArchiveLoading(false);
+  }
+
+  function closeArchive() {
+    setArchiveOpen(false);
+    setDeleteConfirmId('');
+    setDeleteAllArchiveConfirm(false);
+    setExpandedActivityId('');
+  }
+
   async function archiveActivity(activityId: string) {
     if (!currentUserId) return;
 
     setActivityActionId(activityId);
     setWarning('');
+
+    const activityToArchive = activities.find((activity) => activity.id === activityId) ?? null;
 
     const { error } = await supabase
       .from('sendio_notifications')
@@ -881,6 +946,16 @@ export default function ClientsPage() {
     }
 
     setActivities((current) => current.filter((activity) => activity.id !== activityId));
+
+    if (activityToArchive) {
+      setArchivedActivities((current) => [
+        { ...activityToArchive, is_archived: true, is_seen: true },
+        ...current.filter((activity) => activity.id !== activityId),
+      ]);
+    }
+
+    setDeleteConfirmId('');
+    setExpandedActivityId((current) => (current === activityId ? '' : current));
     setActivityActionId('');
   }
 
@@ -889,6 +964,9 @@ export default function ClientsPage() {
 
     setActivityActionId(activityId);
     setWarning('');
+
+    const activityToRestore =
+      archivedActivities.find((activity) => activity.id === activityId) ?? null;
 
     const { error } = await supabase
       .from('sendio_notifications')
@@ -902,16 +980,27 @@ export default function ClientsPage() {
       return;
     }
 
-    setActivities((current) => current.filter((activity) => activity.id !== activityId));
+    setArchivedActivities((current) =>
+      current.filter((activity) => activity.id !== activityId)
+    );
+
+    if (activityToRestore) {
+      setActivities((current) => [
+        { ...activityToRestore, is_archived: false },
+        ...current.filter((activity) => activity.id !== activityId),
+      ]);
+    }
+
+    setDeleteConfirmId('');
+    setExpandedActivityId((current) => (current === activityId ? '' : current));
     setActivityActionId('');
   }
 
-  async function deleteActivity(activityId: string) {
+  async function deleteActivity(
+    activityId: string,
+    source: 'active' | 'archive'
+  ) {
     if (!currentUserId) return;
-
-    const confirmed = window.confirm('Delete this activity permanently?');
-
-    if (!confirmed) return;
 
     setActivityActionId(activityId);
     setWarning('');
@@ -928,9 +1017,51 @@ export default function ClientsPage() {
       return;
     }
 
-    setActivities((current) => current.filter((activity) => activity.id !== activityId));
+    if (source === 'archive') {
+      setArchivedActivities((current) =>
+        current.filter((activity) => activity.id !== activityId)
+      );
+    } else {
+      setActivities((current) =>
+        current.filter((activity) => activity.id !== activityId)
+      );
+    }
+
+    setDeleteConfirmId('');
+    setExpandedActivityId((current) => (current === activityId ? '' : current));
     setActivityActionId('');
   }
+
+  async function deleteAllArchivedActivities() {
+    if (!currentUserId || deletingAllArchive) {
+      return;
+    }
+
+    setDeletingAllArchive(true);
+    setWarning('');
+
+    const { error } = await supabase
+      .from('sendio_notifications')
+      .delete()
+      .eq('recipient_id', currentUserId)
+      .eq('is_archived', true);
+
+    if (error) {
+      setWarning(error.message);
+      setDeletingAllArchive(false);
+      return;
+    }
+
+    setArchivedActivities([]);
+    setDeleteConfirmId('');
+    setDeleteAllArchiveConfirm(false);
+    setExpandedActivityId('');
+    setDeletingAllArchive(false);
+    setNotice('The activity archive was deleted permanently.');
+  }
+
+  const visibleActivities = showAllActivities ? activities : activities.slice(0, 3);
+  const visibleRequests = showAllRequests ? requests : requests.slice(0, 3);
 
   return (
     <main className="clientsPage">
@@ -989,9 +1120,39 @@ export default function ClientsPage() {
               <Link href="/services">Services</Link>
               <Link href="/contact">Help</Link>
               {currentUserId ? (
-                <button type="button" onClick={handleLogout}>
-                  Logout
-                </button>
+                <div className="menuLogoutArea">
+                  <button
+                    type="button"
+                    className="menuLogoutButton"
+                    onClick={() =>
+                      setLogoutConfirmSource((current) =>
+                        current === 'menu' ? '' : 'menu'
+                      )
+                    }
+                  >
+                    Logout
+                  </button>
+
+                  {logoutConfirmSource === 'menu' ? (
+                    <div className="logoutConfirm menuLogoutConfirm">
+                      <strong>Do you want to log out?</strong>
+                      <button
+                        type="button"
+                        onClick={() => setLogoutConfirmSource('')}
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="button"
+                        className="confirmLogoutButton"
+                        onClick={handleLogout}
+                        disabled={loggingOut}
+                      >
+                        {loggingOut ? 'Logging out...' : 'Yes, logout'}
+                      </button>
+                    </div>
+                  ) : null}
+                </div>
               ) : (
                 <Link href="/register">Create Account</Link>
               )}
@@ -1001,31 +1162,77 @@ export default function ClientsPage() {
       ) : null}
 
       <section className="hero">
-        <p className="eyebrow">SENDIO CLIENTS</p>
+        <div className="heroContent">
+          <p className="eyebrow">SENDIO CLIENTS</p>
 
-        <h1>{currentUserId ? 'My service requests.' : 'Find the right provider faster.'}</h1>
+          <h1>{currentUserId ? 'My service requests.' : 'Find the right provider faster.'}</h1>
 
-        <p className="intro">
-          {currentUserId
-            ? 'Track your real Sendio service requests, provider responses, address details, and contact actions in one place.'
-            : 'Browse services and public providers freely. Sign in when you want to send a request, contact a provider, or manage your request history.'}
-        </p>
+          <p className="intro">
+            {currentUserId
+              ? 'Track your real Sendio service requests, provider responses, address details, and contact actions in one place.'
+              : 'Browse services and public providers freely. Sign in when you want to send a request, contact a provider, or manage your request history.'}
+          </p>
 
-        <div className="heroActions">
-          <Link href="/services" className="primaryButton">
-            Browse Services
-          </Link>
-
-          {currentUserId ? (
-            <button type="button" className="secondaryButton" onClick={handleLogout}>
-              Logout
-            </button>
-          ) : (
-            <Link href="/register" className="secondaryButton">
-              Create Client Account
+          <div className="heroActions">
+            <Link href="/services" className="primaryButton">
+              Browse Services
             </Link>
-          )}
+
+            {currentUserId ? (
+              <div className="logoutControl">
+                <button
+                  type="button"
+                  className="secondaryButton logoutButton"
+                  onClick={() =>
+                    setLogoutConfirmSource((current) =>
+                      current === 'hero' ? '' : 'hero'
+                    )
+                  }
+                >
+                  Logout
+                </button>
+
+                {logoutConfirmSource === 'hero' ? (
+                  <div className="logoutConfirm">
+                    <strong>Do you want to log out?</strong>
+                    <button
+                      type="button"
+                      onClick={() => setLogoutConfirmSource('')}
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      className="confirmLogoutButton"
+                      onClick={handleLogout}
+                      disabled={loggingOut}
+                    >
+                      {loggingOut ? 'Logging out...' : 'Yes, logout'}
+                    </button>
+                  </div>
+                ) : null}
+              </div>
+            ) : (
+              <Link href="/register" className="secondaryButton">
+                Create Client Account
+              </Link>
+            )}
+          </div>
         </div>
+
+        <aside className="safetyMiniCard" aria-label="Sendio client safety support">
+          <span className="safetyIcon" aria-hidden="true">🛡</span>
+          <div>
+            <strong>Your safety matters to us</strong>
+            <p>
+              If you face inappropriate behavior or unwanted contact, report it to Sendio.
+              We are here to support you.
+            </p>
+            <a href="mailto:info@sendio.be?subject=Sendio%20support%20or%20complaint">
+              info@sendio.be
+            </a>
+          </div>
+        </aside>
       </section>
 
       <PlatformNotice compact />
@@ -1061,112 +1268,198 @@ export default function ClientsPage() {
             </article>
           </section>
 
-          {activities.length > 0 ? (
-            <section className="section activitySection">
-              <div className="sectionHeader">
-                <div>
-                  <p className="sectionLabel">RECENT ACTIVITY</p>
-                  <h2>{showArchivedActivities ? 'Activity archive' : 'Contact and request updates'}</h2>
-                </div>
+          <section
+            className={`section activitySection ${
+              activitySectionOpen ? 'activitySectionOpen' : 'activitySectionClosed'
+            }`}
+          >
+            <button
+              type="button"
+              className="activitySectionToggle"
+              aria-expanded={activitySectionOpen}
+              onClick={() => {
+                setActivitySectionOpen((current) => {
+                  const next = !current;
 
-                <button
-                  type="button"
-                  className="archiveToggleButton"
-                  onClick={() => setShowArchivedActivities((current) => !current)}
-                >
-                  {showArchivedActivities ? 'Back to active' : 'View archive'}
-                </button>
-              </div>
+                  if (!next) {
+                    setExpandedActivityId('');
+                    setDeleteConfirmId('');
+                    setShowAllActivities(false);
+                  }
 
-              <div className="activityList">
-                {activities.map((activity) => {
-                  const metadata = activity.metadata ?? {};
-                  const providerName =
-                    typeof metadata.provider_name === 'string'
-                      ? metadata.provider_name
-                      : typeof metadata.company_name === 'string'
-                        ? metadata.company_name
-                        : typeof metadata.worker_name === 'string'
-                          ? metadata.worker_name
-                          : '';
+                  return next;
+                });
+              }}
+            >
+              <span className="activitySectionIcon" aria-hidden="true">✉</span>
 
-                  const providerType =
-                    typeof metadata.provider_type === 'string'
-                      ? metadata.provider_type
-                      : '';
+              <span className="activitySectionSummary">
+                <strong>Contact and request updates</strong>
+                <span>
+                  {activities.length > 0
+                    ? `${activities.length} active update${activities.length === 1 ? '' : 's'}`
+                    : 'No active updates'}
+                </span>
+              </span>
 
-                  return (
-                    <article
-                      className={`activityCard ${
-                        activity.is_seen ? 'activitySeen' : 'activityNew'
-                      }`}
-                      key={activity.id}
+              <span className="activitySectionChevron" aria-hidden="true">
+                {activitySectionOpen ? '⌃' : '⌄'}
+              </span>
+            </button>
+
+            {activitySectionOpen ? (
+              <div className="activitySectionContent">
+                {activities.length > 3 ? (
+                  <div className="activitySectionControls">
+                    <button
+                      type="button"
+                      className="smallControlButton"
+                      onClick={() => setShowAllActivities((current) => !current)}
                     >
-                      <div>
-                        <strong>{activity.title}</strong>
+                      {showAllActivities ? 'Show latest only' : `View all (${activities.length})`}
+                    </button>
+                  </div>
+                ) : null}
 
-                        <p>
-                          {activity.body ||
-                            (providerName
-                              ? `${providerName} ${providerType ? `(${providerType})` : ''}`
-                              : 'Sendio activity update')}
-                        </p>
+                {visibleActivities.length > 0 ? (
+                  <div className="activityList">
+                    {visibleActivities.map((activity) => {
+                      const metadata = activity.metadata ?? {};
+                      const providerName =
+                        typeof metadata.provider_name === 'string'
+                          ? metadata.provider_name
+                          : typeof metadata.company_name === 'string'
+                            ? metadata.company_name
+                            : typeof metadata.worker_name === 'string'
+                              ? metadata.worker_name
+                              : '';
+                      const providerType =
+                        typeof metadata.provider_type === 'string'
+                          ? metadata.provider_type
+                          : '';
+                      const activityExpanded = expandedActivityId === activity.id;
+                      const deleteOpen = deleteConfirmId === activity.id;
 
-                        <span>{formatDateTime(activity.created_at)}</span>
-                      </div>
-
-                      <div className="activityActions">
-                        {getActivityProviderHref(activity) ? (
-                          <Link href={getActivityProviderHref(activity)}>
-                            Open provider
-                          </Link>
-                        ) : null}
-
-                        {showArchivedActivities ? (
-                          <button
-                            type="button"
-                            onClick={() => restoreActivity(activity.id)}
-                            disabled={activityActionId === activity.id}
-                          >
-                            {activityActionId === activity.id ? 'Restoring...' : 'Restore'}
-                          </button>
-                        ) : (
-                          <button
-                            type="button"
-                            onClick={() => archiveActivity(activity.id)}
-                            disabled={activityActionId === activity.id}
-                          >
-                            {activityActionId === activity.id ? 'Archiving...' : 'Archive'}
-                          </button>
-                        )}
-
-                        <button
-                          type="button"
-                          className="deleteActivityButton"
-                          onClick={() => deleteActivity(activity.id)}
-                          disabled={activityActionId === activity.id}
+                      return (
+                        <article
+                          className={`activityCard ${activityExpanded ? 'activityCardOpen' : ''} ${
+                            activity.is_seen ? 'activitySeen' : 'activityNew'
+                          }`}
+                          key={activity.id}
                         >
-                          Delete
-                        </button>
-                      </div>
-                    </article>
-                  );
-                })}
-              </div>
-            </section>
-          ) : null}
+                          <div className="activitySummaryRow">
+                            <button
+                              type="button"
+                              className="activityToggle"
+                              aria-expanded={activityExpanded}
+                              onClick={() =>
+                                setExpandedActivityId((current) =>
+                                  current === activity.id ? '' : activity.id
+                                )
+                              }
+                            >
+                              <span className="activityDot" aria-hidden="true">●</span>
+                              <span className="activitySummaryText">
+                                <strong>{activity.title}</strong>
+                                <span>{formatDateTime(activity.created_at)}</span>
+                              </span>
+                              <span className="foldChevron" aria-hidden="true">
+                                {activityExpanded ? '⌃' : '⌄'}
+                              </span>
+                            </button>
 
-          <section className="section">
-            <div className="sectionHeader">
+                            <div className="activityActions">
+                              {getActivityProviderHref(activity) ? (
+                                <Link href={getActivityProviderHref(activity)}>
+                                  Open provider
+                                </Link>
+                              ) : null}
+
+                              <button
+                                type="button"
+                                onClick={() => archiveActivity(activity.id)}
+                                disabled={activityActionId === activity.id}
+                              >
+                                {activityActionId === activity.id ? 'Archiving...' : 'Archive'}
+                              </button>
+
+                              <button
+                                type="button"
+                                className="deleteActivityButton"
+                                onClick={() =>
+                                  setDeleteConfirmId((current) =>
+                                    current === activity.id ? '' : activity.id
+                                  )
+                                }
+                                disabled={activityActionId === activity.id}
+                              >
+                                Delete
+                              </button>
+                            </div>
+                          </div>
+
+                          {deleteOpen ? (
+                            <div className="inlineDeleteConfirm">
+                              <strong>Delete permanently?</strong>
+                              <button type="button" onClick={() => setDeleteConfirmId('')}>
+                                Cancel
+                              </button>
+                              <button
+                                type="button"
+                                className="confirmDeleteButton"
+                                onClick={() => deleteActivity(activity.id, 'active')}
+                                disabled={activityActionId === activity.id}
+                              >
+                                {activityActionId === activity.id ? 'Deleting...' : 'Yes, delete'}
+                              </button>
+                            </div>
+                          ) : null}
+
+                          {activityExpanded ? (
+                            <div className="activityDetails">
+                              <p>
+                                {activity.body ||
+                                  (providerName
+                                    ? `${providerName}${providerType ? ` (${providerType})` : ''}`
+                                    : 'Sendio activity update')}
+                              </p>
+                            </div>
+                          ) : null}
+                        </article>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div className="compactEmptyState">
+                    <strong>No active updates</strong>
+                    <span>Your new contact and request updates will appear here.</span>
+                  </div>
+                )}
+              </div>
+            ) : null}
+          </section>
+
+          <section className="section requestsSection">
+            <div className="sectionHeader compactSectionHeader">
               <div>
                 <p className="sectionLabel">REAL REQUESTS</p>
                 <h2>My requests</h2>
               </div>
+
+              {requests.length > 3 ? (
+                <button
+                  type="button"
+                  className="smallControlButton"
+                  onClick={() => setShowAllRequests((current) => !current)}
+                >
+                  {showAllRequests ? 'Show latest only' : `View all (${requests.length})`}
+                </button>
+              ) : null}
             </div>
 
-            {requests.length > 0 ? (
+            {visibleRequests.length > 0 ? (
               <div className="requestList">
-                {requests.map((request) => {
+                {visibleRequests.map((request) => {
                   const provider = request.provider;
                   const locationHref = getLocationHref(request);
                   const whatsappHref = provider ? getWhatsappHref(provider.phone) : '';
@@ -1182,25 +1475,41 @@ export default function ClientsPage() {
                     (provider?.kind === 'company'
                       ? companyVerifiedReviewsSupported
                       : workerVerifiedReviewsSupported);
+                  const requestExpanded = expandedRequestId === request.id;
 
                   return (
-                    <article className="requestCard" key={request.id}>
-                      <div className="requestCardHead">
-                        <div>
-                          <p className="serviceName">
-                            <span className="serviceIcon" aria-hidden="true">
-                              {getServiceIcon(request.category)}
-                            </span>
-                            <span>
+                    <article
+                      className={`requestCard ${requestExpanded ? 'requestCardOpen' : ''}`}
+                      key={request.id}
+                    >
+                      <div className="requestCardHead requestSummaryHead">
+                        <button
+                          type="button"
+                          className="requestToggle"
+                          aria-expanded={requestExpanded}
+                          onClick={() =>
+                            setExpandedRequestId((current) =>
+                              current === request.id ? '' : request.id
+                            )
+                          }
+                        >
+                          <span className="serviceIcon" aria-hidden="true">
+                            {getServiceIcon(request.category)}
+                          </span>
+                          <span className="requestSummaryText">
+                            <strong>
                               {request.category?.name ||
                                 request.service_name ||
                                 'Service request'}
+                            </strong>
+                            <span>
+                              Sent {formatDateTime(request.submitted_at || request.created_at)}
                             </span>
-                          </p>
-                          <span className="createdAt">
-                            Sent {formatDateTime(request.submitted_at || request.created_at)}
                           </span>
-                        </div>
+                          <span className="foldChevron" aria-hidden="true">
+                            {requestExpanded ? '⌃' : '⌄'}
+                          </span>
+                        </button>
 
                         <div className="badgeGroup">
                           <span className={`statusBadge ${requestTone}`}>
@@ -1215,141 +1524,143 @@ export default function ClientsPage() {
                         </div>
                       </div>
 
-                      <div className="requestBody">
-                        <div className="providerPanel">
-                          {provider ? (
-                            <>
-                              <Link
-                                href={getProviderHref(provider)}
-                                className="providerImage"
-                                style={
-                                  provider.image
-                                    ? {
-                                        backgroundImage: `url("${provider.image}")`,
-                                      }
-                                    : undefined
-                                }
-                              >
-                                {!provider.image ? provider.name.charAt(0).toUpperCase() : null}
-                              </Link>
+                      {requestExpanded ? (
+                        <>
+                          <div className="requestBody">
+                            <div className="providerPanel">
+                              {provider ? (
+                                <>
+                                  <Link
+                                    href={getProviderHref(provider)}
+                                    className="providerImage"
+                                    style={
+                                      provider.image
+                                        ? {
+                                            backgroundImage: `url("${provider.image}")`,
+                                          }
+                                        : undefined
+                                    }
+                                  >
+                                    {!provider.image ? provider.name.charAt(0).toUpperCase() : null}
+                                  </Link>
 
-                              <div className="providerInfo">
-                                <Link href={getProviderHref(provider)} className="providerName">
-                                  {provider.name}
-                                </Link>
-                                <span>{provider.kind === 'company' ? 'Company' : 'Worker'}</span>
-                                <span>{provider.city || 'Nearby area'}</span>
-                                <span>{provider.status}</span>
+                                  <div className="providerInfo">
+                                    <Link href={getProviderHref(provider)} className="providerName">
+                                      {provider.name}
+                                    </Link>
+                                    <span>{provider.kind === 'company' ? 'Company' : 'Worker'}</span>
+                                    <span>{provider.city || 'Nearby area'}</span>
+                                    <span>{provider.status}</span>
+                                  </div>
+                                </>
+                              ) : (
+                                <div className="providerMissing">
+                                  <strong>Provider selection pending</strong>
+                                  <span>Provider details will appear after a match is available.</span>
+                                </div>
+                              )}
+                            </div>
+
+                            <div className="detailsPanel">
+                              <div>
+                                <span>Address</span>
+                                <strong>{getAddressLine(request) || 'No address saved'}</strong>
                               </div>
-                            </>
-                          ) : (
-                            <div className="providerMissing">
-                              <strong>Provider selection pending</strong>
-                              <span>Provider details will appear after a match is available.</span>
+
+                              <div>
+                                <span>Preferred time</span>
+                                <strong>{formatPreferredTime(request)}</strong>
+                              </div>
+
+                              <div>
+                                <span>Service identity</span>
+                                <strong>
+                                  {request.category?.name ||
+                                    request.service_name ||
+                                    'Not available'}
+                                </strong>
+                              </div>
+
+                              <div>
+                                <span>Client phone</span>
+                                <strong>{request.phone || 'No phone added'}</strong>
+                              </div>
+
+                              <div>
+                                <span>Request details</span>
+                                <strong>{request.project_description || 'No description added'}</strong>
+                              </div>
+
+                              {request.cancelled_reason ? (
+                                <div>
+                                  <span>Cancellation reason</span>
+                                  <strong>{request.cancelled_reason}</strong>
+                                </div>
+                              ) : null}
                             </div>
-                          )}
-                        </div>
-
-                        <div className="detailsPanel">
-                          <div>
-                            <span>Address</span>
-                            <strong>{getAddressLine(request) || 'No address saved'}</strong>
                           </div>
 
-                          <div>
-                            <span>Preferred time</span>
-                            <strong>{formatPreferredTime(request)}</strong>
+                          <div className="cardActions">
+                            {serviceHref ? <Link href={serviceHref}>View service</Link> : null}
+                            {provider ? <Link href={getProviderHref(provider)}>Open provider</Link> : null}
+
+                            {locationHref ? (
+                              <a href={locationHref} target="_blank" rel="noreferrer">
+                                Location
+                              </a>
+                            ) : null}
+
+                            {provider?.phone ? (
+                              <a href={`tel:${cleanPhone(provider.phone)}`}>Call</a>
+                            ) : null}
+
+                            {whatsappHref ? (
+                              <a href={whatsappHref} target="_blank" rel="noreferrer">
+                                WhatsApp
+                              </a>
+                            ) : null}
+
+                            {provider?.email ? <a href={`mailto:${provider.email}`}>Email</a> : null}
+
+                            {complaintsSupported && canComplainAboutRequest(request) ? (
+                              <button
+                                type="button"
+                                className="complaintButton"
+                                onClick={() => submitComplaint(request)}
+                                disabled={complaintActionId === request.id}
+                              >
+                                {complaintActionId === request.id
+                                  ? 'Submitting...'
+                                  : 'Submit complaint'}
+                              </button>
+                            ) : null}
+
+                            {canUseVerifiedReview ? (
+                              <button
+                                type="button"
+                                className="reviewButton"
+                                onClick={() => submitVerifiedReview(request)}
+                                disabled={reviewActionId === request.id}
+                              >
+                                {reviewActionId === request.id
+                                  ? 'Saving...'
+                                  : 'Rate provider'}
+                              </button>
+                            ) : null}
+
+                            {canCancelRequest(request) ? (
+                              <button
+                                type="button"
+                                className="cancelButton"
+                                onClick={() => cancelRequest(request.id)}
+                                disabled={cancellingId === request.id}
+                              >
+                                {cancellingId === request.id ? 'Cancelling...' : 'Cancel request'}
+                              </button>
+                            ) : null}
                           </div>
-
-                          <div>
-                            <span>Service identity</span>
-                            <strong>
-                              {request.category?.name ||
-                                request.service_name ||
-                                'Not available'}
-                            </strong>
-                          </div>
-
-                          <div>
-                            <span>Client phone</span>
-                            <strong>{request.phone || 'No phone added'}</strong>
-                          </div>
-
-                          <div>
-                            <span>Request details</span>
-                            <strong>{request.project_description || 'No description added'}</strong>
-                          </div>
-
-                          {request.cancelled_reason ? (
-                            <div>
-                              <span>Cancellation reason</span>
-                              <strong>{request.cancelled_reason}</strong>
-                            </div>
-                          ) : null}
-                        </div>
-                      </div>
-
-                      <div className="cardActions">
-                        {serviceHref ? (
-                          <Link href={serviceHref}>View service</Link>
-                        ) : null}
-
-                        {provider ? <Link href={getProviderHref(provider)}>Open provider</Link> : null}
-
-                        {locationHref ? (
-                          <a href={locationHref} target="_blank" rel="noreferrer">
-                            Location
-                          </a>
-                        ) : null}
-
-                        {provider?.phone ? <a href={`tel:${cleanPhone(provider.phone)}`}>Call</a> : null}
-
-                        {whatsappHref ? (
-                          <a href={whatsappHref} target="_blank" rel="noreferrer">
-                            WhatsApp
-                          </a>
-                        ) : null}
-
-                        {provider?.email ? <a href={`mailto:${provider.email}`}>Email</a> : null}
-
-                        {complaintsSupported &&
-                        canComplainAboutRequest(request) ? (
-                          <button
-                            type="button"
-                            className="complaintButton"
-                            onClick={() => submitComplaint(request)}
-                            disabled={complaintActionId === request.id}
-                          >
-                            {complaintActionId === request.id
-                              ? 'Submitting...'
-                              : 'Submit complaint'}
-                          </button>
-                        ) : null}
-
-                        {canUseVerifiedReview ? (
-                          <button
-                            type="button"
-                            className="reviewButton"
-                            onClick={() => submitVerifiedReview(request)}
-                            disabled={reviewActionId === request.id}
-                          >
-                            {reviewActionId === request.id
-                              ? 'Saving...'
-                              : 'Rate provider'}
-                          </button>
-                        ) : null}
-
-                        {canCancelRequest(request) ? (
-                          <button
-                            type="button"
-                            className="cancelButton"
-                            onClick={() => cancelRequest(request.id)}
-                            disabled={cancellingId === request.id}
-                          >
-                            {cancellingId === request.id ? 'Cancelling...' : 'Cancel request'}
-                          </button>
-                        ) : null}
-                      </div>
+                        </>
+                      ) : null}
                     </article>
                   );
                 })}
@@ -1365,6 +1676,18 @@ export default function ClientsPage() {
               </div>
             )}
           </section>
+
+          <div className="archiveFooterLauncher">
+            <button
+              type="button"
+              className="archiveToggleButton"
+              aria-label="Open archive"
+              title="Open archive"
+              onClick={openArchive}
+            >
+              Archive
+            </button>
+          </div>
         </>
       ) : (
         <section className="section publicGrid">
@@ -1401,6 +1724,160 @@ export default function ClientsPage() {
           </article>
         </section>
       )}
+
+      {archiveOpen ? (
+        <div className="archiveLayer" role="dialog" aria-modal="true" aria-label="Activity archive">
+          <button
+            type="button"
+            className="archiveShade"
+            aria-label="Close archive"
+            onClick={closeArchive}
+          />
+
+          <section className="archivePanel">
+            <header className="archiveHeader">
+              <div>
+                <p className="sectionLabel">STORED ACTIVITY</p>
+                <h2>Archive</h2>
+                <p>Archived messages stay hidden from the client page until you open this list.</p>
+              </div>
+
+              <button type="button" className="archiveCloseButton" onClick={closeArchive}>
+                ×
+              </button>
+            </header>
+
+            <div className="archiveToolbar">
+              <span>{archivedActivities.length} archived item{archivedActivities.length === 1 ? '' : 's'}</span>
+
+              {archivedActivities.length > 0 ? (
+                <button
+                  type="button"
+                  className="deleteAllArchiveButton"
+                  onClick={() => setDeleteAllArchiveConfirm((current) => !current)}
+                  disabled={deletingAllArchive}
+                >
+                  Delete all archive
+                </button>
+              ) : null}
+            </div>
+
+            {deleteAllArchiveConfirm ? (
+              <div className="inlineDeleteConfirm deleteAllConfirm">
+                <div>
+                  <strong>Delete all archived items permanently?</strong>
+                  <span>This action cannot be undone.</span>
+                </div>
+                <button type="button" onClick={() => setDeleteAllArchiveConfirm(false)}>
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  className="confirmDeleteButton"
+                  onClick={deleteAllArchivedActivities}
+                  disabled={deletingAllArchive}
+                >
+                  {deletingAllArchive ? 'Deleting...' : 'Yes, delete all'}
+                </button>
+              </div>
+            ) : null}
+
+            {archiveLoading ? (
+              <div className="archiveEmptyState">Loading archive...</div>
+            ) : archivedActivities.length > 0 ? (
+              <div className="archiveList">
+                {archivedActivities.map((activity) => {
+                  const activityExpanded = expandedActivityId === activity.id;
+                  const deleteOpen = deleteConfirmId === activity.id;
+
+                  return (
+                    <article className="archiveItem" key={activity.id}>
+                      <div className="activitySummaryRow">
+                        <button
+                          type="button"
+                          className="activityToggle"
+                          aria-expanded={activityExpanded}
+                          onClick={() =>
+                            setExpandedActivityId((current) =>
+                              current === activity.id ? '' : activity.id
+                            )
+                          }
+                        >
+                          <span className="activityDot archivedDot" aria-hidden="true">●</span>
+                          <span className="activitySummaryText">
+                            <strong>{activity.title}</strong>
+                            <span>{formatDateTime(activity.created_at)}</span>
+                          </span>
+                          <span className="foldChevron" aria-hidden="true">
+                            {activityExpanded ? '⌃' : '⌄'}
+                          </span>
+                        </button>
+
+                        <div className="activityActions">
+                          {getActivityProviderHref(activity) ? (
+                            <Link href={getActivityProviderHref(activity)}>
+                              Open provider
+                            </Link>
+                          ) : null}
+
+                          <button
+                            type="button"
+                            onClick={() => restoreActivity(activity.id)}
+                            disabled={activityActionId === activity.id}
+                          >
+                            {activityActionId === activity.id ? 'Restoring...' : 'Restore'}
+                          </button>
+
+                          <button
+                            type="button"
+                            className="deleteActivityButton"
+                            onClick={() =>
+                              setDeleteConfirmId((current) =>
+                                current === activity.id ? '' : activity.id
+                              )
+                            }
+                            disabled={activityActionId === activity.id}
+                          >
+                            Delete
+                          </button>
+                        </div>
+                      </div>
+
+                      {deleteOpen ? (
+                        <div className="inlineDeleteConfirm">
+                          <strong>Delete permanently?</strong>
+                          <button type="button" onClick={() => setDeleteConfirmId('')}>
+                            Cancel
+                          </button>
+                          <button
+                            type="button"
+                            className="confirmDeleteButton"
+                            onClick={() => deleteActivity(activity.id, 'archive')}
+                            disabled={activityActionId === activity.id}
+                          >
+                            {activityActionId === activity.id ? 'Deleting...' : 'Yes, delete'}
+                          </button>
+                        </div>
+                      ) : null}
+
+                      {activityExpanded ? (
+                        <div className="activityDetails">
+                          <p>{activity.body || 'Sendio activity update'}</p>
+                        </div>
+                      ) : null}
+                    </article>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="archiveEmptyState">
+                <strong>The archive is empty</strong>
+                <span>Items you archive will be stored here.</span>
+              </div>
+            )}
+          </section>
+        </div>
+      ) : null}
 
       <style>{styles}</style>
     </main>
@@ -1590,6 +2067,72 @@ const styles = `
     flex-wrap: wrap;
     gap: 14px;
     margin-top: 30px;
+  }
+
+  .logoutControl {
+    display: inline-flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .logoutButton,
+  .menuLogoutButton {
+    background: rgba(220, 38, 38, 0.08) !important;
+    border-color: rgba(220, 38, 38, 0.24) !important;
+    color: #991b1b !important;
+  }
+
+  .logoutConfirm {
+    min-height: 38px;
+    border-radius: 16px;
+    border: 1px solid rgba(220, 38, 38, 0.22);
+    background: var(--sendio-card-bg, #ffffff);
+    padding: 6px 8px 6px 11px;
+    display: inline-flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 7px;
+    box-shadow: 0 10px 24px rgba(17, 24, 39, 0.08);
+  }
+
+  .logoutConfirm strong {
+    color: var(--sendio-text, #111827);
+    font-size: 11px;
+    font-weight: 900;
+  }
+
+  .logoutConfirm button {
+    min-height: 28px;
+    border-radius: 999px;
+    border: 1px solid var(--sendio-border, #dbeafe);
+    background: var(--sendio-card-bg, #ffffff);
+    color: var(--sendio-text, #111827);
+    padding: 0 10px;
+    font-size: 10px;
+    font-weight: 950;
+    cursor: pointer;
+  }
+
+  .logoutConfirm .confirmLogoutButton {
+    border-color: rgba(220, 38, 38, 0.3);
+    background: rgba(220, 38, 38, 0.1);
+    color: #991b1b;
+  }
+
+  .logoutConfirm button:disabled {
+    opacity: 0.65;
+    cursor: wait;
+  }
+
+  .menuLogoutArea {
+    display: grid;
+    gap: 8px;
+  }
+
+  .menuLogoutConfirm {
+    align-items: flex-start;
+    border-radius: 14px;
   }
 
   .primaryButton,
@@ -1963,8 +2506,106 @@ const styles = `
     font-weight: 700;
   }
 
+  .archiveFooterLauncher {
+    max-width: 1120px;
+    margin: 16px auto 0;
+    display: flex;
+    justify-content: flex-end;
+  }
+
+  .archiveFooterLauncher .archiveToggleButton {
+    min-width: 88px;
+  }
+
   .activitySection {
     background: var(--sendio-card-bg, #ffffff);
+  }
+
+  .activitySectionClosed {
+    padding: 0;
+    overflow: hidden;
+  }
+
+  .activitySectionOpen {
+    padding: 0;
+    overflow: hidden;
+  }
+
+  .activitySectionToggle {
+    width: 100%;
+    min-height: 82px;
+    border: 0;
+    background: transparent;
+    color: var(--sendio-text, #111827);
+    padding: 18px 22px;
+    display: flex;
+    align-items: center;
+    gap: 13px;
+    text-align: left;
+    cursor: pointer;
+  }
+
+  .activitySectionIcon {
+    width: 40px;
+    height: 40px;
+    border-radius: 14px;
+    border: 1px solid rgba(41, 185, 243, 0.24);
+    background: var(--sendio-rectangle-bg, #eef6ff);
+    color: var(--sendio-button-bg, #29b9f3);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 auto;
+    font-size: 18px;
+    font-weight: 950;
+  }
+
+  .activitySectionSummary {
+    min-width: 0;
+    display: grid;
+    gap: 4px;
+  }
+
+  .activitySectionSummary strong {
+    color: var(--sendio-text, #111827);
+    font-size: clamp(18px, 2.4vw, 24px);
+    line-height: 1.15;
+    letter-spacing: -0.025em;
+    font-weight: 950;
+  }
+
+  .activitySectionSummary span {
+    color: var(--sendio-muted, #374151);
+    font-size: 12px;
+    line-height: 1.35;
+    font-weight: 800;
+  }
+
+  .activitySectionChevron {
+    width: 34px;
+    height: 34px;
+    margin-left: auto;
+    border-radius: 999px;
+    border: 1px solid var(--sendio-border, #dbeafe);
+    background: var(--sendio-rectangle-bg, #eef6ff);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 auto;
+    font-size: 15px;
+    font-weight: 950;
+  }
+
+  .activitySectionContent {
+    padding: 0 22px 22px;
+    border-top: 1px solid var(--sendio-border, #dbeafe);
+  }
+
+  .activitySectionControls {
+    min-height: 52px;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
   }
 
   .activityList {
@@ -2097,6 +2738,529 @@ const styles = `
       width: 70px;
       height: 70px;
       border-radius: 16px;
+    }
+  }
+
+
+  /* Client page organization: compact hero support, folded activity and request cards */
+  .hero {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 270px;
+    align-items: center;
+    gap: 30px;
+  }
+
+  .heroContent {
+    min-width: 0;
+  }
+
+  .safetyMiniCard {
+    align-self: center;
+    border: 1px solid rgba(255, 255, 255, 0.85);
+    background: rgba(255, 255, 255, 0.72);
+    border-radius: 22px;
+    padding: 15px;
+    display: grid;
+    grid-template-columns: 34px 1fr;
+    gap: 11px;
+    box-shadow: 0 14px 34px rgba(17, 24, 39, 0.08);
+    backdrop-filter: blur(10px);
+  }
+
+  .safetyIcon {
+    width: 34px;
+    height: 34px;
+    border-radius: 12px;
+    border: 1px solid rgba(41, 185, 243, 0.24);
+    background: rgba(238, 246, 255, 0.92);
+    color: var(--sendio-button-bg, #29b9f3);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 20px;
+    font-weight: 950;
+  }
+
+  .safetyMiniCard strong {
+    display: block;
+    color: var(--sendio-text, #111827);
+    font-size: 14px;
+    line-height: 1.25;
+    font-weight: 950;
+  }
+
+  .safetyMiniCard p {
+    margin: 6px 0 7px;
+    color: var(--sendio-muted, #374151);
+    font-size: 11px;
+    line-height: 1.5;
+    font-weight: 700;
+  }
+
+  .safetyMiniCard a {
+    color: var(--sendio-text, #111827);
+    text-decoration: none;
+    font-size: 11px;
+    font-weight: 950;
+  }
+
+  .compactSectionHeader {
+    align-items: center;
+  }
+
+  .sectionControls {
+    display: inline-flex;
+    align-items: center;
+    justify-content: flex-end;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .archiveToggleButton {
+    min-height: 30px !important;
+    padding: 0 11px !important;
+    font-size: 11px !important;
+    background: var(--sendio-card-bg, #ffffff) !important;
+    box-shadow: none;
+  }
+
+  .smallControlButton {
+    min-height: 34px;
+    border-radius: 999px;
+    border: 1px solid var(--sendio-border, #dbeafe);
+    background: var(--sendio-rectangle-bg, #eef6ff);
+    color: var(--sendio-text, #111827);
+    padding: 0 13px;
+    font-size: 12px;
+    font-weight: 950;
+    cursor: pointer;
+  }
+
+  .activityCard,
+  .archiveItem {
+    display: block;
+    padding: 10px 12px;
+    overflow: hidden;
+  }
+
+  .activitySummaryRow {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+  }
+
+  .activityToggle,
+  .requestToggle {
+    min-width: 0;
+    flex: 1 1 auto;
+    border: 0;
+    background: transparent;
+    color: var(--sendio-text, #111827);
+    padding: 2px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    text-align: left;
+    cursor: pointer;
+  }
+
+  .activityDot {
+    color: var(--sendio-button-bg, #29b9f3);
+    font-size: 10px;
+    flex: 0 0 auto;
+  }
+
+  .archivedDot {
+    color: #64748b;
+  }
+
+  .activitySummaryText,
+  .requestSummaryText {
+    min-width: 0;
+    display: grid;
+    gap: 3px;
+  }
+
+  .activitySummaryText strong,
+  .requestSummaryText strong {
+    color: var(--sendio-text, #111827);
+    font-size: 14px;
+    line-height: 1.3;
+    font-weight: 950;
+    overflow-wrap: anywhere;
+  }
+
+  .activitySummaryText span,
+  .requestSummaryText span {
+    color: var(--sendio-muted, #374151);
+    font-size: 11px;
+    line-height: 1.35;
+    font-weight: 800;
+  }
+
+  .foldChevron {
+    width: 28px;
+    height: 28px;
+    margin-left: auto;
+    border-radius: 999px;
+    border: 1px solid var(--sendio-border, #dbeafe);
+    background: var(--sendio-card-bg, #ffffff);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 auto;
+    font-size: 14px;
+    font-weight: 950;
+  }
+
+  .activityDetails {
+    margin-top: 9px;
+    padding: 11px 13px;
+    border-radius: 14px;
+    border: 1px solid var(--sendio-border, #dbeafe);
+    background: var(--sendio-card-bg, #ffffff);
+  }
+
+  .activityDetails p {
+    margin: 0;
+    color: var(--sendio-muted, #374151);
+    font-size: 13px;
+    line-height: 1.55;
+    font-weight: 750;
+  }
+
+  .inlineDeleteConfirm {
+    margin: 9px 0 0 auto;
+    width: fit-content;
+    max-width: 100%;
+    border: 1px solid rgba(220, 38, 38, 0.22);
+    background: rgba(255, 255, 255, 0.96);
+    border-radius: 14px;
+    padding: 8px 9px;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    flex-wrap: wrap;
+    gap: 7px;
+  }
+
+  .inlineDeleteConfirm strong {
+    color: #991b1b;
+    font-size: 11px;
+    font-weight: 950;
+  }
+
+  .inlineDeleteConfirm span {
+    color: var(--sendio-muted, #374151);
+    font-size: 10px;
+    font-weight: 750;
+  }
+
+  .inlineDeleteConfirm button {
+    min-height: 29px;
+    border-radius: 999px;
+    border: 1px solid var(--sendio-border, #dbeafe);
+    background: var(--sendio-card-bg, #ffffff);
+    color: var(--sendio-text, #111827);
+    padding: 0 10px;
+    font-size: 11px;
+    font-weight: 950;
+    cursor: pointer;
+  }
+
+  .inlineDeleteConfirm .confirmDeleteButton {
+    border-color: rgba(220, 38, 38, 0.28);
+    background: rgba(220, 38, 38, 0.09);
+    color: #991b1b;
+  }
+
+  .inlineDeleteConfirm button:disabled {
+    opacity: 0.62;
+    cursor: wait;
+  }
+
+  .compactEmptyState {
+    border: 1px dashed var(--sendio-border, #dbeafe);
+    border-radius: 18px;
+    background: var(--sendio-rectangle-bg, #eef6ff);
+    padding: 18px;
+    display: grid;
+    gap: 5px;
+    text-align: center;
+  }
+
+  .compactEmptyState strong {
+    font-size: 15px;
+    font-weight: 950;
+  }
+
+  .compactEmptyState span {
+    color: var(--sendio-muted, #374151);
+    font-size: 12px;
+    font-weight: 750;
+  }
+
+  .requestCard {
+    padding: 12px 14px;
+  }
+
+  .requestCardHead {
+    margin-bottom: 0;
+  }
+
+  .requestSummaryHead {
+    align-items: center;
+  }
+
+  .requestToggle {
+    max-width: 620px;
+  }
+
+  .requestCardOpen .requestCardHead {
+    margin-bottom: 14px;
+  }
+
+  .requestCardOpen {
+    padding: 16px;
+  }
+
+  .archiveLayer {
+    position: fixed;
+    inset: 0;
+    z-index: 200;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+  }
+
+  .archiveShade {
+    position: absolute;
+    inset: 0;
+    border: 0;
+    background: rgba(15, 23, 42, 0.36);
+    backdrop-filter: blur(5px);
+    cursor: default;
+  }
+
+  .archivePanel {
+    position: relative;
+    z-index: 1;
+    width: min(940px, 100%);
+    max-height: min(760px, calc(100vh - 48px));
+    overflow: auto;
+    border: 1px solid var(--sendio-border, #dbeafe);
+    border-radius: 28px;
+    background: var(--sendio-card-bg, #ffffff);
+    padding: 24px;
+    box-shadow: 0 28px 90px rgba(15, 23, 42, 0.24);
+  }
+
+  .archiveHeader {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 18px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid var(--sendio-border, #dbeafe);
+  }
+
+  .archiveHeader h2 {
+    margin: 0;
+    color: var(--sendio-text, #111827);
+    font-size: 34px;
+    line-height: 1;
+    letter-spacing: -0.04em;
+  }
+
+  .archiveHeader p:not(.sectionLabel) {
+    margin: 9px 0 0;
+    color: var(--sendio-muted, #374151);
+    font-size: 13px;
+    line-height: 1.5;
+    font-weight: 700;
+  }
+
+  .archiveCloseButton {
+    width: 38px;
+    height: 38px;
+    border-radius: 999px;
+    border: 1px solid var(--sendio-border, #dbeafe);
+    background: var(--sendio-rectangle-bg, #eef6ff);
+    color: var(--sendio-text, #111827);
+    font-size: 24px;
+    line-height: 1;
+    cursor: pointer;
+  }
+
+  .archiveToolbar {
+    min-height: 52px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+  }
+
+  .archiveToolbar span {
+    color: var(--sendio-muted, #374151);
+    font-size: 12px;
+    font-weight: 900;
+  }
+
+  .deleteAllArchiveButton {
+    min-height: 34px;
+    border-radius: 999px;
+    border: 1px solid rgba(220, 38, 38, 0.25);
+    background: rgba(220, 38, 38, 0.08);
+    color: #991b1b;
+    padding: 0 14px;
+    font-size: 12px;
+    font-weight: 950;
+    cursor: pointer;
+  }
+
+  .deleteAllConfirm {
+    width: 100%;
+    margin-top: 0;
+  }
+
+  .deleteAllConfirm > div {
+    margin-right: auto;
+    display: grid;
+    gap: 2px;
+  }
+
+  .archiveList {
+    display: grid;
+    gap: 10px;
+  }
+
+  .archiveItem {
+    border: 1px solid var(--sendio-border, #dbeafe);
+    border-radius: 18px;
+    background: var(--sendio-rectangle-bg, #eef6ff);
+  }
+
+  .archiveEmptyState {
+    min-height: 150px;
+    border: 1px dashed var(--sendio-border, #dbeafe);
+    border-radius: 20px;
+    background: var(--sendio-rectangle-bg, #eef6ff);
+    display: grid;
+    place-content: center;
+    gap: 6px;
+    text-align: center;
+    color: var(--sendio-muted, #374151);
+    font-size: 13px;
+    font-weight: 800;
+  }
+
+  .archiveEmptyState strong {
+    color: var(--sendio-text, #111827);
+    font-size: 17px;
+    font-weight: 950;
+  }
+
+  @media (max-width: 920px) {
+    .hero {
+      grid-template-columns: 1fr;
+    }
+
+    .safetyMiniCard {
+      width: min(100%, 390px);
+    }
+
+    .compactSectionHeader,
+    .activitySummaryRow,
+    .requestSummaryHead {
+      align-items: flex-start;
+      flex-direction: column;
+    }
+
+    .sectionControls,
+    .activityActions,
+    .badgeGroup {
+      justify-content: flex-start;
+    }
+
+    .activityActions {
+      width: 100%;
+    }
+
+    .requestToggle {
+      width: 100%;
+      max-width: none;
+    }
+  }
+
+  @media (max-width: 560px) {
+    .hero {
+      gap: 20px;
+    }
+
+    .safetyMiniCard {
+      padding: 13px;
+      grid-template-columns: 30px 1fr;
+    }
+
+    .safetyIcon {
+      width: 30px;
+      height: 30px;
+      border-radius: 10px;
+    }
+
+    .section {
+      padding: 20px 14px;
+    }
+
+    .activitySectionClosed,
+    .activitySectionOpen {
+      padding: 0;
+    }
+
+    .activitySectionToggle {
+      min-height: 72px;
+      padding: 15px 14px;
+    }
+
+    .activitySectionContent {
+      padding: 0 12px 14px;
+    }
+
+    .activitySectionIcon {
+      width: 34px;
+      height: 34px;
+      border-radius: 12px;
+    }
+
+    .activityActions a,
+    .activityActions button {
+      min-height: 32px;
+      padding: 0 10px;
+      font-size: 11px;
+    }
+
+    .inlineDeleteConfirm {
+      width: 100%;
+      justify-content: flex-start;
+    }
+
+    .archiveLayer {
+      align-items: flex-end;
+      padding: 10px;
+    }
+
+    .archivePanel {
+      max-height: calc(100vh - 20px);
+      border-radius: 24px;
+      padding: 18px 14px;
+    }
+
+    .archiveToolbar {
+      align-items: flex-start;
+      flex-direction: column;
+      padding: 12px 0;
     }
   }
 `;
