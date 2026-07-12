@@ -12,6 +12,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import {
   getFloatingNotificationsEnabled,
+  getSendioNotificationTargetUrl,
   getUnreadSendioNotifications,
   openSendioNotification,
   type SendioNotification,
@@ -35,6 +36,17 @@ export default function GlobalMessageAlert() {
     [isHomePage]
   );
 
+  const targetUrl = useMemo(
+    () =>
+      notification
+        ? getSendioNotificationTargetUrl(notification)
+        : '/',
+    [notification]
+  );
+  const isOnNotificationTarget =
+  notification !== null &&
+  (pathname === targetUrl ||
+    pathname.startsWith(`${targetUrl}/`));
   const loadNotificationAlert = useCallback(async () => {
     const enabled = getFloatingNotificationsEnabled();
     setFloatingEnabled(enabled);
@@ -60,57 +72,44 @@ export default function GlobalMessageAlert() {
       1
     );
 
-    const nextNotification = unreadNotifications[0] ?? null;
-
-    if (nextNotification && pathname === nextNotification.target_url) {
-      setNotification(null);
-      return;
-    }
-
-    setNotification(nextNotification);
-  }, [pathname]);
+    setNotification(unreadNotifications[0] ?? null);
+  }, []);
 
   useEffect(() => {
     let isMounted = true;
+    let channel: ReturnType<typeof supabase.channel> | null = null;
 
     async function safeLoadNotificationAlert() {
       try {
         if (!isMounted) return;
+
         await loadNotificationAlert();
       } catch {
         if (!isMounted) return;
+
         setNotification(null);
       }
     }
 
-    void safeLoadNotificationAlert();
+    async function replaceRealtimeChannel(userId: string | null) {
+      if (channel) {
+        await supabase.removeChannel(channel);
+        channel = null;
+      }
 
-    const { data: authListener } = supabase.auth.onAuthStateChange(() => {
-      void safeLoadNotificationAlert();
-    });
-
-    let channel:
-      | ReturnType<typeof supabase.channel>
-      | null = null;
-
-    async function subscribeToRealtimeNotifications() {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-
-      if (!isMounted || !user) {
+      if (!isMounted || !userId) {
         return;
       }
 
       channel = supabase
-        .channel(`sendio-notifications-${user.id}`)
+        .channel(`sendio-notifications-${userId}`)
         .on(
           'postgres_changes',
           {
             event: 'INSERT',
             schema: 'public',
             table: 'sendio_notifications',
-            filter: `recipient_id=eq.${user.id}`,
+            filter: `recipient_id=eq.${userId}`,
           },
           () => {
             void safeLoadNotificationAlert();
@@ -122,7 +121,7 @@ export default function GlobalMessageAlert() {
             event: 'UPDATE',
             schema: 'public',
             table: 'sendio_notifications',
-            filter: `recipient_id=eq.${user.id}`,
+            filter: `recipient_id=eq.${userId}`,
           },
           () => {
             void safeLoadNotificationAlert();
@@ -131,7 +130,27 @@ export default function GlobalMessageAlert() {
         .subscribe();
     }
 
-    void subscribeToRealtimeNotifications();
+    async function initializeNotificationAlert() {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
+      if (!isMounted) {
+        return;
+      }
+
+      await safeLoadNotificationAlert();
+      await replaceRealtimeChannel(user?.id ?? null);
+    }
+
+    void initializeNotificationAlert();
+
+    const { data: authListener } = supabase.auth.onAuthStateChange(
+      (_event, session) => {
+        void safeLoadNotificationAlert();
+        void replaceRealtimeChannel(session?.user.id ?? null);
+      }
+    );
 
     function handleFloatingSettingChanged() {
       void safeLoadNotificationAlert();
@@ -144,13 +163,22 @@ export default function GlobalMessageAlert() {
 
     window.addEventListener('storage', handleFloatingSettingChanged);
 
+    const refreshInterval = window.setInterval(() => {
+      void safeLoadNotificationAlert();
+    }, 30000);
+
     return () => {
       isMounted = false;
+
       authListener.subscription.unsubscribe();
+
+      window.clearInterval(refreshInterval);
+
       window.removeEventListener(
         'sendio-floating-notifications-changed',
         handleFloatingSettingChanged
       );
+
       window.removeEventListener('storage', handleFloatingSettingChanged);
 
       if (channel) {
@@ -165,6 +193,8 @@ export default function GlobalMessageAlert() {
     event.preventDefault();
 
     const selectedNotification = notification;
+    const selectedTargetUrl =
+      getSendioNotificationTargetUrl(selectedNotification);
 
     setNotification(null);
 
@@ -178,26 +208,28 @@ export default function GlobalMessageAlert() {
     }
 
     try {
-      const targetUrl = await openSendioNotification(
+      const openedTargetUrl = await openSendioNotification(
         supabase,
         selectedNotification.id,
         user.id
       );
 
-      router.push(targetUrl || selectedNotification.target_url);
+      router.push(openedTargetUrl || selectedTargetUrl);
     } catch {
-      router.push(selectedNotification.target_url);
+      router.push(selectedTargetUrl);
     }
   }
-
-  if (!floatingEnabled || !notification) {
-    return null;
+   if (
+      !floatingEnabled ||
+      !notification ||
+      isOnNotificationTarget
+     ) {
+  return null;
   }
-
   return (
     <>
       <Link
-        href={notification.target_url}
+        href={targetUrl}
         className={className}
         aria-label={notification.title || 'Message waiting'}
         title={notification.title || 'Message waiting'}

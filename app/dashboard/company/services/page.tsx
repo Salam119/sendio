@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { getCompanyId } from '@/lib/getCompanyId';
 
@@ -10,15 +10,156 @@ type Service = {
   description: string | null;
 };
 
+type ServiceCategory = {
+  id: string;
+  name: string;
+  icon: string | null;
+  sort_order: number | null;
+};
+
+type CompanyServiceCategoryLink = {
+  service_category_id: string;
+};
+
 const SERVICE_DESCRIPTION_LIMIT = 500;
+
+const SERVICE_CATEGORY_SYMBOLS: Record<string, string> = {
+  ant: '🐜',
+  bath: '🛁',
+  bike: '🚲',
+  blocks: '🧱',
+  box: '📦',
+  boxes: '🗃️',
+  'brick-wall': '🏗️',
+  briefcase: '💼',
+  brush: '🖌️',
+  bug: '🐞',
+  'bug-off': '🚫',
+  building: '🏢',
+  'building-2': '🏬',
+  cabinet: '🗄️',
+  camera: '📷',
+  'chef-hat': '👨‍🍳',
+  chimney: '🏭',
+  construction: '🚧',
+  curtains: '🪟',
+  dishwasher: '🍽️',
+  door: '🚪',
+  droplet: '💧',
+  droplets: '💦',
+  fan: '🌀',
+  fence: '🪵',
+  flame: '🔥',
+  flower: '🌸',
+  grass: '🌱',
+  grid: '▦',
+  'grid-2x2': '▥',
+  gutter: '🌧️',
+  hammer: '🔨',
+  'hard-hat': '⛑️',
+  heat: '♨️',
+  home: '🏠',
+  'home-repair': '🛠️',
+  house: '🏡',
+  key: '🔑',
+  laptop: '💻',
+  layers: '🧽',
+  layout: '🗂️',
+  'layout-panel-top': '🖼️',
+  leaf: '🍃',
+  lightbulb: '💡',
+  lock: '🔒',
+  'map-pin': '📍',
+  mouse: '🖱️',
+  oven: '🍳',
+  package: '🎁',
+  'package-check': '✅',
+  'paint-roller': '🧑‍🎨',
+  paintbrush: '🎨',
+  panel: '🧩',
+  'panel-top': '🪟',
+  pipe: '🚰',
+  plug: '🔌',
+  printer: '🖨️',
+  rain: '🌦️',
+  road: '🛣️',
+  roof: '🏘️',
+  'roof-repair': '🏚️',
+  scissors: '✂️',
+  scroll: '📜',
+  settings: '⚙️',
+  shelves: '📚',
+  shovel: '⛏️',
+  signpost: '🪧',
+  smartphone: '📱',
+  snowflake: '❄️',
+  sofa: '🛋️',
+  sparkles: '✨',
+  spray: '🧴',
+  store: '🏪',
+  sun: '☀️',
+  thermometer: '🌡️',
+  toilet: '🚽',
+  toolbox: '🧰',
+  trash: '🗑️',
+  'trash-2': '♻️',
+  tree: '🌳',
+  truck: '🚚',
+  tv: '📺',
+  warehouse: '🏭',
+  'washing-machine': '🧺',
+  waves: '🌊',
+  wifi: '📶',
+  wind: '🌬️',
+  window: '🪟',
+  wood: '🪵',
+  wrench: '🔧',
+  zap: '⚡',
+};
+
+function getServiceCategorySymbol(icon: string | null) {
+  if (!icon) return '';
+
+  return SERVICE_CATEGORY_SYMBOLS[icon.trim().toLowerCase()] ?? '';
+}
 
 export default function ServicesPage() {
   const [companyId, setCompanyId] = useState<string | null>(null);
   const [services, setServices] = useState<Service[]>([]);
+  const [serviceCategories, setServiceCategories] = useState<ServiceCategory[]>(
+    []
+  );
+  const [selectedServiceCategoryIds, setSelectedServiceCategoryIds] = useState<
+    string[]
+  >([]);
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [loading, setLoading] = useState(false);
   const [initialLoading, setInitialLoading] = useState(true);
+  const [loadingServiceCategories, setLoadingServiceCategories] =
+    useState(true);
+  const [savingServiceCategoryId, setSavingServiceCategoryId] = useState<
+    string | null
+  >(null);
+  const [serviceCategoryError, setServiceCategoryError] = useState<
+    string | null
+  >(null);
+
+  const selectedServiceCategories = useMemo(
+    () =>
+      serviceCategories.filter((category) =>
+        selectedServiceCategoryIds.includes(category.id)
+      ),
+    [serviceCategories, selectedServiceCategoryIds]
+  );
+
+  const availableServiceCategories = useMemo(
+    () =>
+      serviceCategories.filter(
+        (category) => !selectedServiceCategoryIds.includes(category.id)
+      ),
+    [serviceCategories, selectedServiceCategoryIds]
+  );
 
   async function loadServices(id?: string) {
     const currentCompanyId = id || companyId;
@@ -40,6 +181,51 @@ export default function ServicesPage() {
     setServices(data || []);
   }
 
+  async function loadServiceCategories(id: string) {
+    setLoadingServiceCategories(true);
+    setServiceCategoryError(null);
+
+    const [categoriesResult, linksResult] = await Promise.all([
+      supabase
+        .from('service_categories')
+        .select('id, name, icon, sort_order')
+        .eq('is_active', true)
+        .eq('is_selectable', true)
+        .in('provider_scope', ['company', 'both'])
+        .order('sort_order', { ascending: true })
+        .order('name', { ascending: true }),
+
+      supabase
+        .from('company_service_categories')
+        .select('service_category_id')
+        .eq('company_id', id),
+    ]);
+
+    if (categoriesResult.error || linksResult.error) {
+      setServiceCategories([]);
+      setSelectedServiceCategoryIds([]);
+      setServiceCategoryError(
+        categoriesResult.error?.message ||
+          linksResult.error?.message ||
+          'Service categories could not be loaded.'
+      );
+      setLoadingServiceCategories(false);
+      return;
+    }
+
+    setServiceCategories(
+      (categoriesResult.data ?? []) as ServiceCategory[]
+    );
+
+    setSelectedServiceCategoryIds(
+      (
+        (linksResult.data ?? []) as CompanyServiceCategoryLink[]
+      ).map((link) => link.service_category_id)
+    );
+
+    setLoadingServiceCategories(false);
+  }
+
   useEffect(() => {
     async function init() {
       setInitialLoading(true);
@@ -49,11 +235,14 @@ export default function ServicesPage() {
       if (!id) {
         alert('Company not found for this user.');
         setInitialLoading(false);
+        setLoadingServiceCategories(false);
         return;
       }
 
       setCompanyId(id);
-      await loadServices(id);
+
+      await Promise.all([loadServices(id), loadServiceCategories(id)]);
+
       setInitialLoading(false);
     }
 
@@ -110,6 +299,61 @@ export default function ServicesPage() {
     await loadServices();
   }
 
+  async function selectServiceCategory(categoryId: string) {
+    if (
+      !companyId ||
+      !categoryId ||
+      selectedServiceCategoryIds.includes(categoryId)
+    ) {
+      return;
+    }
+
+    setSavingServiceCategoryId(categoryId);
+    setServiceCategoryError(null);
+
+    const { error } = await supabase
+      .from('company_service_categories')
+      .insert({
+        company_id: companyId,
+        service_category_id: categoryId,
+        is_primary: false,
+      });
+
+    if (error) {
+      setServiceCategoryError(error.message);
+      setSavingServiceCategoryId(null);
+      return;
+    }
+
+    setSelectedServiceCategoryIds((current) => [...current, categoryId]);
+    setSavingServiceCategoryId(null);
+  }
+
+  async function removeServiceCategory(categoryId: string) {
+    if (!companyId) return;
+
+    setSavingServiceCategoryId(categoryId);
+    setServiceCategoryError(null);
+
+    const { error } = await supabase
+      .from('company_service_categories')
+      .delete()
+      .eq('company_id', companyId)
+      .eq('service_category_id', categoryId);
+
+    if (error) {
+      setServiceCategoryError(error.message);
+      setSavingServiceCategoryId(null);
+      return;
+    }
+
+    setSelectedServiceCategoryIds((current) =>
+      current.filter((currentId) => currentId !== categoryId)
+    );
+
+    setSavingServiceCategoryId(null);
+  }
+
   return (
     <section className="rounded-[22px] border border-[var(--sendio-border)] bg-white p-4 shadow-sm">
       <div className="mb-3 flex items-center justify-between gap-3">
@@ -117,6 +361,7 @@ export default function ServicesPage() {
           <p className="text-[10px] font-black uppercase tracking-[0.18em] text-[var(--sendio-muted)]">
             Services
           </p>
+
           <h2 className="mt-1 text-base font-black text-[var(--sendio-text)]">
             What your company offers
           </h2>
@@ -126,6 +371,77 @@ export default function ServicesPage() {
           {services.length}
         </span>
       </div>
+
+      <div className="mb-4 flex flex-wrap items-center gap-2">
+        <select
+          value=""
+          onChange={(event) => {
+            const categoryId = event.target.value;
+
+            if (categoryId) {
+              void selectServiceCategory(categoryId);
+            }
+          }}
+          disabled={
+            loadingServiceCategories ||
+            savingServiceCategoryId !== null ||
+            availableServiceCategories.length === 0
+          }
+          aria-label="Choose service category"
+          className="h-9 max-w-[220px] rounded-full border border-[var(--sendio-border)] bg-white px-3 text-xs font-black text-[var(--sendio-text)] outline-none focus:border-[var(--sendio-accent)] disabled:cursor-not-allowed disabled:opacity-60"
+        >
+          <option value="">
+            {loadingServiceCategories
+              ? 'Loading categories...'
+              : availableServiceCategories.length === 0
+                ? 'All categories selected'
+                : 'Choose category'}
+          </option>
+
+          {availableServiceCategories.map((category) => {
+            const symbol = getServiceCategorySymbol(category.icon);
+
+            return (
+              <option key={category.id} value={category.id}>
+                {symbol ? `${symbol} ` : ''}
+                {category.name}
+              </option>
+            );
+          })}
+        </select>
+
+        {selectedServiceCategories.map((category) => {
+          const symbol = getServiceCategorySymbol(category.icon);
+
+          return (
+            <span
+              key={category.id}
+              className="inline-flex min-h-9 items-center gap-2 rounded-full border border-[var(--sendio-border)] bg-[var(--sendio-soft)] px-3 py-1.5 text-xs font-black text-[var(--sendio-text)]"
+            >
+              {symbol ? <span aria-hidden="true">{symbol}</span> : null}
+
+              <span>{category.name}</span>
+
+              <button
+                type="button"
+                onClick={() => void removeServiceCategory(category.id)}
+                disabled={savingServiceCategoryId === category.id}
+                title={`Remove ${category.name}`}
+                aria-label={`Remove ${category.name}`}
+                className="flex h-5 w-5 items-center justify-center rounded-full bg-white text-sm font-black text-red-500 disabled:opacity-50"
+              >
+                ×
+              </button>
+            </span>
+          );
+        })}
+      </div>
+
+      {serviceCategoryError ? (
+        <p className="mb-4 rounded-2xl border border-red-200 bg-red-50 px-3 py-2 text-xs font-bold text-red-700">
+          {serviceCategoryError}
+        </p>
+      ) : null}
 
       <div className="grid gap-2 md:grid-cols-[0.8fr_1fr_auto]">
         <input

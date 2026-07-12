@@ -3,6 +3,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 
+type InboxSource = 'company_messages' | 'service_requests';
+
 type CompanyMessage = {
   id: string;
   company_id: string | null;
@@ -22,6 +24,62 @@ type CompanyMessage = {
   source_channel: string | null;
   source_url: string | null;
   event_type: string | null;
+  inbox_source?: InboxSource;
+  service_request_id?: string | null;
+  service_match_id?: string | null;
+  service_category_id?: string | null;
+  service_name?: string | null;
+  service_slug?: string | null;
+  service_icon?: string | null;
+  city?: string | null;
+  postal_code?: string | null;
+  street?: string | null;
+  house_number?: string | null;
+  preferred_date?: string | null;
+  preferred_time?: string | null;
+  preferred_time_window?: string | null;
+  cancelled_reason?: string | null;
+};
+
+type ServiceRequestRow = {
+  id: string;
+  service_category_id: string | null;
+  service_name: string | null;
+  service_slug: string | null;
+  client_id: string | null;
+  selected_company_id: string | null;
+  first_name: string | null;
+  last_name: string | null;
+  email: string | null;
+  phone: string | null;
+  city: string | null;
+  postal_code: string | null;
+  street: string | null;
+  house_number: string | null;
+  preferred_date: string | null;
+  preferred_time: string | null;
+  preferred_time_window: string | null;
+  project_description: string | null;
+  status: string | null;
+  provider_seen: boolean | null;
+  submitted_at: string | null;
+  created_at: string | null;
+  cancelled_reason: string | null;
+};
+
+type ServiceRequestMatchRow = {
+  id: string;
+  request_id: string | null;
+  company_id: string | null;
+  status: string | null;
+  created_at: string | null;
+};
+
+type ServiceCategoryRow = {
+  id: string;
+  name: string;
+  slug: string;
+  icon: string | null;
 };
 
 type CompanyRow = {
@@ -46,6 +104,44 @@ type InboxSection = {
   description: string;
   icon: string;
   items: CompanyMessage[];
+};
+
+const SERVICE_ICON_MAP: Record<string, string> = {
+  sparkles: '🧹',
+  home: '🏠',
+  brush: '🎨',
+  building: '🏢',
+  window: '🪟',
+  layers: '🧽',
+  wrench: '🔧',
+  pipe: '🚰',
+  drop: '💧',
+  toilet: '🚽',
+  faucet: '🚰',
+  bulb: '💡',
+  plug: '🔌',
+  fan: '🌀',
+  camera: '📷',
+  paint: '🖌️',
+  truck: '🚚',
+  box: '📦',
+  tree: '🌳',
+  leaf: '🍃',
+  scissors: '✂️',
+  hammer: '🔨',
+  key: '🔑',
+  roof: '🏠',
+  chimney: '🏚️',
+  bug: '🐞',
+  floor: '🧱',
+  tile: '▦',
+  kitchen: '🍽️',
+  water: '💧',
+  cabinet: '🗄️',
+  store: '🏪',
+  phone: '📱',
+  computer: '💻',
+  printer: '🖨️',
 };
 
 function formatDate(value: string | null) {
@@ -103,9 +199,27 @@ function getPhoneReplyUrl(phone: string | null | undefined) {
   return `tel:${cleanValue}`;
 }
 
+function isCentralServiceRequest(message: CompanyMessage) {
+  return message.inbox_source === 'service_requests';
+}
+
+function getServiceIcon(icon: string | null | undefined) {
+  const normalizedIcon = icon?.trim().toLowerCase();
+
+  if (!normalizedIcon) {
+    return '🧰';
+  }
+
+  return SERVICE_ICON_MAP[normalizedIcon] ?? '🧰';
+}
+
 function getSourceLabel(message: CompanyMessage) {
   const source = message.source_channel;
   const eventType = message.event_type;
+
+  if (isCentralServiceRequest(message)) {
+    return 'Linked Service Request';
+  }
 
   if (eventType === 'service_request' || source === 'sendio_service_request') {
     return 'Service Request';
@@ -129,6 +243,10 @@ function getSourceIcon(message: CompanyMessage) {
   const source = message.source_channel;
   const eventType = message.event_type;
 
+  if (isCentralServiceRequest(message)) {
+    return getServiceIcon(message.service_icon);
+  }
+
   if (eventType === 'service_request' || source === 'sendio_service_request') {
     return '🧰';
   }
@@ -148,22 +266,78 @@ function getSourceIcon(message: CompanyMessage) {
 }
 
 function getRequestStatusLabel(value: string | null) {
-  if (value === 'accepted') return 'Accepted';
-  if (value === 'declined') return 'Declined';
+  const normalizedValue = value?.trim().toLowerCase() ?? '';
+
+  if (normalizedValue === 'accepted') return 'Accepted';
+  if (normalizedValue === 'declined') return 'Declined';
+  if (normalizedValue === 'cancelled') return 'Cancelled';
+  if (normalizedValue === 'completed') return 'Completed';
+  if (normalizedValue === 'viewed') return 'Viewed';
+  if (normalizedValue === 'in_progress') return 'In progress';
+  if (normalizedValue === 'submitted' || normalizedValue === 'pending') {
+    return 'Pending';
+  }
 
   return 'New';
 }
 
 function getRequestStatusClass(value: string | null) {
-  if (value === 'accepted') {
+  const normalizedValue = value?.trim().toLowerCase() ?? '';
+
+  if (
+    normalizedValue === 'accepted' ||
+    normalizedValue === 'completed' ||
+    normalizedValue === 'in_progress'
+  ) {
     return 'border-emerald-200 bg-emerald-50 text-emerald-700';
   }
 
-  if (value === 'declined') {
+  if (normalizedValue === 'declined' || normalizedValue === 'cancelled') {
     return 'border-rose-200 bg-rose-50 text-rose-700';
   }
 
+  if (normalizedValue === 'viewed') {
+    return 'border-blue-200 bg-blue-50 text-blue-700';
+  }
+
   return 'border-sky-200 bg-sky-50 text-sky-700';
+}
+
+function getServiceRequestAddress(message: CompanyMessage) {
+  return [
+    message.street,
+    message.house_number,
+    message.postal_code,
+    message.city,
+  ]
+    .map((part) => part?.trim())
+    .filter(Boolean)
+    .join(' ');
+}
+
+function getPreferredServiceTime(message: CompanyMessage) {
+  return [
+    message.preferred_date,
+    message.preferred_time || message.preferred_time_window,
+  ]
+    .map((part) => part?.trim())
+    .filter(Boolean)
+    .join(' • ');
+}
+
+function canRespondToServiceRequest(message: CompanyMessage) {
+  const status = message.request_status?.trim().toLowerCase() ?? '';
+
+  return !['cancelled', 'completed'].includes(status);
+}
+
+function sortInboxItems(items: CompanyMessage[]) {
+  return [...items].sort((first, second) => {
+    const firstTime = first.created_at ? new Date(first.created_at).getTime() : 0;
+    const secondTime = second.created_at ? new Date(second.created_at).getTime() : 0;
+
+    return secondTime - firstTime;
+  });
 }
 
 export default function MessagesPage() {
@@ -288,7 +462,7 @@ export default function MessagesPage() {
         key: 'serviceRequests',
         eyebrow: 'Client work requests',
         title: 'Service Requests',
-        description: 'Accept, decline, contact, archive, or delete.',
+        description: 'Accept, decline, contact, and track linked service requests.',
         icon: '🧰',
         items: serviceRequestMessages,
       },
@@ -389,25 +563,193 @@ export default function MessagesPage() {
       }
 
       const selectedCompany = companyData as CompanyRow;
-
       setCompany(selectedCompany);
 
-      const { data: messagesData, error: messagesError } = await supabase
-        .from('company_messages')
-        .select('*')
-        .eq('company_id', selectedCompany.id)
-        .order('created_at', { ascending: false });
+      const serviceRequestSelect =
+        'id, service_category_id, service_name, service_slug, client_id, selected_company_id, first_name, last_name, email, phone, city, postal_code, street, house_number, preferred_date, preferred_time, preferred_time_window, project_description, status, provider_seen, submitted_at, created_at, cancelled_reason';
+
+      const [
+        messagesResult,
+        matchesResult,
+        selectedRequestsResult,
+      ] = await Promise.all([
+        supabase
+          .from('company_messages')
+          .select('*')
+          .eq('company_id', selectedCompany.id)
+          .order('created_at', { ascending: false }),
+
+        supabase
+          .from('service_request_matches')
+          .select('id, request_id, company_id, status, created_at')
+          .eq('provider_type', 'company')
+          .eq('company_id', selectedCompany.id)
+          .order('created_at', { ascending: false }),
+
+        supabase
+          .from('service_requests')
+          .select(serviceRequestSelect)
+          .eq('selected_company_id', selectedCompany.id)
+          .order('created_at', { ascending: false }),
+      ]);
 
       if (!isMounted) return;
 
-      if (messagesError) {
-        setMessages([]);
-        setPageStatus(messagesError.message);
-        setLoading(false);
-        return;
+      const warningMessages = [
+        messagesResult.error?.message,
+        matchesResult.error?.message,
+        selectedRequestsResult.error?.message,
+      ].filter(Boolean) as string[];
+
+      const legacyMessages = ((messagesResult.data ?? []) as CompanyMessage[]).map(
+        (message) => ({
+          ...message,
+          inbox_source: 'company_messages' as const,
+        })
+      );
+
+      const serviceMatches =
+        (matchesResult.data ?? []) as ServiceRequestMatchRow[];
+
+      const directServiceRequests =
+        (selectedRequestsResult.data ?? []) as ServiceRequestRow[];
+
+      const directRequestIds = new Set(
+        directServiceRequests.map((request) => request.id)
+      );
+
+      const matchedRequestIds = serviceMatches
+        .map((match) => match.request_id)
+        .filter((requestId): requestId is string => Boolean(requestId));
+
+      const missingMatchedRequestIds = Array.from(
+        new Set(
+          matchedRequestIds.filter((requestId) => !directRequestIds.has(requestId))
+        )
+      );
+
+      let matchedServiceRequests: ServiceRequestRow[] = [];
+
+      if (missingMatchedRequestIds.length > 0) {
+        const { data, error } = await supabase
+          .from('service_requests')
+          .select(serviceRequestSelect)
+          .in('id', missingMatchedRequestIds);
+
+        if (!isMounted) return;
+
+        if (error) {
+          warningMessages.push(error.message);
+        } else {
+          matchedServiceRequests = (data ?? []) as ServiceRequestRow[];
+        }
       }
 
-      setMessages((messagesData ?? []) as CompanyMessage[]);
+      const serviceRequestMap = new Map<string, ServiceRequestRow>();
+
+      [...directServiceRequests, ...matchedServiceRequests].forEach((request) => {
+        serviceRequestMap.set(request.id, request);
+      });
+
+      const serviceRequests = Array.from(serviceRequestMap.values());
+      const serviceCategoryIds = Array.from(
+        new Set(
+          serviceRequests
+            .map((request) => request.service_category_id)
+            .filter((categoryId): categoryId is string => Boolean(categoryId))
+        )
+      );
+
+      let serviceCategories: ServiceCategoryRow[] = [];
+
+      if (serviceCategoryIds.length > 0) {
+        const { data, error } = await supabase
+          .from('service_categories')
+          .select('id, name, slug, icon')
+          .in('id', serviceCategoryIds);
+
+        if (!isMounted) return;
+
+        if (error) {
+          warningMessages.push(error.message);
+        } else {
+          serviceCategories = (data ?? []) as ServiceCategoryRow[];
+        }
+      }
+
+      const matchByRequestId = new Map<string, ServiceRequestMatchRow>();
+
+      serviceMatches.forEach((match) => {
+        if (match.request_id && !matchByRequestId.has(match.request_id)) {
+          matchByRequestId.set(match.request_id, match);
+        }
+      });
+
+      const categoryById = new Map(
+        serviceCategories.map((category) => [category.id, category])
+      );
+
+      const centralServiceRequests: CompanyMessage[] = serviceRequests.map(
+        (request) => {
+          const match = matchByRequestId.get(request.id) ?? null;
+          const category = request.service_category_id
+            ? categoryById.get(request.service_category_id) ?? null
+            : null;
+          const clientName =
+            [request.first_name, request.last_name]
+              .map((part) => part?.trim())
+              .filter(Boolean)
+              .join(' ') ||
+            request.email?.split('@')[0] ||
+            'Client';
+
+          return {
+            id: `service-request:${request.id}`,
+            company_id: selectedCompany.id,
+            client_id: request.client_id,
+            name: clientName,
+            email: request.email ?? '',
+            phone: request.phone,
+            message:
+              request.project_description?.trim() ||
+              'No request details were added.',
+            created_at: request.submitted_at || request.created_at,
+            status: request.status,
+            request_status: match?.status || request.status || 'pending',
+            company_seen: request.provider_seen,
+            admin_seen: null,
+            is_archived: false,
+            moderation_status: null,
+            admin_note: null,
+            source_channel: 'sendio_service_request',
+            source_url: null,
+            event_type: 'service_request',
+            inbox_source: 'service_requests',
+            service_request_id: request.id,
+            service_match_id: match?.id ?? null,
+            service_category_id: request.service_category_id,
+            service_name:
+              category?.name || request.service_name || 'Service request',
+            service_slug: category?.slug || request.service_slug,
+            service_icon: category?.icon ?? null,
+            city: request.city,
+            postal_code: request.postal_code,
+            street: request.street,
+            house_number: request.house_number,
+            preferred_date: request.preferred_date,
+            preferred_time: request.preferred_time,
+            preferred_time_window: request.preferred_time_window,
+            cancelled_reason: request.cancelled_reason,
+          };
+        }
+      );
+
+      setMessages(sortInboxItems([...centralServiceRequests, ...legacyMessages]));
+
+      if (warningMessages.length > 0) {
+        setPageStatus(Array.from(new Set(warningMessages)).join(' • '));
+      }
+
       setLoading(false);
     }
 
@@ -429,19 +771,58 @@ export default function MessagesPage() {
     messageId: string,
     updates: Partial<CompanyMessage>
   ) {
+    const selectedMessage =
+      messages.find((message) => message.id === messageId) ?? null;
+
+    if (!selectedMessage) {
+      return false;
+    }
+
     setUpdatingId(messageId);
     setPageStatus(null);
 
-    const { error } = await supabase
-      .from('company_messages')
-      .update(updates)
-      .eq('id', messageId);
+    if (isCentralServiceRequest(selectedMessage)) {
+      if (!selectedMessage.service_request_id) {
+        setUpdatingId(null);
+        setPageStatus('The linked service request could not be identified.');
+        return false;
+      }
 
-    setUpdatingId(null);
+      const requestUpdates: { provider_seen?: boolean } = {};
 
-    if (error) {
-      setPageStatus(error.message);
-      return false;
+      if (typeof updates.company_seen === 'boolean') {
+        requestUpdates.provider_seen = updates.company_seen;
+      }
+
+      if (Object.keys(requestUpdates).length === 0) {
+        setUpdatingId(null);
+        return true;
+      }
+
+      const { error } = await supabase
+        .from('service_requests')
+        .update(requestUpdates)
+        .eq('id', selectedMessage.service_request_id)
+        .eq('selected_company_id', company?.id ?? '');
+
+      setUpdatingId(null);
+
+      if (error) {
+        setPageStatus(error.message);
+        return false;
+      }
+    } else {
+      const { error } = await supabase
+        .from('company_messages')
+        .update(updates)
+        .eq('id', messageId);
+
+      setUpdatingId(null);
+
+      if (error) {
+        setPageStatus(error.message);
+        return false;
+      }
     }
 
     setMessages((currentMessages) =>
@@ -477,13 +858,87 @@ export default function MessagesPage() {
     messageId: string,
     requestStatus: 'accepted' | 'declined'
   ) {
-    await updateMessage(messageId, {
-      request_status: requestStatus,
-      company_seen: true,
-    });
+    const selectedMessage =
+      messages.find((message) => message.id === messageId) ?? null;
+
+    if (!selectedMessage) {
+      return;
+    }
+
+    if (!isCentralServiceRequest(selectedMessage)) {
+      await updateMessage(messageId, {
+        request_status: requestStatus,
+        company_seen: true,
+      });
+      return;
+    }
+
+    if (
+      !selectedMessage.service_request_id ||
+      !canRespondToServiceRequest(selectedMessage)
+    ) {
+      return;
+    }
+
+    setUpdatingId(messageId);
+    setPageStatus(null);
+
+    const matchUpdate = selectedMessage.service_match_id
+      ? supabase
+          .from('service_request_matches')
+          .update({ status: requestStatus })
+          .eq('id', selectedMessage.service_match_id)
+          .eq('company_id', company?.id ?? '')
+      : supabase
+          .from('service_request_matches')
+          .update({ status: requestStatus })
+          .eq('request_id', selectedMessage.service_request_id)
+          .eq('company_id', company?.id ?? '');
+
+    const [matchResult, requestResult] = await Promise.all([
+      matchUpdate,
+      supabase
+        .from('service_requests')
+        .update({
+          status: requestStatus,
+          provider_seen: true,
+        })
+        .eq('id', selectedMessage.service_request_id)
+        .eq('selected_company_id', company?.id ?? ''),
+    ]);
+
+    setUpdatingId(null);
+
+    const errorMessage =
+      matchResult.error?.message || requestResult.error?.message || '';
+
+    if (errorMessage) {
+      setPageStatus(errorMessage);
+      return;
+    }
+
+    setMessages((currentMessages) =>
+      currentMessages.map((message) =>
+        message.id === messageId
+          ? {
+              ...message,
+              status: requestStatus,
+              request_status: requestStatus,
+              company_seen: true,
+            }
+          : message
+      )
+    );
   }
 
   async function deleteMessage(messageId: string) {
+    const selectedMessage =
+      messages.find((message) => message.id === messageId) ?? null;
+
+    if (!selectedMessage || isCentralServiceRequest(selectedMessage)) {
+      return;
+    }
+
     const confirmed = window.confirm('Delete this item permanently?');
 
     if (!confirmed) return;
@@ -513,16 +968,38 @@ export default function MessagesPage() {
 
     setPageStatus(null);
 
-    const { error } = await supabase
-      .from('company_messages')
-      .update({
-        company_seen: true,
-      })
-      .eq('company_id', company.id)
-      .eq('company_seen', false);
+    const centralRequestIds = messages
+      .filter(
+        (message) =>
+          isCentralServiceRequest(message) &&
+          message.company_seen === false &&
+          Boolean(message.service_request_id)
+      )
+      .map((message) => message.service_request_id as string);
 
-    if (error) {
-      setPageStatus(error.message);
+    const [messagesResult, requestsResult] = await Promise.all([
+      supabase
+        .from('company_messages')
+        .update({
+          company_seen: true,
+        })
+        .eq('company_id', company.id)
+        .eq('company_seen', false),
+
+      centralRequestIds.length > 0
+        ? supabase
+            .from('service_requests')
+            .update({ provider_seen: true })
+            .in('id', centralRequestIds)
+            .eq('selected_company_id', company.id)
+        : Promise.resolve({ error: null }),
+    ]);
+
+    const errorMessage =
+      messagesResult.error?.message || requestsResult.error?.message || '';
+
+    if (errorMessage) {
+      setPageStatus(errorMessage);
       return;
     }
 
@@ -545,7 +1022,12 @@ export default function MessagesPage() {
     const isServiceRequest =
       message.event_type === 'service_request' ||
       message.source_channel === 'sendio_service_request';
+    const centralServiceRequest = isCentralServiceRequest(message);
+    const requestCanBeAnswered =
+      isServiceRequest && canRespondToServiceRequest(message);
     const isArchived = message.is_archived === true;
+    const serviceRequestAddress = getServiceRequestAddress(message);
+    const preferredServiceTime = getPreferredServiceTime(message);
 
     return (
       <article
@@ -614,6 +1096,43 @@ export default function MessagesPage() {
           </p>
         </div>
 
+        {centralServiceRequest ? (
+          <div className="mt-3 grid gap-2 sm:grid-cols-2">
+            <div className="rounded-2xl border border-[var(--sendio-border,#dbeafe)] bg-white px-3 py-3">
+              <span className="block text-[10px] font-black uppercase tracking-[0.14em] text-[var(--sendio-muted,#374151)]">
+                Service
+              </span>
+              <strong className="mt-1 block text-sm font-black text-[var(--sendio-text,#111827)]">
+                {message.service_name || 'Service request'}
+              </strong>
+            </div>
+
+            <div className="rounded-2xl border border-[var(--sendio-border,#dbeafe)] bg-white px-3 py-3">
+              <span className="block text-[10px] font-black uppercase tracking-[0.14em] text-[var(--sendio-muted,#374151)]">
+                Preferred date and time
+              </span>
+              <strong className="mt-1 block text-sm font-black text-[var(--sendio-text,#111827)]">
+                {preferredServiceTime || 'Flexible'}
+              </strong>
+            </div>
+
+            <div className="rounded-2xl border border-[var(--sendio-border,#dbeafe)] bg-white px-3 py-3 sm:col-span-2">
+              <span className="block text-[10px] font-black uppercase tracking-[0.14em] text-[var(--sendio-muted,#374151)]">
+                Client address
+              </span>
+              <strong className="mt-1 block text-sm font-black text-[var(--sendio-text,#111827)]">
+                {serviceRequestAddress || 'No address saved'}
+              </strong>
+            </div>
+
+            {message.cancelled_reason ? (
+              <div className="rounded-2xl border border-rose-200 bg-rose-50 px-3 py-3 text-sm font-black text-rose-700 sm:col-span-2">
+                Cancellation: {message.cancelled_reason}
+              </div>
+            ) : null}
+          </div>
+        ) : null}
+
         {message.moderation_status &&
         message.moderation_status !== 'normal' ? (
           <div className="mt-3 rounded-2xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-black text-amber-700">
@@ -622,7 +1141,7 @@ export default function MessagesPage() {
         ) : null}
 
         <div className="mt-4 flex flex-wrap gap-2">
-          {isServiceRequest && message.request_status !== 'accepted' ? (
+          {requestCanBeAnswered && message.request_status !== 'accepted' ? (
             <button
               type="button"
               onClick={() => updateRequestStatus(message.id, 'accepted')}
@@ -633,7 +1152,7 @@ export default function MessagesPage() {
             </button>
           ) : null}
 
-          {isServiceRequest && message.request_status !== 'declined' ? (
+          {requestCanBeAnswered && message.request_status !== 'declined' ? (
             <button
               type="button"
               onClick={() => updateRequestStatus(message.id, 'declined')}
@@ -642,6 +1161,15 @@ export default function MessagesPage() {
             >
               Decline
             </button>
+          ) : null}
+
+          {centralServiceRequest && message.service_slug ? (
+            <a
+              href={`/services/${message.service_slug}`}
+              className="rounded-full border border-[var(--sendio-border,#dbeafe)] bg-white px-3 py-2 text-xs font-black text-[var(--sendio-text,#111827)]"
+            >
+              View Service
+            </a>
           ) : null}
 
           {sourceUrlAvailable ? (
@@ -684,34 +1212,39 @@ export default function MessagesPage() {
             </button>
           ) : null}
 
-          {isArchived ? (
-            <button
-              type="button"
-              onClick={() => restoreMessage(message.id)}
-              disabled={updatingId === message.id}
-              className="rounded-full border border-[var(--sendio-border,#dbeafe)] bg-white px-3 py-2 text-xs font-black text-[var(--sendio-text,#111827)] disabled:opacity-60"
-            >
-              Restore
-            </button>
-          ) : (
-            <button
-              type="button"
-              onClick={() => archiveMessage(message.id)}
-              disabled={updatingId === message.id}
-              className="rounded-full border border-[var(--sendio-border,#dbeafe)] bg-white px-3 py-2 text-xs font-black text-[var(--sendio-text,#111827)] disabled:opacity-60"
-            >
-              Archive
-            </button>
-          )}
+          {!centralServiceRequest ? (
+            <>
+              {isArchived ? (
+                <button
+                  type="button"
+                  onClick={() => restoreMessage(message.id)}
+                  disabled={updatingId === message.id}
+                  className="rounded-full border border-[var(--sendio-border,#dbeafe)] bg-white px-3 py-2 text-xs font-black text-[var(--sendio-text,#111827)] disabled:opacity-60"
+                >
+                  Restore
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => archiveMessage(message.id)}
+                  disabled={updatingId === message.id}
+                  className="rounded-full border border-[var(--sendio-border,#dbeafe)] bg-white px-3 py-2 text-xs font-black text-[var(--sendio-text,#111827)] disabled:opacity-60"
+                >
+                  Archive
+                </button>
+              )}
 
-          <button
-            type="button"
-            onClick={() => deleteMessage(message.id)}
-            disabled={updatingId === message.id}
-            className="rounded-full bg-rose-50 px-3 py-2 text-xs font-black text-rose-700 ring-1 ring-rose-200 disabled:opacity-60"
-          >
-            Delete
-          </button>
+              <button
+                type="button"
+                onClick={() => deleteMessage(message.id)}
+                disabled={updatingId === message.id}
+                className="rounded-full bg-rose-50 px-3 py-2 text-xs font-black text-rose-700 ring-1 ring-rose-200 disabled:opacity-60"
+              >
+                Delete
+              </button>
+            </>
+          ) : null}
+
         </div>
 
         {sectionKey === 'archived' ? (
@@ -871,7 +1404,7 @@ export default function MessagesPage() {
                   </h2>
 
                   <p className="mt-2 text-sm font-semibold text-[var(--sendio-muted,#374151)]">
-                    Live counters from company messages.
+                    Live counters from linked requests and company messages.
                   </p>
                 </div>
 

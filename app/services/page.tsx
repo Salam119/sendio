@@ -41,16 +41,14 @@ type RawWorkerRow = {
   phone: string | null;
 };
 
-type RawCompanyServiceRow = {
+type CompanyCategoryLink = {
   company_id: string | null;
-  title: string | null;
-  description: string | null;
+  service_category_id: string | null;
 };
 
-type RawWorkerServiceRow = {
+type WorkerCategoryLink = {
   worker_id: string | null;
-  title: string | null;
-  description: string | null;
+  service_category_id: string | null;
 };
 
 type FeaturedProvider = {
@@ -64,6 +62,10 @@ type FeaturedProvider = {
   specialty: string;
   rating: number | null;
   phone: string | null;
+  serviceCategoryIds: string[];
+  serviceSlugs: string[];
+  serviceNames: string[];
+  primaryServiceSlug: string;
   searchText: string;
 };
 
@@ -316,63 +318,105 @@ export default function ServicesPage() {
     let active = true;
 
     async function loadProviders() {
-      const [
-        companiesResult,
-        workersResult,
-        companyServicesResult,
-        workerServicesResult,
-      ] = await Promise.all([
+      if (services.length === 0) {
+        setProviders([]);
+        return;
+      }
+
+      const [companyLinksResult, workerLinksResult] = await Promise.all([
         supabase
-          .from('companies')
-          .select('id, name, slug, description, logo, city, category, rating, phone')
-          .limit(100),
+          .from('company_service_categories')
+          .select('company_id, service_category_id'),
         supabase
-          .from('workers')
-          .select('id, name, slug, description, avatar, city, rating, phone')
-          .limit(100),
-        supabase.from('company_services').select('company_id, title, description').limit(300),
-        supabase.from('worker_services').select('worker_id, title, description').limit(300),
+          .from('worker_service_categories')
+          .select('worker_id, service_category_id'),
       ]);
 
       if (!active) {
         return;
       }
 
-      const companyServices = (companyServicesResult.data ?? []) as RawCompanyServiceRow[];
-      const workerServices = (workerServicesResult.data ?? []) as RawWorkerServiceRow[];
+      if (companyLinksResult.error || workerLinksResult.error) {
+        setProviders([]);
+        setWarning(
+          companyLinksResult.error?.message ||
+            workerLinksResult.error?.message ||
+            'Linked providers could not be loaded.'
+        );
+        return;
+      }
 
-      const companyServiceMap = new Map<string, RawCompanyServiceRow[]>();
-      const workerServiceMap = new Map<string, RawWorkerServiceRow[]>();
+      const companyLinks = (companyLinksResult.data ?? []) as CompanyCategoryLink[];
+      const workerLinks = (workerLinksResult.data ?? []) as WorkerCategoryLink[];
+      const serviceById = new Map(services.map((service) => [service.id, service]));
+      const companyCategoryMap = new Map<string, Set<string>>();
+      const workerCategoryMap = new Map<string, Set<string>>();
 
-      companyServices.forEach((service) => {
-        if (!service.company_id) {
+      companyLinks.forEach((link) => {
+        if (!link.company_id || !link.service_category_id || !serviceById.has(link.service_category_id)) {
           return;
         }
 
-        const current = companyServiceMap.get(service.company_id) ?? [];
-        current.push(service);
-        companyServiceMap.set(service.company_id, current);
+        const current = companyCategoryMap.get(link.company_id) ?? new Set<string>();
+        current.add(link.service_category_id);
+        companyCategoryMap.set(link.company_id, current);
       });
 
-      workerServices.forEach((service) => {
-        if (!service.worker_id) {
+      workerLinks.forEach((link) => {
+        if (!link.worker_id || !link.service_category_id || !serviceById.has(link.service_category_id)) {
           return;
         }
 
-        const current = workerServiceMap.get(service.worker_id) ?? [];
-        current.push(service);
-        workerServiceMap.set(service.worker_id, current);
+        const current = workerCategoryMap.get(link.worker_id) ?? new Set<string>();
+        current.add(link.service_category_id);
+        workerCategoryMap.set(link.worker_id, current);
       });
 
-      const companyProviders = ((companiesResult.data ?? []) as RawCompanyRow[]).map(
-        (company) => {
-          const serviceRows = companyServiceMap.get(company.id) ?? [];
-          const specialty = serviceRows[0]?.title || company.category || 'Company service';
-          const serviceText = serviceRows
-            .map((service) => `${service.title ?? ''} ${service.description ?? ''}`)
-            .join(' ');
+      const companyIds = Array.from(companyCategoryMap.keys());
+      const workerIds = Array.from(workerCategoryMap.keys());
 
-          return {
+      const [companiesResult, workersResult] = await Promise.all([
+        companyIds.length > 0
+          ? supabase
+              .from('companies')
+              .select('id, name, slug, description, logo, city, rating, phone')
+              .in('id', companyIds)
+          : Promise.resolve({ data: [], error: null }),
+        workerIds.length > 0
+          ? supabase
+              .from('workers')
+              .select('id, name, slug, description, avatar, city, rating, phone')
+              .in('id', workerIds)
+          : Promise.resolve({ data: [], error: null }),
+      ]);
+
+      if (!active) {
+        return;
+      }
+
+      if (companiesResult.error || workersResult.error) {
+        setWarning(
+          companiesResult.error?.message ||
+            workersResult.error?.message ||
+            'Provider profiles could not be loaded.'
+        );
+      }
+
+      const companyProviders: FeaturedProvider[] = ((companiesResult.data ?? []) as RawCompanyRow[])
+        .flatMap((company): FeaturedProvider[] => {
+          const serviceCategoryIds = Array.from(companyCategoryMap.get(company.id) ?? []);
+          const linkedServices = serviceCategoryIds
+            .map((categoryId) => serviceById.get(categoryId))
+            .filter((service): service is ServiceCategoryRow => Boolean(service));
+
+          if (linkedServices.length === 0) {
+            return [];
+          }
+
+          const serviceNames = linkedServices.map((service) => service.name);
+          const serviceSlugs = linkedServices.map((service) => service.slug);
+
+          return [{
             id: company.id,
             kind: 'company' as const,
             name: company.name || 'Company',
@@ -380,37 +424,49 @@ export default function ServicesPage() {
             description: company.description || 'Open this provider profile on Sendio.',
             image: company.logo,
             city: company.city || '',
-            specialty,
+            specialty: serviceNames[0] || 'Company service',
             rating: company.rating,
             phone: company.phone,
-            searchText: `${company.name ?? ''} ${company.category ?? ''} ${
-              company.description ?? ''
-            } ${serviceText}`.toLowerCase(),
-          };
-        }
-      );
+            serviceCategoryIds,
+            serviceSlugs,
+            serviceNames,
+            primaryServiceSlug: serviceSlugs[0],
+            searchText: `${company.name ?? ''} ${company.description ?? ''} ${serviceNames.join(' ')}`.toLowerCase(),
+          }];
+        });
 
-      const workerProviders = ((workersResult.data ?? []) as RawWorkerRow[]).map((worker) => {
-        const serviceRows = workerServiceMap.get(worker.id) ?? [];
-        const specialty = serviceRows[0]?.title || 'Worker service';
-        const serviceText = serviceRows
-          .map((service) => `${service.title ?? ''} ${service.description ?? ''}`)
-          .join(' ');
+      const workerProviders: FeaturedProvider[] = ((workersResult.data ?? []) as RawWorkerRow[])
+        .flatMap((worker): FeaturedProvider[] => {
+          const serviceCategoryIds = Array.from(workerCategoryMap.get(worker.id) ?? []);
+          const linkedServices = serviceCategoryIds
+            .map((categoryId) => serviceById.get(categoryId))
+            .filter((service): service is ServiceCategoryRow => Boolean(service));
 
-        return {
-          id: worker.id,
-          kind: 'worker' as const,
-          name: worker.name || 'Worker',
-          slug: worker.slug || worker.id,
-          description: worker.description || 'Open this worker profile on Sendio.',
-          image: worker.avatar,
-          city: worker.city || '',
-          specialty,
-          rating: worker.rating,
-          phone: worker.phone,
-          searchText: `${worker.name ?? ''} ${worker.description ?? ''} ${serviceText}`.toLowerCase(),
-        };
-      });
+          if (linkedServices.length === 0) {
+            return [];
+          }
+
+          const serviceNames = linkedServices.map((service) => service.name);
+          const serviceSlugs = linkedServices.map((service) => service.slug);
+
+          return [{
+            id: worker.id,
+            kind: 'worker' as const,
+            name: worker.name || 'Worker',
+            slug: worker.slug || worker.id,
+            description: worker.description || 'Open this worker profile on Sendio.',
+            image: worker.avatar,
+            city: worker.city || '',
+            specialty: serviceNames[0] || 'Worker service',
+            rating: worker.rating,
+            phone: worker.phone,
+            serviceCategoryIds,
+            serviceSlugs,
+            serviceNames,
+            primaryServiceSlug: serviceSlugs[0],
+            searchText: `${worker.name ?? ''} ${worker.description ?? ''} ${serviceNames.join(' ')}`.toLowerCase(),
+          }];
+        });
 
       setProviders([...companyProviders, ...workerProviders]);
     }
@@ -420,7 +476,7 @@ export default function ServicesPage() {
     return () => {
       active = false;
     };
-  }, []);
+  }, [services]);
 
   const normalizedSearch = normalizeText(searchText);
   const normalizedLocation = normalizeText(locationText);
@@ -452,29 +508,37 @@ export default function ServicesPage() {
   const cvImages = providers.filter((provider) => provider.image).slice(0, 3);
   const serviceMarqueeItems = services.length > 0 ? services : visibleServices;
 
-  function findBestServiceSlugForProvider(provider: FeaturedProvider) {
-    const directService = services.find((service) => {
-      const serviceName = normalizeText(service.name);
-      const providerSpecialty = normalizeText(provider.specialty);
+  function isCategoryInsideService(categoryId: string, serviceId: string) {
+    const serviceById = new Map(services.map((item) => [item.id, item]));
+    let currentId: string | null = categoryId;
+    const visited = new Set<string>();
 
-      return (
-        provider.searchText.includes(serviceName) ||
-        providerSpecialty.includes(serviceName) ||
-        serviceName.includes(providerSpecialty)
-      );
-    });
+    while (currentId && !visited.has(currentId)) {
+      if (currentId === serviceId) {
+        return true;
+      }
 
-    if (directService) {
-      return directService.slug;
+      visited.add(currentId);
+      currentId = serviceById.get(currentId)?.parent_id ?? null;
     }
 
+    return false;
+  }
+
+  function findBestServiceSlugForProvider(provider: FeaturedProvider) {
     const searchedService = visibleServices[0];
 
-    if (searchedService) {
+    if (
+      normalizedSearch &&
+      searchedService &&
+      provider.serviceCategoryIds.some((categoryId) =>
+        isCategoryInsideService(categoryId, searchedService.id)
+      )
+    ) {
       return searchedService.slug;
     }
 
-    return services[0]?.slug ?? '';
+    return provider.primaryServiceSlug;
   }
 
   function getProviderRequestHref(provider: FeaturedProvider) {
@@ -494,6 +558,17 @@ export default function ServicesPage() {
     }
 
     return `/services/${serviceSlug}?${params.toString()}`;
+  }
+
+  function getServiceHref(service: ServiceCategoryRow) {
+    const params = new URLSearchParams();
+
+    if (locationText.trim()) {
+      params.set('city', locationText.trim());
+    }
+
+    const query = params.toString();
+    return query ? `/services/${service.slug}?${query}` : `/services/${service.slug}`;
   }
 
   function handleSearch(event: FormEvent<HTMLFormElement>) {
@@ -696,7 +771,7 @@ export default function ServicesPage() {
         <div className="quickServiceTrack">
           {[...serviceMarqueeItems, ...serviceMarqueeItems].map((service, index) => (
             <Link
-              href={`/services/${service.slug}`}
+              href={getServiceHref(service)}
               className="quickServiceItem"
               key={`${service.id}-${index}`}
             >
@@ -747,7 +822,7 @@ export default function ServicesPage() {
         {allServicesOpen ? (
           <div className="serviceList">
             {visibleServices.map((service) => (
-              <Link href={`/services/${service.slug}`} className="serviceLine" key={service.id}>
+              <Link href={getServiceHref(service)} className="serviceLine" key={service.id}>
                 <span>{getServiceIcon(service)}</span>
                 <strong>{service.name}</strong>
               </Link>
@@ -762,7 +837,7 @@ export default function ServicesPage() {
 
           <div className="trendingGrid">
             {trendingServices.map((service) => (
-              <Link href={`/services/${service.slug}`} className="trendingLine" key={service.id}>
+              <Link href={getServiceHref(service)} className="trendingLine" key={service.id}>
                 <span>{getServiceIcon(service)}</span>
                 <strong>{service.name}</strong>
               </Link>

@@ -2,15 +2,17 @@
 
 import Link from 'next/link';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { supabase } from '@/lib/supabase';
-
+import { createSendioNotification } from '@/lib/notifications';
 type ServiceCategoryRow = {
   id: string;
   name: string;
   slug: string;
   description: string | null;
   icon: string | null;
+  parent_id: string | null;
+  is_active: boolean | null;
 };
 
 type RawCompanyRow = {
@@ -24,7 +26,6 @@ type RawCompanyRow = {
   address: string | null;
   phone: string | null;
   email: string | null;
-  category: string | null;
   status: string | null;
   rating: number | null;
 };
@@ -43,20 +44,19 @@ type RawWorkerRow = {
   rating: number | null;
 };
 
-type RawCompanyServiceRow = {
+type CompanyCategoryLink = {
   company_id: string | null;
-  title: string | null;
-  description: string | null;
+  service_category_id: string | null;
 };
 
-type RawWorkerServiceRow = {
+type WorkerCategoryLink = {
   worker_id: string | null;
-  title: string | null;
-  description: string | null;
+  service_category_id: string | null;
 };
 
 type Provider = {
   id: string;
+  userId: string | null;
   kind: 'company' | 'worker';
   name: string;
   slug: string;
@@ -68,8 +68,8 @@ type Provider = {
   email: string | null;
   status: string;
   rating: number | null;
-  specialty: string;
-  searchText: string;
+  categoryIds: string[];
+  categoryNames: string[];
 };
 
 const SERVICE_ICON_MAP: Record<string, string> = {
@@ -93,7 +93,7 @@ const SERVICE_ICON_MAP: Record<string, string> = {
   computer: '💻',
 };
 
-const fallbackIcons = ['🧰', '🔧', '🏠', '🧹', '🚚', '💡', '🌿', '🎨'];
+const FALLBACK_ICONS = ['🧰', '🔧', '🏠', '🧹', '🚚', '💡', '🌿', '🎨'];
 
 function normalizeText(value: string | null | undefined) {
   return value?.trim().toLowerCase() ?? '';
@@ -101,7 +101,7 @@ function normalizeText(value: string | null | undefined) {
 
 function getFallbackIcon(name: string) {
   const total = name.split('').reduce((sum, char) => sum + char.charCodeAt(0), 0);
-  return fallbackIcons[total % fallbackIcons.length];
+  return FALLBACK_ICONS[total % FALLBACK_ICONS.length];
 }
 
 function getServiceIcon(service: ServiceCategoryRow | null) {
@@ -110,12 +110,7 @@ function getServiceIcon(service: ServiceCategoryRow | null) {
   }
 
   const icon = service.icon?.trim().toLowerCase();
-
-  if (!icon) {
-    return getFallbackIcon(service.name);
-  }
-
-  return SERVICE_ICON_MAP[icon] ?? getFallbackIcon(service.name);
+  return icon ? SERVICE_ICON_MAP[icon] ?? getFallbackIcon(service.name) : getFallbackIcon(service.name);
 }
 
 function cleanPhone(phone: string | null) {
@@ -124,50 +119,68 @@ function cleanPhone(phone: string | null) {
 
 function getWhatsappHref(phone: string | null) {
   const cleaned = cleanPhone(phone).replace('+', '');
-
-  if (!cleaned) {
-    return '';
-  }
-
-  return `https://wa.me/${cleaned}`;
+  return cleaned ? `https://wa.me/${cleaned}` : '';
 }
 
 function getProviderHref(provider: Provider) {
   return provider.kind === 'company' ? `/companies/${provider.slug}` : `/workers/${provider.slug}`;
 }
 
-function providerMatchesService(provider: Provider, serviceName: string) {
-  const cleanServiceName = serviceName.toLowerCase().replace(/services?/g, '').trim();
-  const words = cleanServiceName.split(/\s+/).filter((word) => word.length > 2);
-
-  if (provider.searchText.includes(serviceName.toLowerCase())) {
-    return true;
-  }
-
-  if (cleanServiceName && provider.searchText.includes(cleanServiceName)) {
-    return true;
-  }
-
-  return words.some((word) => provider.searchText.includes(word));
-}
-
-function sortByCity(providers: Provider[], city: string) {
-  const normalizedCity = normalizeText(city);
-
-  if (!normalizedCity) {
-    return providers;
-  }
-
-  return [...providers].sort((a, b) => {
-    const aExact = normalizeText(a.city).includes(normalizedCity) ? 0 : 1;
-    const bExact = normalizeText(b.city).includes(normalizedCity) ? 0 : 1;
-
-    return aExact - bExact;
-  });
-}
-
 function shortDescription(value: string) {
-  return value.split(/\s+/).filter(Boolean).slice(0, 12).join(' ');
+  const words = value.split(/\s+/).filter(Boolean).slice(0, 18);
+  return words.length > 0 ? words.join(' ') : 'Open this provider profile on Sendio.';
+}
+
+function collectDescendantIds(categories: ServiceCategoryRow[], rootId: string) {
+  const childrenByParent = new Map<string, string[]>();
+
+  categories.forEach((category) => {
+    if (!category.parent_id) {
+      return;
+    }
+
+    const current = childrenByParent.get(category.parent_id) ?? [];
+    current.push(category.id);
+    childrenByParent.set(category.parent_id, current);
+  });
+
+  const visited = new Set<string>();
+  const queue = [rootId];
+
+  while (queue.length > 0) {
+    const currentId = queue.shift();
+
+    if (!currentId || visited.has(currentId)) {
+      continue;
+    }
+
+    visited.add(currentId);
+    (childrenByParent.get(currentId) ?? []).forEach((childId) => queue.push(childId));
+  }
+
+  return Array.from(visited);
+}
+
+function buildCategoryMap<T extends { service_category_id: string | null }>(
+  rows: T[],
+  getProviderId: (row: T) => string | null
+) {
+  const result = new Map<string, Set<string>>();
+
+  rows.forEach((row) => {
+    const providerId = getProviderId(row);
+    const categoryId = row.service_category_id;
+
+    if (!providerId || !categoryId) {
+      return;
+    }
+
+    const current = result.get(providerId) ?? new Set<string>();
+    current.add(categoryId);
+    result.set(providerId, current);
+  });
+
+  return result;
 }
 
 export default function ServiceRequestPage() {
@@ -177,50 +190,37 @@ export default function ServiceRequestPage() {
 
   const slugParam = params?.slug;
   const slug = Array.isArray(slugParam) ? slugParam[0] : slugParam ?? '';
-  const selectedProviderType = searchParams.get('providerType');
-  const selectedProviderId = searchParams.get('providerId');
+  const providerTypeFromQuery = searchParams.get('providerType');
+  const providerIdFromQuery = searchParams.get('providerId');
   const cityFromQuery = searchParams.get('city') ?? '';
 
   const [service, setService] = useState<ServiceCategoryRow | null>(null);
+  const [categoryOptions, setCategoryOptions] = useState<ServiceCategoryRow[]>([]);
   const [providers, setProviders] = useState<Provider[]>([]);
   const [loading, setLoading] = useState(true);
   const [warning, setWarning] = useState('');
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [accountEmail, setAccountEmail] = useState('');
 
-  const [step, setStep] = useState(0);
+  const [cityFilter, setCityFilter] = useState(cityFromQuery);
+  const [areaFilter, setAreaFilter] = useState('');
+  const [providerKindFilter, setProviderKindFilter] = useState<'all' | 'company' | 'worker'>('all');
+  const [categoryFilter, setCategoryFilter] = useState('');
+  const [requestCategoryId, setRequestCategoryId] = useState('');
+
   const [submitting, setSubmitting] = useState(false);
   const [submittedRequestId, setSubmittedRequestId] = useState<string | null>(null);
   const [cancelMessage, setCancelMessage] = useState('');
 
-  const [serviceType, setServiceType] = useState('');
-  const [serviceScope, setServiceScope] = useState('');
-  const [urgency, setUrgency] = useState('urgent_1_2_days');
   const [street, setStreet] = useState('');
   const [houseNumber, setHouseNumber] = useState('');
-  const [city, setCity] = useState('');
+  const [city, setCity] = useState(cityFromQuery);
   const [postalCode, setPostalCode] = useState('');
   const [preferredDate, setPreferredDate] = useState('');
-  const [preferredTimeWindow, setPreferredTimeWindow] = useState('flexible');
   const [preferredTime, setPreferredTime] = useState('');
   const [projectDescription, setProjectDescription] = useState('');
-  const [firstName, setFirstName] = useState('');
-  const [lastName, setLastName] = useState('');
   const [phone, setPhone] = useState('');
   const [email, setEmail] = useState('');
-useEffect(() => {
-  if (!cityFromQuery) {
-    return;
-  }
-
-  const timeout = window.setTimeout(() => {
-    setCity(cityFromQuery);
-  }, 0);
-
-  return () => {
-    window.clearTimeout(timeout);
-  };
-}, [cityFromQuery]);
- 
 
   useEffect(() => {
     let active = true;
@@ -229,42 +229,12 @@ useEffect(() => {
       setLoading(true);
       setWarning('');
 
-      const { data: serviceData, error: serviceError } = await supabase
-        .from('service_categories')
-        .select('id, name, slug, description, icon')
-        .eq('slug', slug)
-        .eq('is_active', true)
-        .maybeSingle();
-
-      if (!active) {
-        return;
-      }
-
-      if (serviceError || !serviceData) {
-        setService(null);
-        setLoading(false);
-        return;
-      }
-
-      setService(serviceData as ServiceCategoryRow);
-
-      const [
-        companiesResult,
-        workersResult,
-        companyServicesResult,
-        workerServicesResult,
-        userResult,
-      ] = await Promise.all([
+      const [categoriesResult, userResult] = await Promise.all([
         supabase
-          .from('companies')
-          .select('id, user_id, name, slug, description, logo, city, address, phone, email, category, status, rating')
-          .limit(100),
-        supabase
-          .from('workers')
-          .select('id, user_id, name, slug, description, avatar, city, phone, email, status, rating')
-          .limit(100),
-        supabase.from('company_services').select('company_id, title, description').limit(300),
-        supabase.from('worker_services').select('worker_id, title, description').limit(300),
+          .from('service_categories')
+          .select('id, name, slug, description, icon, parent_id, is_active')
+          .eq('is_active', true)
+          .order('name', { ascending: true }),
         supabase.auth.getUser(),
       ]);
 
@@ -273,46 +243,100 @@ useEffect(() => {
       }
 
       const user = userResult.data.user ?? null;
-      const userEmail = user?.email ?? '';
       setCurrentUserId(user?.id ?? null);
-      setEmail(userEmail);
+      setAccountEmail(user?.email ?? '');
+      setEmail('');
 
-      const companyServices = (companyServicesResult.data ?? []) as RawCompanyServiceRow[];
-      const workerServices = (workerServicesResult.data ?? []) as RawWorkerServiceRow[];
+      if (categoriesResult.error) {
+        setService(null);
+        setProviders([]);
+        setWarning(categoriesResult.error.message);
+        setLoading(false);
+        return;
+      }
 
-      const companyServiceMap = new Map<string, RawCompanyServiceRow[]>();
-      const workerServiceMap = new Map<string, RawWorkerServiceRow[]>();
+      const allCategories = (categoriesResult.data ?? []) as ServiceCategoryRow[];
+      const currentService = allCategories.find((category) => category.slug === slug) ?? null;
 
-      companyServices.forEach((item) => {
-        if (!item.company_id) {
-          return;
-        }
+      if (!currentService) {
+        setService(null);
+        setProviders([]);
+        setLoading(false);
+        return;
+      }
 
-        const current = companyServiceMap.get(item.company_id) ?? [];
-        current.push(item);
-        companyServiceMap.set(item.company_id, current);
-      });
+      setService(currentService);
 
-      workerServices.forEach((item) => {
-        if (!item.worker_id) {
-          return;
-        }
+      const descendantIds = collectDescendantIds(allCategories, currentService.id);
+      const descendantSet = new Set(descendantIds);
+      const scopedCategories = allCategories.filter((category) => descendantSet.has(category.id));
+      setCategoryOptions(scopedCategories);
 
-        const current = workerServiceMap.get(item.worker_id) ?? [];
-        current.push(item);
-        workerServiceMap.set(item.worker_id, current);
-      });
+      const [companyLinksResult, workerLinksResult] = await Promise.all([
+        supabase
+          .from('company_service_categories')
+          .select('company_id, service_category_id')
+          .in('service_category_id', descendantIds),
+        supabase
+          .from('worker_service_categories')
+          .select('worker_id, service_category_id')
+          .in('service_category_id', descendantIds),
+      ]);
 
-      const companyProviders = ((companiesResult.data ?? []) as RawCompanyRow[]).map((company) => {
-        const serviceRows = companyServiceMap.get(company.id) ?? [];
-        const specialty = serviceRows[0]?.title || company.category || 'Company service';
-        const serviceText = serviceRows
-          .map((item) => `${item.title ?? ''} ${item.description ?? ''}`)
-          .join(' ');
+      if (!active) {
+        return;
+      }
+
+      if (companyLinksResult.error || workerLinksResult.error) {
+        setWarning(
+          companyLinksResult.error?.message ||
+            workerLinksResult.error?.message ||
+            'Linked providers could not be loaded.'
+        );
+      }
+
+      const companyLinks = (companyLinksResult.data ?? []) as CompanyCategoryLink[];
+      const workerLinks = (workerLinksResult.data ?? []) as WorkerCategoryLink[];
+      const companyCategoryMap = buildCategoryMap(companyLinks, (row) => row.company_id);
+      const workerCategoryMap = buildCategoryMap(workerLinks, (row) => row.worker_id);
+      const companyIds = Array.from(companyCategoryMap.keys());
+      const workerIds = Array.from(workerCategoryMap.keys());
+
+      const [companiesResult, workersResult] = await Promise.all([
+        companyIds.length > 0
+          ? supabase
+              .from('companies')
+              .select('id, user_id, name, slug, description, logo, city, address, phone, email, status, rating')
+              .in('id', companyIds)
+          : Promise.resolve({ data: [], error: null }),
+        workerIds.length > 0
+          ? supabase
+              .from('workers')
+              .select('id, user_id, name, slug, description, avatar, city, phone, email, status, rating')
+              .in('id', workerIds)
+          : Promise.resolve({ data: [], error: null }),
+      ]);
+
+      if (!active) {
+        return;
+      }
+
+      if (companiesResult.error || workersResult.error) {
+        setWarning(
+          companiesResult.error?.message ||
+            workersResult.error?.message ||
+            'Provider profiles could not be loaded.'
+        );
+      }
+
+      const categoryNameById = new Map(scopedCategories.map((category) => [category.id, category.name]));
+      const companyProviders: Provider[] = ((companiesResult.data ?? []) as RawCompanyRow[]).map((company) => {
+        const categoryIds = Array.from(companyCategoryMap.get(company.id) ?? []);
 
         return {
           id: company.id,
-          kind: 'company' as const,
+          userId: company.user_id,
+          kind: 'company',
           name: company.name || 'Company',
           slug: company.slug || company.id,
           description: company.description || 'Open this company profile on Sendio.',
@@ -323,23 +347,18 @@ useEffect(() => {
           email: company.email,
           status: company.status || 'available',
           rating: company.rating,
-          specialty,
-          searchText: `${company.name ?? ''} ${company.category ?? ''} ${
-            company.description ?? ''
-          } ${serviceText}`.toLowerCase(),
+          categoryIds,
+          categoryNames: categoryIds.map((id) => categoryNameById.get(id)).filter((name): name is string => Boolean(name)),
         };
       });
 
-      const workerProviders = ((workersResult.data ?? []) as RawWorkerRow[]).map((worker) => {
-        const serviceRows = workerServiceMap.get(worker.id) ?? [];
-        const specialty = serviceRows[0]?.title || 'Worker service';
-        const serviceText = serviceRows
-          .map((item) => `${item.title ?? ''} ${item.description ?? ''}`)
-          .join(' ');
+      const workerProviders: Provider[] = ((workersResult.data ?? []) as RawWorkerRow[]).map((worker) => {
+        const categoryIds = Array.from(workerCategoryMap.get(worker.id) ?? []);
 
         return {
           id: worker.id,
-          kind: 'worker' as const,
+          userId: worker.user_id,
+          kind: 'worker',
           name: worker.name || 'Worker',
           slug: worker.slug || worker.id,
           description: worker.description || 'Open this worker profile on Sendio.',
@@ -350,8 +369,8 @@ useEffect(() => {
           email: worker.email,
           status: worker.status || 'available',
           rating: worker.rating,
-          specialty,
-          searchText: `${worker.name ?? ''} ${worker.description ?? ''} ${serviceText}`.toLowerCase(),
+          categoryIds,
+          categoryNames: categoryIds.map((id) => categoryNameById.get(id)).filter((name): name is string => Boolean(name)),
         };
       });
 
@@ -366,65 +385,95 @@ useEffect(() => {
     };
   }, [slug]);
 
-  const serviceProviders = service
-    ? providers.filter((provider) => providerMatchesService(provider, service.name))
-    : [];
+  const categoryById = useMemo(
+    () => new Map(categoryOptions.map((category) => [category.id, category])),
+    [categoryOptions]
+  );
 
-  const matchingProviders = sortByCity(serviceProviders, city);
+  const filteredProviders = useMemo(() => {
+    const normalizedCity = normalizeText(cityFilter);
+    const normalizedArea = normalizeText(areaFilter);
+
+    return providers.filter((provider) => {
+      const cityMatches = normalizedCity ? normalizeText(provider.city).includes(normalizedCity) : true;
+      const areaText = normalizeText(`${provider.address} ${provider.city}`);
+      const areaMatches = normalizedArea ? areaText.includes(normalizedArea) : true;
+      const kindMatches = providerKindFilter === 'all' ? true : provider.kind === providerKindFilter;
+      const categoryMatches = categoryFilter ? provider.categoryIds.includes(categoryFilter) : true;
+
+      return cityMatches && areaMatches && kindMatches && categoryMatches;
+    });
+  }, [areaFilter, categoryFilter, cityFilter, providerKindFilter, providers]);
+
   const selectedProvider =
-    selectedProviderId && (selectedProviderType === 'company' || selectedProviderType === 'worker')
+    providerIdFromQuery &&
+    (providerTypeFromQuery === 'company' || providerTypeFromQuery === 'worker')
       ? providers.find(
           (provider) =>
-            provider.id === selectedProviderId && provider.kind === selectedProviderType
+            provider.id === providerIdFromQuery && provider.kind === providerTypeFromQuery
         ) ?? null
       : null;
-  const prioritizedProviders = selectedProvider
-    ? [
-        selectedProvider,
-        ...matchingProviders.filter(
-          (provider) =>
-            provider.id !== selectedProvider.id || provider.kind !== selectedProvider.kind
-        ),
-      ]
-    : matchingProviders;
-  const closestProviders = prioritizedProviders.slice(0, 12);
 
-  function goNext() {
+  const selectedProviderKey = selectedProvider
+    ? `${selectedProvider.kind}:${selectedProvider.id}`
+    : '';
+
+  const effectiveRequestCategoryId =
+    selectedProvider &&
+    requestCategoryId &&
+    selectedProvider.categoryIds.includes(requestCategoryId)
+      ? requestCategoryId
+      : selectedProvider?.categoryIds[0] || service?.id || '';
+
+  const selectedRequestCategory =
+    (effectiveRequestCategoryId
+      ? categoryById.get(effectiveRequestCategoryId)
+      : null) ?? service;
+
+  function selectProvider(provider: Provider) {
+    const preferredCategoryId =
+      (categoryFilter && provider.categoryIds.includes(categoryFilter) ? categoryFilter : '') ||
+      provider.categoryIds[0] ||
+      service?.id ||
+      '';
+
+    setRequestCategoryId(preferredCategoryId);
     setWarning('');
+    setSubmittedRequestId(null);
+    setCancelMessage('');
 
-    if (step === 2 && (!city || !postalCode)) {
-      setWarning('Please add your city and postal code.');
-      return;
+    const nextParams = new URLSearchParams(searchParams.toString());
+    nextParams.set('providerType', provider.kind);
+    nextParams.set('providerId', provider.id);
+
+    if (cityFilter.trim()) {
+      nextParams.set('city', cityFilter.trim());
+    } else {
+      nextParams.delete('city');
     }
 
-    if (step === 4 && (!firstName || !phone)) {
-      setWarning('Please add your first name and phone number.');
-      return;
-    }
+    router.replace(`/services/${service?.slug ?? slug}?${nextParams.toString()}`, { scroll: false });
 
-    if (step < 4) {
-      setStep((current) => current + 1);
-      return;
-    }
-
-    submitRequest();
+    window.setTimeout(() => {
+      document.getElementById('sendio-request-form')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 0);
   }
 
-  function goBack() {
+  function clearSelectedProvider() {
+    setRequestCategoryId('');
     setWarning('');
 
-    if (step === 0) {
-      router.back();
-      return;
-    }
-
-    setStep((current) => current - 1);
+    const nextParams = new URLSearchParams(searchParams.toString());
+    nextParams.delete('providerType');
+    nextParams.delete('providerId');
+    router.replace(`/services/${service?.slug ?? slug}${nextParams.toString() ? `?${nextParams.toString()}` : ''}`, {
+      scroll: false,
+    });
   }
 
   function getCurrentRequestPath() {
     const query = searchParams.toString();
     const basePath = `/services/${service?.slug ?? slug}`;
-
     return query ? `${basePath}?${query}` : basePath;
   }
 
@@ -436,8 +485,11 @@ useEffect(() => {
     setWarning('Please sign in to use contact actions.');
   }
 
-  async function submitDirectProviderRequest() {
-    if (!service || !selectedProvider) {
+  async function submitProviderRequest(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    if (!service || !selectedProvider || !selectedRequestCategory) {
+      setWarning('Please choose a provider and service first.');
       return;
     }
 
@@ -455,18 +507,15 @@ useEffect(() => {
       return;
     }
 
-    setCurrentUserId(user.id);
-    setEmail(user.email ?? '');
-
-    if (!street || !houseNumber || !city || !postalCode) {
+    if (!street.trim() || !houseNumber.trim() || !city.trim() || !postalCode.trim()) {
       setSubmitting(false);
-      setWarning('Please add your full address before sending the request.');
+      setWarning('Please add your full service address.');
       return;
     }
 
-    if (!preferredDate || (!preferredTime && preferredTimeWindow === 'specific_time')) {
+    if (!preferredDate || !preferredTime) {
       setSubmitting(false);
-      setWarning('Please add the preferred date and time.');
+      setWarning('Please choose the preferred day and time.');
       return;
     }
 
@@ -476,153 +525,45 @@ useEffect(() => {
       return;
     }
 
+    const contactEmail = email.trim() || user.email || null;
+    const contactPhone = phone.trim() || null;
+
     const { data: requestData, error: requestError } = await supabase
       .from('service_requests')
       .insert({
-        service_category_id: service.id,
-        service_slug: service.slug,
-        service_name: service.name,
+        service_category_id: selectedRequestCategory.id,
+        service_slug: selectedRequestCategory.slug,
+        service_name: selectedRequestCategory.name,
         client_id: user.id,
-
         selected_provider_type: selectedProvider.kind,
-        selected_company_id:
-          selectedProvider.kind === 'company' ? selectedProvider.id : null,
-        selected_worker_id:
-          selectedProvider.kind === 'worker' ? selectedProvider.id : null,
-
-        email: user.email,
-        phone: phone || null,
-
-        city,
-        postal_code: postalCode,
-        street,
-        house_number: houseNumber,
-
-        service_type: service.name,
-        service_scope: selectedProvider.specialty,
-        urgency,
-        preferred_date: preferredDate || null,
-        preferred_time: preferredTime || null,
-        preferred_time_window: preferredTimeWindow,
-        project_description: projectDescription,
-
+        selected_company_id: selectedProvider.kind === 'company' ? selectedProvider.id : null,
+        selected_worker_id: selectedProvider.kind === 'worker' ? selectedProvider.id : null,
+        email: contactEmail,
+        phone: contactPhone,
+        city: city.trim(),
+        postal_code: postalCode.trim(),
+        street: street.trim(),
+        house_number: houseNumber.trim(),
+        service_type: selectedRequestCategory.name,
+        service_scope: selectedProvider.categoryNames.join(', ') || selectedRequestCategory.name,
+        urgency: 'not_sure',
+        preferred_date: preferredDate,
+        preferred_time: preferredTime,
+        preferred_time_window: 'specific_time',
+        project_description: projectDescription.trim(),
         project_answers: {
           directProviderRequest: true,
+          sourceCategoryId: service.id,
+          sourceCategorySlug: service.slug,
+          selectedServiceCategoryId: selectedRequestCategory.id,
+          selectedServiceCategorySlug: selectedRequestCategory.slug,
           selectedProviderName: selectedProvider.name,
           selectedProviderType: selectedProvider.kind,
-          optionalPhone: phone || null,
+          optionalPhone: contactPhone,
+          optionalEmail: email.trim() || null,
           preferredDate,
-          preferredTimeWindow,
           preferredTime,
         },
-
-        status: 'submitted',
-        submitted_at: new Date().toISOString(),
-        client_seen: true,
-        provider_seen: false,
-        admin_seen: false,
-      })
-      .select('id')
-      .single();
-
-    if (requestError || !requestData) {
-      console.error('DIRECT SERVICE REQUEST SAVE ERROR:', requestError);
-
-      setSubmitting(false);
-      setWarning(
-        requestError?.message
-          ? `تعذر حفظ الطلب: ${requestError.message}`
-          : 'تعذر حفظ الطلب. يرجى المحاولة مرة أخرى.'
-      );
-      return;
-    }
-
-    const { error: matchError } = await supabase.from('service_request_matches').insert({
-      request_id: requestData.id,
-      provider_type: selectedProvider.kind,
-      company_id: selectedProvider.kind === 'company' ? selectedProvider.id : null,
-      worker_id: selectedProvider.kind === 'worker' ? selectedProvider.id : null,
-      match_rank: 1,
-      city_match: city
-        ? normalizeText(selectedProvider.city).includes(normalizeText(city))
-        : false,
-      service_match: true,
-      status: 'pending',
-    });
-
-    if (matchError) {
-      console.error('DIRECT SERVICE REQUEST MATCH ERROR:', matchError);
-      setCancelMessage(
-        `تم حفظ الطلب، لكن تعذر ربطه بالمزود: ${matchError.message}`
-      );
-    } else {
-      setCancelMessage('');
-    }
-
-    setSubmittedRequestId(requestData.id);
-    setStep(5);
-    setSubmitting(false);
-  }
-
-  async function submitRequest() {
-    if (!service) {
-      return;
-    }
-
-    setSubmitting(true);
-    setWarning('');
-
-    const { data: userData } = await supabase.auth.getUser();
-    const user = userData.user;
-
-    if (!user) {
-      setSubmitting(false);
-      setWarning('Please sign in first, then send your service request.');
-      router.push(`/login?redirectTo=/services/${service.slug}`);
-      return;
-    }
-
-    const { data: requestData, error: requestError } = await supabase
-      .from('service_requests')
-      .insert({
-        service_category_id: service.id,
-        service_slug: service.slug,
-        service_name: service.name,
-        client_id: user.id,
-
-        selected_provider_type: selectedProvider ? selectedProvider.kind : null,
-        selected_company_id:
-          selectedProvider?.kind === 'company' ? selectedProvider.id : null,
-        selected_worker_id:
-          selectedProvider?.kind === 'worker' ? selectedProvider.id : null,
-
-        first_name: firstName,
-        last_name: lastName,
-        email: email || user.email,
-        phone,
-
-        city,
-        postal_code: postalCode,
-        street,
-        house_number: houseNumber,
-
-        service_type: serviceType,
-        service_scope: serviceScope,
-        urgency,
-        preferred_date: preferredDate || null,
-        preferred_time: preferredTime || null,
-        preferred_time_window: preferredTimeWindow,
-        project_description: projectDescription,
-
-        project_answers: {
-          serviceType,
-          serviceScope,
-          urgency,
-          preferredDate,
-          preferredTimeWindow,
-          preferredTime,
-        },
-
         status: 'submitted',
         submitted_at: new Date().toISOString(),
         client_seen: true,
@@ -634,7 +575,6 @@ useEffect(() => {
 
     if (requestError || !requestData) {
       console.error('SERVICE REQUEST SAVE ERROR:', requestError);
-
       setSubmitting(false);
       setWarning(
         requestError?.message
@@ -644,36 +584,104 @@ useEffect(() => {
       return;
     }
 
-    const providersToNotify = selectedProvider ? [selectedProvider] : closestProviders;
+    const { error: matchError } = await supabase
+  .from('service_request_matches')
+  .insert({
+    request_id: requestData.id,
+    provider_type: selectedProvider.kind,
+    company_id:
+      selectedProvider.kind === 'company'
+        ? selectedProvider.id
+        : null,
+    worker_id:
+      selectedProvider.kind === 'worker'
+        ? selectedProvider.id
+        : null,
+    match_rank: 1,
+    city_match: normalizeText(selectedProvider.city).includes(
+      normalizeText(city)
+    ),
+    service_match: selectedProvider.categoryIds.includes(
+      selectedRequestCategory.id
+    ),
+    status: 'pending',
+    provider_seen: false,
+    client_seen: false,
+  });
 
-    const matchRows = providersToNotify.slice(0, 12).map((provider, index) => ({
+if (matchError) {
+  console.error('SERVICE REQUEST MATCH ERROR:', matchError);
+
+  setCancelMessage(
+    `تم حفظ الطلب، لكن تعذر ربطه بالمزود: ${matchError.message}`
+  );
+
+  setSubmittedRequestId(requestData.id);
+  setSubmitting(false);
+  return;
+}
+
+if (!selectedProvider.userId) {
+  setCancelMessage(
+    'The request was saved, but the provider account could not receive a notification.'
+  );
+
+  setSubmittedRequestId(requestData.id);
+  setSubmitting(false);
+  return;
+}
+
+const providerTargetUrl =
+  selectedProvider.kind === 'company'
+    ? '/dashboard/company/messages'
+    : '/dashboard/worker/requests';
+
+const notificationCreated =
+  await createSendioNotification(supabase, {
+    recipientId: selectedProvider.userId,
+    actorId: user.id,
+    recipientType: selectedProvider.kind,
+    eventType:
+      selectedProvider.kind === 'company'
+        ? 'company_service_request_received'
+        : 'worker_service_request_received',
+    sourceTable: 'service_requests',
+    sourceId: requestData.id,
+    title: 'New service request',
+    body: `${selectedRequestCategory.name}: ${projectDescription.trim()}`,
+    targetUrl: providerTargetUrl,
+    metadata: {
       request_id: requestData.id,
-      provider_type: provider.kind,
-      company_id: provider.kind === 'company' ? provider.id : null,
-      worker_id: provider.kind === 'worker' ? provider.id : null,
-      match_rank: index + 1,
-      city_match: city ? normalizeText(provider.city).includes(normalizeText(city)) : false,
-      service_match: true,
-      status: 'pending',
-    }));
+      provider_type: selectedProvider.kind,
+      provider_id: selectedProvider.id,
+      provider_name: selectedProvider.name,
+      company_id:
+        selectedProvider.kind === 'company'
+          ? selectedProvider.id
+          : null,
+      worker_id:
+        selectedProvider.kind === 'worker'
+          ? selectedProvider.id
+          : null,
+      service_category_id: selectedRequestCategory.id,
+      service_name: selectedRequestCategory.name,
+      service_slug: selectedRequestCategory.slug,
+      client_id: user.id,
+      client_email: contactEmail,
+      client_phone: contactPhone,
+      city: city.trim(),
+    },
+  });
 
-    if (matchRows.length > 0) {
-      const { error: matchesError } = await supabase
-        .from('service_request_matches')
-        .insert(matchRows);
+if (!notificationCreated) {
+  setCancelMessage(
+    'The request was saved, but the floating notification could not be created.'
+  );
+} else {
+  setCancelMessage('');
+}
 
-      if (matchesError) {
-        console.error('SERVICE REQUEST MATCHES ERROR:', matchesError);
-        setCancelMessage(
-          `تم حفظ الطلب، لكن تعذر ربطه بالمزودين: ${matchesError.message}`
-        );
-      } else {
-        setCancelMessage('');
-      }
-    }
-
-    setSubmittedRequestId(requestData.id);
-    setStep(5);
+     setSubmittedRequestId(requestData.id);
     setSubmitting(false);
   }
 
@@ -704,7 +712,6 @@ useEffect(() => {
         <section className="requestShell">
           <h1>Loading service...</h1>
         </section>
-
         <style>{styles}</style>
       </main>
     );
@@ -716,13 +723,11 @@ useEffect(() => {
         <section className="requestShell">
           <h1>Service not found</h1>
           <p>This service is not available on Sendio yet.</p>
-
           <div className="navRow">
             <Link href="/">Home</Link>
             <Link href="/services">Services</Link>
           </div>
         </section>
-
         <style>{styles}</style>
       </main>
     );
@@ -734,7 +739,6 @@ useEffect(() => {
         <Link href="/" className="logo">
           Sendio
         </Link>
-
         <div className="navRow">
           <button type="button" onClick={() => router.back()}>
             Back
@@ -744,128 +748,181 @@ useEffect(() => {
         </div>
       </header>
 
-      <div className="progressBar">
-        <span style={{ width: `${step === 5 ? 100 : (step + 1) * 20}%` }} />
-      </div>
-
-      {step < 5 ? (
-        <section className={selectedProvider ? 'requestShell directShell' : 'requestShell'}>
-          <div className="serviceHead">
-            <span>{getServiceIcon(service)}</span>
-            <p>{service.name}</p>
+      <section className="providerDirectoryShell">
+        <div className="serviceHead directoryServiceHead">
+          <span>{getServiceIcon(service)}</span>
+          <div>
+            <h1>{service.name}</h1>
+            <p>{service.description || 'Choose a linked company or worker before sending your request.'}</p>
           </div>
-        {!selectedProvider && !currentUserId ? (
-  <section className="loginLockBox">
-    <p>
-      Please sign in first. You can browse services, but sending a service
-      request requires a real Sendio account.
-    </p>
+        </div>
 
-    <div className="loginLockActions">
-      <button type="button" className="nextButton" onClick={requestLogin}>
-        Sign in
-      </button>
+        <section className="providerFilters" aria-label="Provider filters">
+          <input
+            value={cityFilter}
+            onChange={(event) => setCityFilter(event.target.value)}
+            placeholder="City, for example Liège"
+            type="search"
+          />
+          <input
+            value={areaFilter}
+            onChange={(event) => setAreaFilter(event.target.value)}
+            placeholder="Area or address, for example Hesbaye"
+            type="search"
+          />
+          <select
+            value={categoryFilter}
+            onChange={(event) => setCategoryFilter(event.target.value)}
+            aria-label="Service type"
+          >
+            <option value="">All related service types</option>
+            {categoryOptions.map((category) => (
+              <option value={category.id} key={category.id}>
+                {category.name}
+              </option>
+            ))}
+          </select>
+          <select
+            value={providerKindFilter}
+            onChange={(event) =>
+              setProviderKindFilter(event.target.value as 'all' | 'company' | 'worker')
+            }
+            aria-label="Provider type"
+          >
+            <option value="all">Companies and workers</option>
+            <option value="company">Companies only</option>
+            <option value="worker">Workers only</option>
+          </select>
+        </section>
 
-      <Link href="/register" className="backButton">
-        Create account
-      </Link>
-    </div>
-  </section>
-) : null}
-          {selectedProvider && currentUserId ? (
+        <div className="providerCountRow">
+          <strong>{filteredProviders.length}</strong>
+          <span>{filteredProviders.length === 1 ? 'linked provider' : 'linked providers'}</span>
+        </div>
+
+        {warning ? <p className="warningBox">{warning}</p> : null}
+
+        <section className="providerSelectionGrid">
+          {filteredProviders.length > 0 ? (
+            filteredProviders.map((provider) => {
+              const providerKey = `${provider.kind}:${provider.id}`;
+              const isSelected = selectedProviderKey === providerKey;
+              const whatsappHref = getWhatsappHref(provider.phone);
+
+              return (
+                <article
+                  className={isSelected ? 'providerChoiceCard providerChoiceCardSelected' : 'providerChoiceCard'}
+                  key={providerKey}
+                >
+                  <Link
+                    href={getProviderHref(provider)}
+                    className="providerChoiceImage"
+                    style={provider.image ? { backgroundImage: `url("${provider.image}")` } : undefined}
+                  >
+                    {!provider.image ? provider.name.charAt(0).toUpperCase() : null}
+                  </Link>
+
+                  <div className="providerChoiceBody">
+                    <div className="providerChoiceTitle">
+                      <Link href={getProviderHref(provider)}>{provider.name}</Link>
+                      <span>{provider.kind === 'company' ? 'Company' : 'Worker'}</span>
+                    </div>
+                    <p>{shortDescription(provider.description)}</p>
+                    <div className="providerChoiceMeta">
+                      <span>{provider.city || 'Area not specified'}</span>
+                      <span>{provider.rating ? `★ ${provider.rating.toFixed(1)}` : 'No rating yet'}</span>
+                      <span>{provider.status}</span>
+                    </div>
+                    <div className="providerCategoryChips">
+                      {provider.categoryNames.map((name) => (
+                        <span key={`${providerKey}-${name}`}>{name}</span>
+                      ))}
+                    </div>
+                    <div className="providerChoiceActions">
+                      <Link href={getProviderHref(provider)} className="backButton">
+                        Open profile
+                      </Link>
+                      <button type="button" className="nextButton" onClick={() => selectProvider(provider)}>
+                        {isSelected ? 'Selected' : 'Choose provider'}
+                      </button>
+                    </div>
+                    <div className="tinyActions">
+                      {provider.phone ? (
+                        currentUserId ? (
+                          <a href={`tel:${cleanPhone(provider.phone)}`} aria-label="Call provider">☎</a>
+                        ) : (
+                          <button type="button" onClick={handleLockedContact} aria-label="Call provider">☎</button>
+                        )
+                      ) : null}
+                      {provider.email ? (
+                        currentUserId ? (
+                          <a href={`mailto:${provider.email}`} aria-label="Email provider">✉</a>
+                        ) : (
+                          <button type="button" onClick={handleLockedContact} aria-label="Email provider">✉</button>
+                        )
+                      ) : null}
+                      {whatsappHref ? (
+                        currentUserId ? (
+                          <a href={whatsappHref} target="_blank" rel="noreferrer" aria-label="Open WhatsApp">●</a>
+                        ) : (
+                          <button type="button" onClick={handleLockedContact} aria-label="Open WhatsApp">●</button>
+                        )
+                      ) : null}
+                    </div>
+                  </div>
+                </article>
+              );
+            })
+          ) : (
+            <div className="emptyResult">
+              <h2>No linked providers match these filters</h2>
+              <p>Remove one filter or choose another related service type.</p>
+            </div>
+          )}
+        </section>
+      </section>
+
+      {selectedProvider ? (
+        <section id="sendio-request-form" className="requestShell directShell selectedRequestShell">
+          {submittedRequestId ? (
+            <section className="requestSuccessBox">
+              <span>{getServiceIcon(selectedRequestCategory)}</span>
+              <h1>Your request was sent.</h1>
+              <p>
+                {selectedRequestCategory?.name} was sent to {selectedProvider.name}. You can follow it from your client page.
+              </p>
+              <div className="successActions">
+                <Link href="/clients" className="nextButton">Open my requests</Link>
+                <button type="button" className="backButton" onClick={cancelRequest}>Cancel request</button>
+              </div>
+              {cancelMessage ? <span className="cancelMessage">{cancelMessage}</span> : null}
+            </section>
+          ) : (
             <section className="directRequestGrid">
               <article className="directPanel providerPanel">
                 <p className="panelLabel">Selected provider</p>
-
                 <div
                   className="directProviderImage"
-                  style={
-                    selectedProvider.image
-                      ? {
-                          backgroundImage: `url("${selectedProvider.image}")`,
-                        }
-                      : undefined
-                  }
+                  style={selectedProvider.image ? { backgroundImage: `url("${selectedProvider.image}")` } : undefined}
                 >
-                  {!selectedProvider.image
-                    ? selectedProvider.name.charAt(0).toUpperCase()
-                    : null}
+                  {!selectedProvider.image ? selectedProvider.name.charAt(0).toUpperCase() : null}
                 </div>
-
                 <div className="providerTitleBlock">
                   <h1>{selectedProvider.name}</h1>
                   <span>{selectedProvider.kind === 'company' ? 'Company' : 'Worker'}</span>
                 </div>
-
                 <div className="providerMetaGrid">
-                  <span>{selectedProvider.city || 'Nearby area'}</span>
+                  <span>{selectedProvider.city || 'Area not specified'}</span>
                   <span>{selectedProvider.status}</span>
-                  <span>{selectedProvider.specialty}</span>
                   <span>{selectedProvider.rating ? `★ ${selectedProvider.rating.toFixed(1)}` : 'No rating yet'}</span>
+                  <span>{selectedProvider.categoryNames.length} service link(s)</span>
                 </div>
-
-                <p className="providerDirectDescription">
-                  {shortDescription(selectedProvider.description)}
-                </p>
-
-                <div className="iconContactRow" aria-label="Provider contact actions">
-                  {selectedProvider.phone ? (
-                    currentUserId ? (
-                      <a href={`tel:${cleanPhone(selectedProvider.phone)}`} aria-label="Call provider">
-                        ☎
-                      </a>
-                    ) : (
-                      <button type="button" onClick={handleLockedContact} aria-label="Call provider">
-                        ☎
-                      </button>
-                    )
-                  ) : null}
-
-                  {getWhatsappHref(selectedProvider.phone) ? (
-                    currentUserId ? (
-                      <a
-                        href={getWhatsappHref(selectedProvider.phone)}
-                        target="_blank"
-                        rel="noreferrer"
-                        aria-label="Open WhatsApp"
-                      >
-                        ◉
-                      </a>
-                    ) : (
-                      <button type="button" onClick={handleLockedContact} aria-label="Open WhatsApp">
-                        ◉
-                      </button>
-                    )
-                  ) : null}
-
-                  {selectedProvider.phone ? (
-                    currentUserId ? (
-                      <a href={`viber://chat?number=${cleanPhone(selectedProvider.phone)}`} aria-label="Open Viber">
-                        V
-                      </a>
-                    ) : (
-                      <button type="button" onClick={handleLockedContact} aria-label="Open Viber">
-                        V
-                      </button>
-                    )
-                  ) : null}
-
-                  {selectedProvider.email ? (
-                    currentUserId ? (
-                      <a href={`mailto:${selectedProvider.email}`} aria-label="Email provider">
-                        ✉
-                      </a>
-                    ) : (
-                      <button type="button" onClick={handleLockedContact} aria-label="Email provider">
-                        ✉
-                      </button>
-                    )
-                  ) : null}
+                <div className="providerCategoryChips providerCategoryChipsLarge">
+                  {selectedProvider.categoryNames.map((name) => <span key={name}>{name}</span>)}
                 </div>
-
-                {!currentUserId ? (
-                  <p className="lockedText">Sign in to request this provider or use contact actions.</p>
-                ) : null}
+                <button type="button" className="backButton changeProviderButton" onClick={clearSelectedProvider}>
+                  Change provider
+                </button>
               </article>
 
               <article className="directPanel clientPanel">
@@ -874,327 +931,73 @@ useEffect(() => {
 
                 {!currentUserId ? (
                   <div className="loginLockBox">
-                    <p>Please sign in first. You can view the provider, but requests and contact actions require a real account.</p>
-
+                    <p>You can browse providers freely. Sign in only when you are ready to send the request.</p>
                     <div className="loginLockActions">
-                      <button type="button" className="nextButton" onClick={requestLogin}>
-                        Sign in
-                      </button>
-
-                      <Link href="/register" className="backButton">
-                        Create account
-                      </Link>
+                      <button type="button" className="nextButton" onClick={requestLogin}>Sign in</button>
+                      <Link href="/register" className="backButton">Create account</Link>
                     </div>
                   </div>
                 ) : (
-                  <>
+                  <form onSubmit={submitProviderRequest} className="providerRequestForm">
+                    <label className="requestServiceField">
+                      <span>Service symbol</span>
+                      <select value={effectiveRequestCategoryId} onChange={(event) => setRequestCategoryId(event.target.value)}>
+                        {selectedProvider.categoryIds.map((categoryId) => {
+                          const category = categoryById.get(categoryId);
+                          return category ? (
+                            <option value={category.id} key={category.id}>{getServiceIcon(category)} {category.name}</option>
+                          ) : null;
+                        })}
+                      </select>
+                    </label>
+
                     <div className="fieldGrid">
                       <input value={street} onChange={(event) => setStreet(event.target.value)} placeholder="Street" />
-                      <input
-                        value={houseNumber}
-                        onChange={(event) => setHouseNumber(event.target.value)}
-                        placeholder="House number"
-                      />
+                      <input value={houseNumber} onChange={(event) => setHouseNumber(event.target.value)} placeholder="House number" />
                       <input value={city} onChange={(event) => setCity(event.target.value)} placeholder="City" />
-                      <input
-                        value={postalCode}
-                        onChange={(event) => setPostalCode(event.target.value)}
-                        placeholder="Postal code"
-                      />
+                      <input value={postalCode} onChange={(event) => setPostalCode(event.target.value)} placeholder="Postal code" />
                     </div>
 
                     <div className="fieldGrid directTimeGrid">
+                      <input value={preferredDate} onChange={(event) => setPreferredDate(event.target.value)} type="date" />
+                      <input value={preferredTime} onChange={(event) => setPreferredTime(event.target.value)} type="time" />
+                      <input value={phone} onChange={(event) => setPhone(event.target.value)} placeholder="Phone optional" />
                       <input
-                        value={phone}
-                        onChange={(event) => setPhone(event.target.value)}
-                        placeholder="Phone optional"
-                      />
-
-                      <input
-                        value={preferredDate}
-                        onChange={(event) => setPreferredDate(event.target.value)}
-                        type="date"
-                      />
-
-                      <select
-                        value={preferredTimeWindow}
-                        onChange={(event) => setPreferredTimeWindow(event.target.value)}
-                      >
-                        <option value="morning">Morning</option>
-                        <option value="afternoon">Afternoon</option>
-                        <option value="evening">Evening</option>
-                        <option value="specific_time">Specific time</option>
-                        <option value="flexible">Flexible</option>
-                      </select>
-
-                      <input
-                        value={preferredTime}
-                        onChange={(event) => setPreferredTime(event.target.value)}
-                        type="time"
+                        value={email}
+                        onChange={(event) => setEmail(event.target.value)}
+                        placeholder={accountEmail ? `Email optional (${accountEmail})` : 'Email optional'}
+                        type="email"
                       />
                     </div>
 
                     <textarea
                       value={projectDescription}
                       onChange={(event) => setProjectDescription(event.target.value)}
-                      placeholder="Requested service details"
+                      placeholder="Describe the requested service"
                       maxLength={2000}
                     />
 
-                    <div className="bottomActions">
-                      <button type="button" className="backButton" onClick={() => router.back()}>
-                        Back
-                      </button>
+                    {warning ? <p className="warningBox">{warning}</p> : null}
 
-                      <button
-                        type="button"
-                        className="nextButton"
-                        onClick={submitDirectProviderRequest}
-                        disabled={submitting}
-                      >
+                    <div className="bottomActions">
+                      <button type="button" className="backButton" onClick={clearSelectedProvider}>Change provider</button>
+                      <button type="submit" className="nextButton" disabled={submitting}>
                         {submitting ? 'Sending request...' : 'Send request'}
                       </button>
                     </div>
-                  </>
+                  </form>
                 )}
               </article>
             </section>
-          ) : null}
-
-          {!selectedProvider && currentUserId && step === 0 ? (
-            <section className="stepBlock">
-              <h1>What type of service do you need?</h1>
-
-              <div className="choiceGrid">
-                {['Home', 'Business'].map((item) => (
-                  <button
-                    type="button"
-                    className={serviceType === item ? 'choiceButton activeChoice' : 'choiceButton'}
-                    onClick={() => setServiceType(item)}
-                    key={item}
-                  >
-                    {item}
-                  </button>
-                ))}
-              </div>
-
-              <div className="choiceGrid smallChoices">
-                {['Indoor', 'Outdoor', 'Both'].map((item) => (
-                  <button
-                    type="button"
-                    className={serviceScope === item ? 'choiceButton activeChoice' : 'choiceButton'}
-                    onClick={() => setServiceScope(item)}
-                    key={item}
-                  >
-                    {item}
-                  </button>
-                ))}
-              </div>
-            </section>
-          ) : null}
-
-          {!selectedProvider && currentUserId && step === 1 ? (
-            <section className="stepBlock">
-              <h1>When do you need this work done?</h1>
-
-              <div className="radioList">
-                {[
-                  ['urgent_1_2_days', 'Urgent: 1–2 days'],
-                  ['within_2_weeks', 'Within 2 weeks'],
-                  ['more_than_2_weeks', 'More than 2 weeks'],
-                  ['not_sure', 'Not sure / planning'],
-                ].map(([value, label]) => (
-                  <button
-                    type="button"
-                    className={urgency === value ? 'radioLine activeRadio' : 'radioLine'}
-                    onClick={() => setUrgency(value)}
-                    key={value}
-                  >
-                    <span />
-                    {label}
-                  </button>
-                ))}
-              </div>
-            </section>
-          ) : null}
-
-          {!selectedProvider && currentUserId && step === 2 ? (
-            <section className="stepBlock">
-              <h1>What is your project address?</h1>
-
-              <div className="fieldGrid">
-                <input value={street} onChange={(event) => setStreet(event.target.value)} placeholder="Street" />
-                <input
-                  value={houseNumber}
-                  onChange={(event) => setHouseNumber(event.target.value)}
-                  placeholder="House number"
-                />
-                <input value={city} onChange={(event) => setCity(event.target.value)} placeholder="City" />
-                <input
-                  value={postalCode}
-                  onChange={(event) => setPostalCode(event.target.value)}
-                  placeholder="Postal code"
-                />
-              </div>
-            </section>
-          ) : null}
-
-          {!selectedProvider && currentUserId && step === 3 ? (
-            <section className="stepBlock">
-              <h1>Please tell us a little about your project.</h1>
-
-              <textarea
-                value={projectDescription}
-                onChange={(event) => setProjectDescription(event.target.value)}
-                placeholder="Tell us in your own words..."
-                maxLength={2000}
-              />
-
-              <div className="fieldGrid">
-                <input
-                  value={preferredDate}
-                  onChange={(event) => setPreferredDate(event.target.value)}
-                  type="date"
-                />
-
-                <select
-                  value={preferredTimeWindow}
-                  onChange={(event) => setPreferredTimeWindow(event.target.value)}
-                >
-                  <option value="morning">Morning</option>
-                  <option value="afternoon">Afternoon</option>
-                  <option value="evening">Evening</option>
-                  <option value="specific_time">Specific time</option>
-                  <option value="flexible">Flexible</option>
-                </select>
-
-                <input
-                  value={preferredTime}
-                  onChange={(event) => setPreferredTime(event.target.value)}
-                  type="time"
-                />
-              </div>
-            </section>
-          ) : null}
-
-          {!selectedProvider && currentUserId && step === 4 ? (
-            <section className="stepBlock">
-              <h1>We have matching providers in your area.</h1>
-              <p className="subText">Add your contact details so providers can respond to your request.</p>
-
-              <div className="fieldGrid">
-                <input
-                  value={firstName}
-                  onChange={(event) => setFirstName(event.target.value)}
-                  placeholder="First name"
-                />
-                <input
-                  value={lastName}
-                  onChange={(event) => setLastName(event.target.value)}
-                  placeholder="Last name"
-                />
-                <input value={phone} onChange={(event) => setPhone(event.target.value)} placeholder="Phone" />
-                <input value={email} onChange={(event) => setEmail(event.target.value)} placeholder="Email" />
-              </div>
-            </section>
-          ) : null}
-
-          {warning ? <p className="warningBox">{warning}</p> : null}
-
-          {!selectedProvider ? (
-            <>
-              <div className="bottomActions">
-                <button type="button" className="backButton" onClick={goBack}>
-                  Back
-                </button>
-
-                <button type="button" className="nextButton" onClick={goNext} disabled={submitting}>
-                  {submitting ? 'Building your request...' : step === 4 ? 'View Matching Providers' : 'Next'}
-                </button>
-              </div>
-
-              <button
-                type="button"
-                className="tinyCancelButton"
-                onClick={() => router.push('/services')}
-              >
-                
-              </button>
-            </>
-          ) : null}
+          )}
         </section>
-      ) : (
-        <section className="resultShell">
-          <div className="resultHead">
-            <h1>Your request was sent.</h1>
-            <p>Closest matching providers are shown first. Providers can accept or decline your request.</p>
-
-            <button type="button" className="tinyCancel" onClick={cancelRequest}>
-              Cancel request
-            </button>
-
-            {cancelMessage ? <span className="cancelMessage">{cancelMessage}</span> : null}
-          </div>
-
-          <div className="providerGrid">
-            {closestProviders.length > 0 ? (
-              closestProviders.map((provider) => {
-                const whatsappHref = getWhatsappHref(provider.phone);
-
-                return (
-                  <article className="providerCard" key={`${provider.kind}-${provider.id}`}>
-                    <Link
-                      href={getProviderHref(provider)}
-                      className="providerImage"
-                      style={
-                        provider.image
-                          ? {
-                              backgroundImage: `url("${provider.image}")`,
-                            }
-                          : undefined
-                      }
-                    >
-                      {!provider.image ? provider.name.charAt(0).toUpperCase() : null}
-                    </Link>
-
-                    <div className="providerInfo">
-                      <Link href={getProviderHref(provider)} className="providerName">
-                        {provider.name}
-                      </Link>
-
-                      <p>{provider.specialty}</p>
-                      <span>{provider.city || 'Nearby area'}</span>
-                      <span>{provider.status}</span>
-                      <span>{provider.rating ? `★ ${provider.rating.toFixed(1)}` : 'No rating yet'}</span>
-                      <small>{shortDescription(provider.description)}</small>
-
-                      <div className="tinyActions">
-                        {provider.phone ? <a href={`tel:${cleanPhone(provider.phone)}`}>☎</a> : null}
-                        {provider.email ? <a href={`mailto:${provider.email}`}>✉</a> : null}
-                        {whatsappHref ? (
-                          <a href={whatsappHref} target="_blank" rel="noreferrer">
-                            ●
-                          </a>
-                        ) : null}
-                      </div>
-                    </div>
-                  </article>
-                );
-              })
-            ) : (
-              <div className="emptyResult">
-                <h2>No matching providers yet</h2>
-                <p>Your request was saved. Sendio can show providers here when they join this service.</p>
-              </div>
-            )}
-          </div>
-        </section>
-      )}
+      ) : null}
 
       <style>{styles}</style>
     </main>
   );
 }
+
 
 const styles = `
   .requestPage {
@@ -1769,4 +1572,274 @@ const styles = `
       min-height: 88px;
     }
   }
+
+
+  .providerDirectoryShell {
+    width: min(1160px, calc(100% - 32px));
+    margin: 34px auto 54px;
+  }
+
+  .directoryServiceHead {
+    justify-content: flex-start;
+    align-items: flex-start;
+    border: 1px solid var(--sendio-border);
+    border-radius: 18px;
+    background: var(--sendio-card-bg);
+    padding: 18px;
+  }
+
+  .directoryServiceHead h1 {
+    margin: 0;
+    font-size: clamp(27px, 5vw, 42px);
+    line-height: 1.05;
+    letter-spacing: -0.04em;
+  }
+
+  .directoryServiceHead p {
+    margin: 8px 0 0;
+    color: var(--sendio-muted);
+    font-size: 13px;
+    line-height: 1.5;
+  }
+
+  .providerFilters {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 10px;
+    margin: 18px 0 12px;
+  }
+
+  .providerCountRow {
+    display: flex;
+    align-items: baseline;
+    gap: 7px;
+    color: var(--sendio-muted);
+    font-size: 13px;
+    font-weight: 800;
+  }
+
+  .providerCountRow strong {
+    color: var(--sendio-text);
+    font-size: 22px;
+  }
+
+  .providerSelectionGrid {
+    margin-top: 18px;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 14px;
+  }
+
+  .providerChoiceCard {
+    display: grid;
+    grid-template-columns: 142px minmax(0, 1fr);
+    gap: 13px;
+    border: 1px solid var(--sendio-border);
+    border-radius: 16px;
+    background: var(--sendio-card-bg);
+    padding: 11px;
+    transition: border-color 0.18s ease, transform 0.18s ease;
+  }
+
+  .providerChoiceCard:hover,
+  .providerChoiceCardSelected {
+    border-color: var(--sendio-button-bg);
+    transform: translateY(-1px);
+  }
+
+  .providerChoiceImage {
+    min-height: 152px;
+    border-radius: 13px;
+    background-color: var(--sendio-rectangle-bg);
+    background-size: cover;
+    background-position: center;
+    color: var(--sendio-button-bg);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-decoration: none;
+    font-size: 40px;
+    font-weight: 950;
+  }
+
+  .providerChoiceBody {
+    min-width: 0;
+    display: grid;
+    align-content: start;
+    gap: 8px;
+  }
+
+  .providerChoiceTitle {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 9px;
+  }
+
+  .providerChoiceTitle a {
+    color: var(--sendio-text);
+    text-decoration: none;
+    font-size: 17px;
+    font-weight: 950;
+  }
+
+  .providerChoiceTitle span {
+    border: 1px solid var(--sendio-border);
+    border-radius: 999px;
+    background: var(--sendio-rectangle-bg);
+    padding: 5px 8px;
+    font-size: 10px;
+    font-weight: 900;
+  }
+
+  .providerChoiceBody > p {
+    margin: 0;
+    color: var(--sendio-muted);
+    font-size: 12px;
+    line-height: 1.45;
+    font-weight: 700;
+  }
+
+  .providerChoiceMeta,
+  .providerCategoryChips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  .providerChoiceMeta span,
+  .providerCategoryChips span {
+    border: 1px solid var(--sendio-border);
+    border-radius: 999px;
+    background: var(--sendio-rectangle-bg);
+    color: var(--sendio-muted);
+    padding: 5px 8px;
+    font-size: 10px;
+    font-weight: 800;
+  }
+
+  .providerCategoryChips span {
+    color: var(--sendio-text);
+  }
+
+  .providerChoiceActions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+
+  .providerChoiceActions .backButton,
+  .providerChoiceActions .nextButton {
+    min-height: 36px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    text-decoration: none;
+    font-size: 11px;
+  }
+
+  .tinyActions button {
+    width: 24px;
+    height: 24px;
+    border: 0;
+    border-radius: 50%;
+    background: var(--sendio-button-bg);
+    color: var(--sendio-text);
+    font-size: 11px;
+    font-weight: 950;
+    cursor: pointer;
+  }
+
+  .selectedRequestShell {
+    scroll-margin-top: 20px;
+  }
+
+  .providerCategoryChipsLarge {
+    margin-top: 14px;
+  }
+
+  .changeProviderButton {
+    width: 100%;
+    margin-top: 16px;
+  }
+
+  .providerRequestForm {
+    display: grid;
+    gap: 12px;
+  }
+
+  .requestServiceField {
+    display: grid;
+    gap: 7px;
+  }
+
+  .requestServiceField > span {
+    color: var(--sendio-muted);
+    font-size: 11px;
+    font-weight: 900;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+  }
+
+  .requestSuccessBox {
+    border: 1px solid var(--sendio-border);
+    border-radius: 18px;
+    background: var(--sendio-card-bg);
+    padding: 28px;
+    text-align: center;
+  }
+
+  .requestSuccessBox > span {
+    font-size: 42px;
+  }
+
+  .requestSuccessBox h1 {
+    margin: 12px 0 8px;
+  }
+
+  .requestSuccessBox p {
+    color: var(--sendio-muted);
+    line-height: 1.5;
+  }
+
+  .successActions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    margin-top: 18px;
+  }
+
+  .successActions a,
+  .successActions button {
+    min-height: 46px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    text-decoration: none;
+  }
+
+  @media (max-width: 900px) {
+    .providerFilters,
+    .providerSelectionGrid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+  }
+
+  @media (max-width: 620px) {
+    .providerFilters,
+    .providerSelectionGrid,
+    .providerChoiceActions,
+    .successActions {
+      grid-template-columns: 1fr;
+    }
+
+    .providerChoiceCard {
+      grid-template-columns: 96px minmax(0, 1fr);
+    }
+
+    .providerChoiceImage {
+      min-height: 112px;
+    }
+  }
+
 `;

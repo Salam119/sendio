@@ -20,6 +20,7 @@ export type SendioNotification = {
   target_url: string;
   metadata: Record<string, unknown>;
   is_seen: boolean;
+  is_archived: boolean | null;
   seen_at: string | null;
   created_at: string;
 };
@@ -52,66 +53,77 @@ const CONTACT_OPENED_REVERSE_EVENTS: Record<
     body: 'The company opened your Sendio message.',
     targetUrl: '/clients',
   },
+
   company_contact_email: {
     eventType: 'client_company_email_opened',
     title: 'Your email contact was opened',
     body: 'The company opened your email contact.',
     targetUrl: '/clients',
   },
+
   company_contact_phone: {
     eventType: 'client_company_phone_opened',
     title: 'Your phone contact was viewed',
     body: 'The company viewed your phone contact.',
     targetUrl: '/clients',
   },
+
   company_contact_whatsapp: {
     eventType: 'client_company_whatsapp_opened',
     title: 'Your WhatsApp contact was viewed',
     body: 'The company viewed your WhatsApp contact.',
     targetUrl: '/clients',
   },
+
   company_contact_social: {
     eventType: 'client_company_social_opened',
     title: 'Your social contact was viewed',
     body: 'The company opened your social contact.',
     targetUrl: '/clients',
   },
+
   worker_contact_message: {
     eventType: 'client_worker_message_opened',
     title: 'Your message was opened',
     body: 'The worker opened your Sendio message.',
     targetUrl: '/clients',
   },
+
   worker_contact_email: {
     eventType: 'client_worker_email_opened',
     title: 'Your email contact was opened',
     body: 'The worker opened your email contact.',
     targetUrl: '/clients',
   },
+
   worker_contact_phone: {
     eventType: 'client_worker_phone_opened',
     title: 'Your phone contact was viewed',
     body: 'The worker viewed your phone contact.',
     targetUrl: '/clients',
   },
+
   worker_contact_whatsapp: {
     eventType: 'client_worker_whatsapp_opened',
     title: 'Your WhatsApp contact was viewed',
     body: 'The worker viewed your WhatsApp contact.',
     targetUrl: '/clients',
   },
+
   worker_contact_social: {
     eventType: 'client_worker_social_opened',
     title: 'Your social contact was viewed',
     body: 'The worker opened your social contact.',
     targetUrl: '/clients',
   },
+
   company_service_request_received: {
     eventType: 'client_company_service_request_opened',
     title: 'Your service request was opened',
     body: 'The company opened your service request.',
     targetUrl: '/clients',
   },
+
   worker_service_request_received: {
     eventType: 'client_worker_service_request_opened',
     title: 'Your service request was opened',
@@ -119,6 +131,120 @@ const CONTACT_OPENED_REVERSE_EVENTS: Record<
     targetUrl: '/clients',
   },
 };
+
+const IGNORED_EXACT_CONTACT_EVENTS = new Set([
+  'contact_click',
+
+  'company_contact_phone',
+  'company_contact_whatsapp',
+  'company_contact_social',
+
+  'worker_contact_phone',
+  'worker_contact_whatsapp',
+  'worker_contact_social',
+]);
+
+export function isImportantFloatingSendioNotification(
+  notification: SendioNotification
+) {
+  const eventType = String(notification.event_type ?? '')
+    .trim()
+    .toLowerCase();
+
+  if (!eventType) {
+    return false;
+  }
+
+  if (notification.is_seen) {
+    return false;
+  }
+
+  if (notification.is_archived === true) {
+    return false;
+  }
+
+  /*
+   * Email notifications are important.
+   * This includes email contact and email-opened notifications.
+   */
+  if (eventType.includes('email')) {
+    return true;
+  }
+
+  /*
+   * Written messages are important.
+   * This includes Sendio messages, WhatsApp messages,
+   * SMS messages, phone-written messages and social messages.
+   *
+   * Message-opened notifications also remain visible.
+   */
+  if (
+    eventType.includes('message') ||
+    eventType.includes('sms')
+  ) {
+    return true;
+  }
+
+  /*
+   * Hide only contact clicks that do not confirm
+   * that a written message was sent.
+   */
+  if (IGNORED_EXACT_CONTACT_EVENTS.has(eventType)) {
+    return false;
+  }
+
+  if (eventType.includes('contact_click')) {
+    return false;
+  }
+
+  /*
+   * Hide calls and opening external contact methods.
+   */
+  const isIgnoredContactActivity =
+    eventType.includes('phone_opened') ||
+    eventType.includes('whatsapp_opened') ||
+    eventType.includes('social_opened') ||
+    eventType.includes('website_opened') ||
+    eventType.includes('map_opened') ||
+    eventType.includes('maps_opened') ||
+    eventType.includes('call_opened');
+
+  if (isIgnoredContactActivity) {
+    return false;
+  }
+
+  /*
+   * Keep every other real unread notification visible.
+   *
+   * This preserves:
+   * - new service requests
+   * - accepted requests
+   * - declined requests
+   * - cancelled requests
+   * - request status changes
+   * - service request opened notifications
+   * - account and administration notifications
+   */
+  return true;
+}
+
+export function getSendioNotificationTargetUrl(
+  notification: SendioNotification
+) {
+  if (notification.recipient_type === 'client') {
+    return '/clients';
+  }
+
+  if (notification.recipient_type === 'company') {
+    return '/dashboard/company/messages';
+  }
+
+  if (notification.recipient_type === 'worker') {
+    return '/dashboard/worker/requests';
+  }
+
+  return notification.target_url || '/';
+}
 
 export async function createSendioNotification(
   supabase: SupabaseClient,
@@ -139,37 +265,49 @@ export async function createSendioNotification(
     seen_at: null,
   };
 
-    const { error } = await supabase
+  const { error } = await supabase
     .from('sendio_notifications')
     .upsert(payload, {
-      onConflict: 'recipient_id,event_type,source_table,source_id',
+      onConflict:
+        'recipient_id,event_type,source_table,source_id',
       ignoreDuplicates: true,
     });
+
   if (error) {
+    console.error(
+      'SENDIO NOTIFICATION CREATE ERROR:',
+      error
+    );
+
     return false;
   }
 
   return true;
- 
- }
+}
+
 export async function getUnreadSendioNotifications(
   supabase: SupabaseClient,
   userId: string,
   limit = 5
 ) {
+  const fetchLimit = Math.max(limit * 20, 50);
+
   const { data, error } = await supabase
     .from('sendio_notifications')
     .select('*')
     .eq('recipient_id', userId)
     .eq('is_seen', false)
+    .or('is_archived.is.null,is_archived.eq.false')
     .order('created_at', { ascending: false })
-    .limit(limit);
+    .limit(fetchLimit);
 
   if (error) {
     throw error;
   }
 
-  return (data ?? []) as SendioNotification[];
+  return ((data ?? []) as SendioNotification[])
+    .filter(isImportantFloatingSendioNotification)
+    .slice(0, limit);
 }
 
 export async function markSendioNotificationSeen(
@@ -211,7 +349,8 @@ export async function openSendioNotification(
     return null;
   }
 
-  const typedNotification = notification as SendioNotification;
+  const typedNotification =
+    notification as SendioNotification;
 
   await markSendioNotificationSeen(
     supabase,
@@ -225,7 +364,9 @@ export async function openSendioNotification(
     currentUserId
   );
 
-  return typedNotification.target_url;
+  return getSendioNotificationTargetUrl(
+    typedNotification
+  );
 }
 
 async function createReverseClientOpenedNotification(
@@ -233,7 +374,10 @@ async function createReverseClientOpenedNotification(
   notification: SendioNotification,
   openerUserId: string
 ) {
-  const reverseEvent = CONTACT_OPENED_REVERSE_EVENTS[notification.event_type];
+  const reverseEvent =
+    CONTACT_OPENED_REVERSE_EVENTS[
+      notification.event_type
+    ];
 
   if (!reverseEvent) {
     return;
@@ -260,7 +404,8 @@ async function createReverseClientOpenedNotification(
     metadata: {
       opened_from_notification_id: notification.id,
       original_event_type: notification.event_type,
-      original_recipient_type: notification.recipient_type,
+      original_recipient_type:
+        notification.recipient_type,
       ...(notification.metadata ?? {}),
     },
   });
@@ -272,11 +417,15 @@ export function getFloatingNotificationsEnabled() {
   }
 
   return (
-    window.localStorage.getItem('sendio_floating_notifications') !== 'disabled'
+    window.localStorage.getItem(
+      'sendio_floating_notifications'
+    ) !== 'disabled'
   );
 }
 
-export function setFloatingNotificationsEnabled(enabled: boolean) {
+export function setFloatingNotificationsEnabled(
+  enabled: boolean
+) {
   if (typeof window === 'undefined') {
     return;
   }

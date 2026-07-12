@@ -58,6 +58,17 @@ type WorkerService = {
   created_at?: string | null;
 };
 
+type ServiceCategory = {
+  id: string;
+  name: string;
+  icon: string | null;
+  sort_order: number | null;
+};
+
+type WorkerServiceCategoryLink = {
+  service_category_id: string;
+};
+
 type WorkerSkill = {
   id: string;
   worker_id: string;
@@ -154,6 +165,107 @@ type SendioStyle = CSSProperties & {
   '--sendio-border': string;
   '--sendio-accent': string;
 };
+
+
+const SERVICE_CATEGORY_SYMBOLS: Record<string, string> = {
+  ant: '🐜',
+  bath: '🛁',
+  bike: '🚲',
+  blocks: '🧱',
+  box: '📦',
+  boxes: '🗃️',
+  'brick-wall': '🏗️',
+  briefcase: '💼',
+  brush: '🖌️',
+  bug: '🐞',
+  'bug-off': '🚫',
+  building: '🏢',
+  'building-2': '🏬',
+  cabinet: '🗄️',
+  camera: '📷',
+  'chef-hat': '👨‍🍳',
+  chimney: '🏭',
+  construction: '🚧',
+  curtains: '🪟',
+  dishwasher: '🍽️',
+  door: '🚪',
+  droplet: '💧',
+  droplets: '💦',
+  fan: '🌀',
+  fence: '🪵',
+  flame: '🔥',
+  flower: '🌸',
+  grass: '🌱',
+  grid: '▦',
+  'grid-2x2': '▥',
+  gutter: '🌧️',
+  hammer: '🔨',
+  'hard-hat': '⛑️',
+  heat: '♨️',
+  home: '🏠',
+  'home-repair': '🛠️',
+  house: '🏡',
+  key: '🔑',
+  laptop: '💻',
+  layers: '🧽',
+  layout: '🗂️',
+  'layout-panel-top': '🖼️',
+  leaf: '🍃',
+  lightbulb: '💡',
+  lock: '🔒',
+  'map-pin': '📍',
+  mouse: '🖱️',
+  oven: '🍳',
+  package: '🎁',
+  'package-check': '✅',
+  'paint-roller': '🧑‍🎨',
+  paintbrush: '🎨',
+  panel: '🧩',
+  'panel-top': '🪟',
+  pipe: '🚰',
+  plug: '🔌',
+  printer: '🖨️',
+  rain: '🌦️',
+  road: '🛣️',
+  roof: '🏘️',
+  'roof-repair': '🏚️',
+  scissors: '✂️',
+  scroll: '📜',
+  settings: '⚙️',
+  shelves: '📚',
+  shovel: '⛏️',
+  signpost: '🪧',
+  smartphone: '📱',
+  snowflake: '❄️',
+  sofa: '🛋️',
+  sparkles: '✨',
+  spray: '🧴',
+  store: '🏪',
+  sun: '☀️',
+  thermometer: '🌡️',
+  toilet: '🚽',
+  toolbox: '🧰',
+  trash: '🗑️',
+  'trash-2': '♻️',
+  tree: '🌳',
+  truck: '🚚',
+  tv: '📺',
+  warehouse: '🏭',
+  'washing-machine': '🧺',
+  waves: '🌊',
+  wifi: '📶',
+  wind: '🌬️',
+  window: '🪟',
+  wood: '🪵',
+  wrench: '🔧',
+  zap: '⚡',
+};
+
+function getServiceCategorySymbol(icon: string | null) {
+  if (!icon) return '';
+
+  return SERVICE_CATEGORY_SYMBOLS[icon.trim().toLowerCase()] ?? '';
+}
 
 const WORKER_MEDIA_BUCKET = 'worker-media';
 const MAX_ACHIEVEMENT_IMAGES = 4;
@@ -393,6 +505,15 @@ export default function WorkerDashboardPage() {
 
   const [worker, setWorker] = useState<WorkerProfile | null>(null);
   const [services, setServices] = useState<WorkerService[]>([]);
+  const [serviceCategories, setServiceCategories] = useState<ServiceCategory[]>(
+    []
+  );
+  const [selectedServiceCategoryIds, setSelectedServiceCategoryIds] = useState<
+    string[]
+  >([]);
+  const [savingServiceCategoryId, setSavingServiceCategoryId] = useState<
+    string | null
+  >(null);
   const [skills, setSkills] = useState<WorkerSkill[]>([]);
   const [gallery, setGallery] = useState<WorkerGalleryItem[]>([]);
   const [requests, setRequests] = useState<WorkerRequest[]>([]);
@@ -475,6 +596,14 @@ export default function WorkerDashboardPage() {
 
   const latestRequests = requests.slice(0, 3);
   const gallerySlots = Array.from({ length: FREE_GALLERY_ITEMS_LIMIT });
+
+  const selectedServiceCategories = serviceCategories.filter((category) =>
+    selectedServiceCategoryIds.includes(category.id)
+  );
+
+  const availableServiceCategories = serviceCategories.filter(
+    (category) => !selectedServiceCategoryIds.includes(category.id)
+  );
 
   const contactActions = worker
     ? [
@@ -637,6 +766,8 @@ export default function WorkerDashboardPage() {
     if (!workerId) {
       setWorker(null);
       setServices([]);
+      setServiceCategories([]);
+      setSelectedServiceCategoryIds([]);
       setSkills([]);
       setGallery([]);
       setRequests([]);
@@ -666,6 +797,8 @@ export default function WorkerDashboardPage() {
       requestsResult,
       reviewsResult,
       socialLinksResult,
+      serviceCategoriesResult,
+      serviceCategoryLinksResult,
     ] = await Promise.all([
       supabase
         .from('worker_services')
@@ -702,6 +835,20 @@ export default function WorkerDashboardPage() {
         .select('*')
         .eq('worker_id', workerId)
         .maybeSingle(),
+
+      supabase
+        .from('service_categories')
+        .select('id, name, icon, sort_order')
+        .eq('is_active', true)
+        .eq('is_selectable', true)
+        .in('provider_scope', ['worker', 'both'])
+        .order('sort_order', { ascending: true })
+        .order('name', { ascending: true }),
+
+      supabase
+        .from('worker_service_categories')
+        .select('service_category_id')
+        .eq('worker_id', workerId),
     ]);
 
     const typedWorker = workerData as WorkerProfile;
@@ -712,6 +859,27 @@ export default function WorkerDashboardPage() {
     fillEditForm(typedWorker);
 
     setServices((servicesResult.data ?? []) as WorkerService[]);
+
+    if (serviceCategoriesResult.error || serviceCategoryLinksResult.error) {
+      setServiceCategories([]);
+      setSelectedServiceCategoryIds([]);
+      setError(
+        serviceCategoriesResult.error?.message ||
+          serviceCategoryLinksResult.error?.message ||
+          'Service categories could not be loaded.'
+      );
+    } else {
+      setServiceCategories(
+        (serviceCategoriesResult.data ?? []) as ServiceCategory[]
+      );
+      setSelectedServiceCategoryIds(
+        (
+          (serviceCategoryLinksResult.data ??
+            []) as WorkerServiceCategoryLink[]
+        ).map((link) => link.service_category_id)
+      );
+    }
+
     setSkills((skillsResult.data ?? []) as WorkerSkill[]);
     setGallery((galleryResult.data ?? []) as WorkerGalleryItem[]);
     setRequests((requestsResult.data ?? []) as WorkerRequest[]);
@@ -1077,6 +1245,64 @@ export default function WorkerDashboardPage() {
       current.filter((galleryItem) => galleryItem.id !== item.id)
     );
     setNotice('Gallery item deleted successfully.');
+  }
+
+  async function handleSelectServiceCategory(categoryId: string) {
+    if (
+      !worker ||
+      !categoryId ||
+      selectedServiceCategoryIds.includes(categoryId)
+    ) {
+      return;
+    }
+
+    setSavingServiceCategoryId(categoryId);
+    setError(null);
+    setNotice(null);
+
+    const { error: insertError } = await supabase
+      .from('worker_service_categories')
+      .insert({
+        worker_id: worker.id,
+        service_category_id: categoryId,
+        is_primary: false,
+      });
+
+    if (insertError) {
+      setError(insertError.message);
+      setSavingServiceCategoryId(null);
+      return;
+    }
+
+    setSelectedServiceCategoryIds((current) => [...current, categoryId]);
+    setNotice('Service category added.');
+    setSavingServiceCategoryId(null);
+  }
+
+  async function handleRemoveServiceCategory(categoryId: string) {
+    if (!worker) return;
+
+    setSavingServiceCategoryId(categoryId);
+    setError(null);
+    setNotice(null);
+
+    const { error: deleteError } = await supabase
+      .from('worker_service_categories')
+      .delete()
+      .eq('worker_id', worker.id)
+      .eq('service_category_id', categoryId);
+
+    if (deleteError) {
+      setError(deleteError.message);
+      setSavingServiceCategoryId(null);
+      return;
+    }
+
+    setSelectedServiceCategoryIds((current) =>
+      current.filter((currentId) => currentId !== categoryId)
+    );
+    setNotice('Service category removed.');
+    setSavingServiceCategoryId(null);
   }
 
   async function handleAddService(event: FormEvent<HTMLFormElement>) {
@@ -1864,6 +2090,69 @@ export default function WorkerDashboardPage() {
             <p className="mt-1 text-sm font-bold text-slate-600">
               Add real worker services.
             </p>
+
+            <div className="mt-4 flex flex-wrap items-center gap-2">
+              <select
+                value=""
+                onChange={(event) => {
+                  const categoryId = event.target.value;
+
+                  if (categoryId) {
+                    void handleSelectServiceCategory(categoryId);
+                  }
+                }}
+                disabled={
+                  savingServiceCategoryId !== null ||
+                  availableServiceCategories.length === 0
+                }
+                aria-label="Choose service category"
+                className="h-9 max-w-[220px] rounded-full border border-[var(--sendio-border)] bg-white px-3 text-xs font-black text-slate-700 outline-none focus:ring-2 focus:ring-[var(--sendio-button)] disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                <option value="">
+                  {availableServiceCategories.length === 0
+                    ? 'All categories selected'
+                    : 'Choose category'}
+                </option>
+
+                {availableServiceCategories.map((category) => {
+                  const symbol = getServiceCategorySymbol(category.icon);
+
+                  return (
+                    <option key={category.id} value={category.id}>
+                      {symbol ? `${symbol} ` : ''}
+                      {category.name}
+                    </option>
+                  );
+                })}
+              </select>
+
+              {selectedServiceCategories.map((category) => {
+                const symbol = getServiceCategorySymbol(category.icon);
+
+                return (
+                  <span
+                    key={category.id}
+                    className="inline-flex min-h-9 items-center gap-2 rounded-full border border-[var(--sendio-border)] bg-[var(--sendio-soft)] px-3 py-1.5 text-xs font-black text-slate-700"
+                  >
+                    {symbol ? <span aria-hidden="true">{symbol}</span> : null}
+                    <span>{category.name}</span>
+
+                    <button
+                    type="button"
+                    onClick={() =>
+                      void handleRemoveServiceCategory(category.id)
+                    }
+                    disabled={savingServiceCategoryId === category.id}
+                    title={`Remove ${category.name}`}
+                    aria-label={`Remove ${category.name}`}
+                    className="flex h-5 w-5 items-center justify-center rounded-full bg-white text-sm font-black text-red-500 disabled:opacity-50"
+                  >
+                      ×
+                    </button>
+                  </span>
+                );
+              })}
+            </div>
 
             <form onSubmit={handleAddService} className="mt-5 grid gap-2">
               <input

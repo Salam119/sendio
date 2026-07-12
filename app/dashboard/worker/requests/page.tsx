@@ -30,7 +30,10 @@ type WorkerRow = {
 
 type ServiceRequest = {
   id: string;
+  service_category_id: string | null;
   service_name: string | null;
+  service_slug: string | null;
+  selected_worker_id: string | null;
   first_name: string | null;
   last_name: string | null;
   email: string | null;
@@ -46,7 +49,13 @@ type ServiceRequest = {
   urgency: string | null;
   project_description: string | null;
   status: string | null;
+  provider_seen: boolean | null;
+  submitted_at: string | null;
   created_at: string | null;
+  cancelled_reason: string | null;
+  category_name?: string | null;
+  category_slug?: string | null;
+  category_icon?: string | null;
 };
 
 type ServiceRequestMatch = {
@@ -66,10 +75,19 @@ type ServiceRequestMatch = {
   responded_at: string | null;
   created_at: string | null;
   service_requests: ServiceRequest | null;
+  direct_only?: boolean;
 };
 
-type RawServiceRequestMatch = Omit<ServiceRequestMatch, 'service_requests'> & {
-  service_requests: ServiceRequest | ServiceRequest[] | null;
+type ServiceRequestMatchRow = Omit<
+  ServiceRequestMatch,
+  'service_requests' | 'direct_only'
+>;
+
+type ServiceCategoryRow = {
+  id: string;
+  name: string;
+  slug: string;
+  icon: string | null;
 };
 
 type InboxCardKind =
@@ -81,6 +99,44 @@ type InboxCardKind =
   | 'social'
   | 'archived'
   | 'stats';
+
+const SERVICE_ICON_MAP: Record<string, string> = {
+  sparkles: '🧹',
+  home: '🏠',
+  brush: '🎨',
+  building: '🏢',
+  window: '🪟',
+  layers: '🧽',
+  wrench: '🔧',
+  pipe: '🚰',
+  drop: '💧',
+  toilet: '🚽',
+  faucet: '🚰',
+  bulb: '💡',
+  plug: '🔌',
+  fan: '🌀',
+  camera: '📷',
+  paint: '🖌️',
+  truck: '🚚',
+  box: '📦',
+  tree: '🌳',
+  leaf: '🍃',
+  scissors: '✂️',
+  hammer: '🔨',
+  key: '🔑',
+  roof: '🏠',
+  chimney: '🏚️',
+  bug: '🐞',
+  floor: '🧱',
+  tile: '▦',
+  kitchen: '🍽️',
+  water: '💧',
+  cabinet: '🗄️',
+  store: '🏪',
+  phone: '📱',
+  computer: '💻',
+  printer: '🖨️',
+};
 
 function formatDate(value: string | null) {
   if (!value) return 'Unknown time';
@@ -110,6 +166,41 @@ function formatServiceDate(
   if (windowValue) parts.push(windowValue.replaceAll('_', ' '));
 
   return parts.length > 0 ? parts.join(' • ') : 'Flexible time';
+}
+
+function getServiceIcon(icon: string | null | undefined) {
+  const normalizedIcon = icon?.trim().toLowerCase();
+
+  if (!normalizedIcon) {
+    return '🧰';
+  }
+
+  return SERVICE_ICON_MAP[normalizedIcon] ?? '🧰';
+}
+
+function getEffectiveServiceRequestStatus(match: ServiceRequestMatch) {
+  const requestStatus = match.service_requests?.status?.trim().toLowerCase() ?? '';
+  const matchStatus = match.status?.trim().toLowerCase() ?? '';
+
+  if (['cancelled', 'completed'].includes(requestStatus)) {
+    return requestStatus;
+  }
+
+  return matchStatus || requestStatus || 'pending';
+}
+
+function canRespondToServiceRequest(match: ServiceRequestMatch) {
+  return !['cancelled', 'completed'].includes(
+    getEffectiveServiceRequestStatus(match)
+  );
+}
+
+function isServiceRequestUnread(match: ServiceRequestMatch) {
+  if (match.direct_only) {
+    return match.service_requests?.provider_seen === false;
+  }
+
+  return match.provider_seen === false;
 }
 
 function getClientName(request: ServiceRequest | null) {
@@ -318,7 +409,8 @@ export default function WorkerRequestsPage() {
     () =>
       serviceRequests.filter(
         (request) =>
-          request.provider_seen === false && request.status !== 'cancelled'
+          isServiceRequestUnread(request) &&
+          getEffectiveServiceRequestStatus(request) !== 'cancelled'
       ).length,
     [serviceRequests]
   );
@@ -385,90 +477,185 @@ export default function WorkerRequestsPage() {
       }
 
       const selectedWorker = workerData as WorkerRow;
-
       setWorker(selectedWorker);
 
-      const [oldRequestsResult, serviceRequestsResult] = await Promise.all([
-        supabase
-          .from('worker_requests')
-          .select('*')
-          .eq('worker_id', selectedWorker.id)
-          .order('created_at', { ascending: false }),
+      const serviceRequestSelect =
+        'id, service_category_id, service_name, service_slug, selected_worker_id, first_name, last_name, email, phone, city, postal_code, street, house_number, country, preferred_date, preferred_time, preferred_time_window, urgency, project_description, status, provider_seen, submitted_at, created_at, cancelled_reason';
 
-        supabase
-          .from('service_request_matches')
-          .select(
-            `
-            id,
-            request_id,
-            provider_type,
-            company_id,
-            worker_id,
-            match_rank,
-            distance_km,
-            city_match,
-            status,
-            provider_seen,
-            client_seen,
-            provider_response_message,
-            declined_reason,
-            responded_at,
-            created_at,
-            service_requests (
-              id,
-              service_name,
-              first_name,
-              last_name,
-              email,
-              phone,
-              city,
-              postal_code,
-              street,
-              house_number,
-              country,
-              preferred_date,
-              preferred_time,
-              preferred_time_window,
-              urgency,
-              project_description,
-              status,
-              created_at
+      const [oldRequestsResult, matchesResult, selectedRequestsResult] =
+        await Promise.all([
+          supabase
+            .from('worker_requests')
+            .select('*')
+            .eq('worker_id', selectedWorker.id)
+            .order('created_at', { ascending: false }),
+
+          supabase
+            .from('service_request_matches')
+            .select(
+              'id, request_id, provider_type, company_id, worker_id, match_rank, distance_km, city_match, status, provider_seen, client_seen, provider_response_message, declined_reason, responded_at, created_at'
             )
-          `
-          )
-          .eq('worker_id', selectedWorker.id)
-          .order('created_at', { ascending: false }),
-      ]);
+            .eq('provider_type', 'worker')
+            .eq('worker_id', selectedWorker.id)
+            .order('created_at', { ascending: false }),
+
+          supabase
+            .from('service_requests')
+            .select(serviceRequestSelect)
+            .eq('selected_worker_id', selectedWorker.id)
+            .order('created_at', { ascending: false }),
+        ]);
 
       if (!isMounted) return;
 
-      if (oldRequestsResult.error) {
-        setRequests([]);
-        setServiceRequests([]);
-        setPageStatus(oldRequestsResult.error.message);
-        setLoading(false);
-        return;
+      const warningMessages = [
+        oldRequestsResult.error?.message,
+        matchesResult.error?.message,
+        selectedRequestsResult.error?.message,
+      ].filter(Boolean) as string[];
+
+      const legacyRequests =
+        (oldRequestsResult.data ?? []) as WorkerRequest[];
+      const serviceMatches =
+        (matchesResult.data ?? []) as ServiceRequestMatchRow[];
+      const directlySelectedRequests =
+        (selectedRequestsResult.data ?? []) as ServiceRequest[];
+
+      const directRequestIds = new Set(
+        directlySelectedRequests.map((request) => request.id)
+      );
+
+      const matchedRequestIds = serviceMatches
+        .map((match) => match.request_id)
+        .filter(Boolean);
+
+      const missingMatchedRequestIds = Array.from(
+        new Set(
+          matchedRequestIds.filter(
+            (requestId) => !directRequestIds.has(requestId)
+          )
+        )
+      );
+
+      let matchedRequests: ServiceRequest[] = [];
+
+      if (missingMatchedRequestIds.length > 0) {
+        const { data, error } = await supabase
+          .from('service_requests')
+          .select(serviceRequestSelect)
+          .in('id', missingMatchedRequestIds);
+
+        if (!isMounted) return;
+
+        if (error) {
+          warningMessages.push(error.message);
+        } else {
+          matchedRequests = (data ?? []) as ServiceRequest[];
+        }
       }
 
-      if (serviceRequestsResult.error) {
-        setRequests((oldRequestsResult.data ?? []) as WorkerRequest[]);
-        setServiceRequests([]);
-        setPageStatus(serviceRequestsResult.error.message);
-        setLoading(false);
-        return;
+      const requestById = new Map<string, ServiceRequest>();
+
+      [...directlySelectedRequests, ...matchedRequests].forEach((request) => {
+        requestById.set(request.id, request);
+      });
+
+      const allServiceRequests = Array.from(requestById.values());
+      const categoryIds = Array.from(
+        new Set(
+          allServiceRequests
+            .map((request) => request.service_category_id)
+            .filter((categoryId): categoryId is string => Boolean(categoryId))
+        )
+      );
+
+      let categories: ServiceCategoryRow[] = [];
+
+      if (categoryIds.length > 0) {
+        const { data, error } = await supabase
+          .from('service_categories')
+          .select('id, name, slug, icon')
+          .in('id', categoryIds);
+
+        if (!isMounted) return;
+
+        if (error) {
+          warningMessages.push(error.message);
+        } else {
+          categories = (data ?? []) as ServiceCategoryRow[];
+        }
       }
 
-      const normalizedServiceRequests = (
-        (serviceRequestsResult.data ?? []) as unknown as RawServiceRequestMatch[]
-      ).map((item) => ({
-        ...item,
-        service_requests: Array.isArray(item.service_requests)
-          ? item.service_requests[0] ?? null
-          : item.service_requests ?? null,
-      }));
+      const categoryById = new Map(
+        categories.map((category) => [category.id, category])
+      );
+      const matchByRequestId = new Map<string, ServiceRequestMatchRow>();
 
-      setRequests((oldRequestsResult.data ?? []) as WorkerRequest[]);
+      serviceMatches.forEach((match) => {
+        if (!matchByRequestId.has(match.request_id)) {
+          matchByRequestId.set(match.request_id, match);
+        }
+      });
+
+      const normalizedServiceRequests: ServiceRequestMatch[] =
+        allServiceRequests.map((request) => {
+          const category = request.service_category_id
+            ? categoryById.get(request.service_category_id) ?? null
+            : null;
+          const matchedRow = matchByRequestId.get(request.id) ?? null;
+          const enrichedRequest: ServiceRequest = {
+            ...request,
+            category_name: category?.name ?? null,
+            category_slug: category?.slug ?? null,
+            category_icon: category?.icon ?? null,
+          };
+
+          if (matchedRow) {
+            return {
+              ...matchedRow,
+              service_requests: enrichedRequest,
+            };
+          }
+
+          return {
+            id: `direct:${request.id}`,
+            request_id: request.id,
+            provider_type: 'worker',
+            company_id: null,
+            worker_id: selectedWorker.id,
+            match_rank: null,
+            distance_km: null,
+            city_match: null,
+            status: request.status || 'pending',
+            provider_seen: request.provider_seen,
+            client_seen: null,
+            provider_response_message: null,
+            declined_reason: null,
+            responded_at: null,
+            created_at: request.submitted_at || request.created_at,
+            service_requests: enrichedRequest,
+            direct_only: true,
+          };
+        });
+
+      normalizedServiceRequests.sort((first, second) => {
+        const firstTime = first.created_at
+          ? new Date(first.created_at).getTime()
+          : 0;
+        const secondTime = second.created_at
+          ? new Date(second.created_at).getTime()
+          : 0;
+
+        return secondTime - firstTime;
+      });
+
+      setRequests(legacyRequests);
       setServiceRequests(normalizedServiceRequests);
+
+      if (warningMessages.length > 0) {
+        setPageStatus(Array.from(new Set(warningMessages)).join(' • '));
+      }
+
       setLoading(false);
     }
 
@@ -483,32 +670,65 @@ export default function WorkerRequestsPage() {
     matchId: string,
     status: 'viewed' | 'accepted' | 'declined'
   ) {
+    const selectedMatch =
+      serviceRequests.find((request) => request.id === matchId) ?? null;
+    const serviceRequestId = selectedMatch?.request_id ?? '';
+
+    if (
+      !selectedMatch ||
+      !serviceRequestId ||
+      !canRespondToServiceRequest(selectedMatch)
+    ) {
+      return;
+    }
+
     setUpdatingId(matchId);
     setPageStatus(null);
 
-    const updateData =
+    const respondedAt = new Date().toISOString();
+    const matchUpdateData =
       status === 'declined'
         ? {
             status,
             provider_seen: true,
             declined_reason: 'Declined by worker',
-            responded_at: new Date().toISOString(),
+            responded_at: respondedAt,
           }
         : {
             status,
             provider_seen: true,
-            responded_at: new Date().toISOString(),
+            responded_at: respondedAt,
           };
 
-    const { error } = await supabase
-      .from('service_request_matches')
-      .update(updateData)
-      .eq('id', matchId);
+    const matchResult = selectedMatch.direct_only
+      ? { error: null }
+      : await supabase
+          .from('service_request_matches')
+          .update(matchUpdateData)
+          .eq('id', matchId)
+          .eq('worker_id', worker?.id ?? '');
+
+    const requestUpdate =
+      status === 'viewed'
+        ? { provider_seen: true }
+        : {
+            status,
+            provider_seen: true,
+          };
+
+    const requestResult = await supabase
+      .from('service_requests')
+      .update(requestUpdate)
+      .eq('id', serviceRequestId)
+      .eq('selected_worker_id', worker?.id ?? '');
 
     setUpdatingId(null);
 
-    if (error) {
-      setPageStatus(error.message);
+    const errorMessage =
+      matchResult.error?.message || requestResult.error?.message || '';
+
+    if (errorMessage) {
+      setPageStatus(errorMessage);
       return;
     }
 
@@ -519,39 +739,24 @@ export default function WorkerRequestsPage() {
               ...request,
               status,
               provider_seen: true,
-              responded_at: updateData.responded_at,
+              responded_at: respondedAt,
               declined_reason:
                 status === 'declined'
                   ? 'Declined by worker'
                   : request.declined_reason,
+              service_requests: request.service_requests
+                ? {
+                    ...request.service_requests,
+                    status:
+                      status === 'viewed'
+                        ? request.service_requests.status
+                        : status,
+                    provider_seen: true,
+                  }
+                : request.service_requests,
             }
           : request
       )
-    );
-  }
-
-  async function deleteServiceRequestMatch(matchId: string) {
-    const confirmed = window.confirm('Delete this service request from your inbox?');
-
-    if (!confirmed) return;
-
-    setUpdatingId(matchId);
-    setPageStatus(null);
-
-    const { error } = await supabase
-      .from('service_request_matches')
-      .delete()
-      .eq('id', matchId);
-
-    setUpdatingId(null);
-
-    if (error) {
-      setPageStatus(error.message);
-      return;
-    }
-
-    setServiceRequests((currentRequests) =>
-      currentRequests.filter((request) => request.id !== matchId)
     );
   }
 
@@ -603,16 +808,33 @@ export default function WorkerRequestsPage() {
       return;
     }
 
-    const { error: serviceRequestsError } = await supabase
-      .from('service_request_matches')
-      .update({
-        provider_seen: true,
-      })
-      .eq('worker_id', worker.id)
-      .eq('provider_seen', false);
+    const centralRequestIds = serviceRequests
+      .map((request) => request.request_id)
+      .filter(Boolean);
+
+    const [matchesResult, requestsResult] = await Promise.all([
+      supabase
+        .from('service_request_matches')
+        .update({
+          provider_seen: true,
+        })
+        .eq('worker_id', worker.id)
+        .eq('provider_seen', false),
+
+      centralRequestIds.length > 0
+        ? supabase
+            .from('service_requests')
+            .update({ provider_seen: true })
+            .in('id', centralRequestIds)
+            .eq('selected_worker_id', worker.id)
+        : Promise.resolve({ error: null }),
+    ]);
+
+    const serviceRequestsError =
+      matchesResult.error?.message || requestsResult.error?.message || '';
 
     if (serviceRequestsError) {
-      setPageStatus(serviceRequestsError.message);
+      setPageStatus(serviceRequestsError);
       return;
     }
 
@@ -627,6 +849,12 @@ export default function WorkerRequestsPage() {
       currentRequests.map((request) => ({
         ...request,
         provider_seen: true,
+        service_requests: request.service_requests
+          ? {
+              ...request.service_requests,
+              provider_seen: true,
+            }
+          : request.service_requests,
       }))
     );
   }
@@ -720,11 +948,18 @@ export default function WorkerRequestsPage() {
 
   function renderServiceRequestCard(match: ServiceRequestMatch) {
     const request = match.service_requests;
-    const unread = match.provider_seen === false;
+    const unread = isServiceRequestUnread(match);
     const locationUrl = getLocationUrl(request);
     const phoneNumber = cleanPhone(request?.phone);
     const whatsappUrl = getWhatsAppReplyUrl(request?.phone ?? null);
-    const status = match.status || 'pending';
+    const status = getEffectiveServiceRequestStatus(match);
+    const canRespond = canRespondToServiceRequest(match);
+    const serviceName =
+      request?.category_name ||
+      request?.service_name ||
+      'Service request';
+    const serviceSlug = request?.category_slug || request?.service_slug || '';
+    const serviceIcon = getServiceIcon(request?.category_icon);
 
     return (
       <article
@@ -732,22 +967,28 @@ export default function WorkerRequestsPage() {
         className={`inbox-item ${unread ? 'inbox-item-new' : ''}`}
       >
         <div className="item-head">
+          <div className="source-icon">{serviceIcon}</div>
+
           <div>
             <div className="item-title-row">
-              <strong>{request?.service_name || 'Service request'}</strong>
+              <strong>{serviceName}</strong>
               {unread ? <span className="badge badge-new">New</span> : null}
-              <span className="badge">{status}</span>
+              <span className="badge">{status.replaceAll('_', ' ')}</span>
             </div>
 
             <p>{getClientName(request)}</p>
-            <small>{formatDate(match.created_at)}</small>
+            <small>
+              {formatDate(
+                request?.submitted_at || match.created_at || request?.created_at || null
+              )}
+            </small>
           </div>
         </div>
 
         <div className="service-details">
           <div>
-            <span>Address</span>
-            <strong>{getRequestAddress(request) || 'No address provided'}</strong>
+            <span>Service</span>
+            <strong>{serviceName}</strong>
           </div>
 
           <div>
@@ -759,6 +1000,11 @@ export default function WorkerRequestsPage() {
                 request?.preferred_time_window ?? null
               )}
             </strong>
+          </div>
+
+          <div className="service-description">
+            <span>Address</span>
+            <strong>{getRequestAddress(request) || 'No address provided'}</strong>
           </div>
 
           <div>
@@ -775,10 +1021,17 @@ export default function WorkerRequestsPage() {
             <span>Project description</span>
             <strong>{request?.project_description || 'No project description.'}</strong>
           </div>
+
+          {request?.cancelled_reason ? (
+            <div className="service-description cancellation-box">
+              <span>Cancellation</span>
+              <strong>{request.cancelled_reason}</strong>
+            </div>
+          ) : null}
         </div>
 
         <div className="action-row">
-          {status !== 'accepted' ? (
+          {canRespond && status !== 'accepted' ? (
             <button
               type="button"
               onClick={() => updateServiceRequestStatus(match.id, 'accepted')}
@@ -789,7 +1042,7 @@ export default function WorkerRequestsPage() {
             </button>
           ) : null}
 
-          {status !== 'declined' ? (
+          {canRespond && status !== 'declined' ? (
             <button
               type="button"
               onClick={() => updateServiceRequestStatus(match.id, 'declined')}
@@ -800,7 +1053,7 @@ export default function WorkerRequestsPage() {
             </button>
           ) : null}
 
-          {status === 'pending' ? (
+          {unread && canRespond ? (
             <button
               type="button"
               onClick={() => updateServiceRequestStatus(match.id, 'viewed')}
@@ -808,6 +1061,10 @@ export default function WorkerRequestsPage() {
             >
               Read
             </button>
+          ) : null}
+
+          {serviceSlug ? (
+            <a href={`/services/${serviceSlug}`}>View service</a>
           ) : null}
 
           {locationUrl ? (
@@ -825,15 +1082,6 @@ export default function WorkerRequestsPage() {
           ) : null}
 
           {request?.email ? <a href={`mailto:${request.email}`}>Email</a> : null}
-
-          <button
-            type="button"
-            onClick={() => deleteServiceRequestMatch(match.id)}
-            disabled={updatingId === match.id}
-            className="action-danger-soft"
-          >
-            Delete
-          </button>
         </div>
       </article>
     );
@@ -1534,6 +1782,19 @@ export default function WorkerRequestsPage() {
 
         .service-description {
           grid-column: 1 / -1;
+        }
+
+        .cancellation-box {
+          border: 1px solid rgba(220, 38, 38, 0.18);
+          border-radius: 14px;
+          background: rgba(220, 38, 38, 0.08);
+          padding: 10px;
+          color: #b91c1c;
+        }
+
+        .cancellation-box span,
+        .cancellation-box strong {
+          color: #b91c1c;
         }
 
         .action-row {

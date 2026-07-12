@@ -3,7 +3,7 @@
 import Image from 'next/image';
 import Link from 'next/link';
 import { useEffect, useState, type FormEvent } from 'react';
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import { createSendioNotification } from '@/lib/notifications';
 type WorkerProfile = {
@@ -37,6 +37,13 @@ type WorkerService = {
   title: string;
   description: string | null;
   price: string | null;
+};
+
+type LinkedServiceCategory = {
+  id: string;
+  name: string;
+  slug: string;
+  sort_order: number | null;
 };
 
 type WorkerSkill = {
@@ -208,43 +215,6 @@ function getMapsUrl(value: string | null) {
   )}`;
 }
 
-function isValidEmail(value: string) {
-  return /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(value.trim());
-}
-
-function getPhoneDigits(value: string) {
-  return value.replace(/\D/g, '');
-}
-
-function isValidPhone(value: string) {
-  const digits = getPhoneDigits(value);
-  return digits.length >= 8 && digits.length <= 15;
-}
-
-function isWeakRequestMessage(value: string) {
-  const cleanValue = value.trim();
-
-  if (cleanValue.length < 6) {
-    return true;
-  }
-
-  const words = cleanValue
-    .split(/\s+/)
-    .filter((word) => word.replace(/[^a-zA-ZÀ-ÿ0-9]/g, '').length >= 2);
-
-  if (words.length < 1) {
-    return true;
-  }
-
-  const compactLetters = cleanValue.replace(/[^a-zA-ZÀ-ÿ]/g, '').toLowerCase();
-
-  if (compactLetters.length >= 5 && /^([a-zà-ÿ])\1+$/.test(compactLetters)) {
-    return true;
-  }
-
-  return false;
-}
-
 function hasText(value: string | number | null | undefined) {
   if (value === null || value === undefined) return false;
 
@@ -340,6 +310,7 @@ function createMediaPreviewLayout(
 
 export default function PublicWorkerProfilePage() {
   const params = useParams();
+  const router = useRouter();
   const slugParam = params?.slug;
   const slug = Array.isArray(slugParam)
     ? slugParam[0]
@@ -347,6 +318,9 @@ export default function PublicWorkerProfilePage() {
 
   const [worker, setWorker] = useState<WorkerProfile | null>(null);
   const [services, setServices] = useState<WorkerService[]>([]);
+  const [linkedServiceCategories, setLinkedServiceCategories] = useState<
+    LinkedServiceCategory[]
+  >([]);
   const [skills, setSkills] = useState<WorkerSkill[]>([]);
   const [gallery, setGallery] = useState<WorkerGalleryItem[]>([]);
   const [socialLinks, setSocialLinks] = useState<WorkerSocialLinks | null>(
@@ -383,18 +357,19 @@ export default function PublicWorkerProfilePage() {
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
 
-  const [requestName, setRequestName] = useState('');
-  const [requestEmail, setRequestEmail] = useState('');
-  const [requestPhone, setRequestPhone] = useState('');
-  const [requestMessage, setRequestMessage] = useState('');
-  const [requestSending, setRequestSending] = useState(false);
-  const [requestStatus, setRequestStatus] = useState<string | null>(null);
+  const [manualServiceCategoryId, setManualServiceCategoryId] = useState('');
 
   const isLoggedIn = Boolean(currentUserId);
 
   const currentUserReview = currentUserId
     ? reviews.find((review) => review.user_id === currentUserId) ?? null
     : null;
+
+  const selectedServiceCategoryId = linkedServiceCategories.some(
+    (category) => category.id === manualServiceCategoryId
+  )
+    ? manualServiceCategoryId
+    : linkedServiceCategories[0]?.id || '';
 
   useEffect(() => {
     let isMounted = true;
@@ -564,6 +539,7 @@ export default function PublicWorkerProfilePage() {
 
       const [
         servicesResult,
+        serviceCategoryLinksResult,
         skillsResult,
         galleryResult,
         socialLinksResult,
@@ -577,6 +553,11 @@ export default function PublicWorkerProfilePage() {
           .select('*')
           .eq('worker_id', selectedWorker.id)
           .order('created_at', { ascending: false }),
+
+        supabase
+          .from('worker_service_categories')
+          .select('service_category_id')
+          .eq('worker_id', selectedWorker.id),
 
         supabase
           .from('worker_skills')
@@ -623,7 +604,39 @@ export default function PublicWorkerProfilePage() {
 
       if (!isMounted) return;
 
+      const linkedServiceCategoryIds = (
+        serviceCategoryLinksResult.data ?? []
+      )
+        .map((row) => row.service_category_id as string)
+        .filter(Boolean);
+
+      let linkedCategoryRows: LinkedServiceCategory[] = [];
+
+      if (linkedServiceCategoryIds.length > 0) {
+        const { data: linkedCategoryData, error: linkedCategoryError } =
+          await supabase
+            .from('service_categories')
+            .select('id, name, slug, sort_order')
+            .in('id', linkedServiceCategoryIds)
+            .eq('is_active', true)
+            .order('sort_order', { ascending: true })
+            .order('name', { ascending: true });
+
+        if (linkedCategoryError) {
+          console.error(
+            'WORKER LINKED SERVICE CATEGORIES ERROR:',
+            linkedCategoryError
+          );
+        } else {
+          linkedCategoryRows =
+            (linkedCategoryData ?? []) as LinkedServiceCategory[];
+        }
+      }
+
+      if (!isMounted) return;
+
       setServices((servicesResult.data ?? []) as WorkerService[]);
+      setLinkedServiceCategories(linkedCategoryRows);
       setSkills((skillsResult.data ?? []) as WorkerSkill[]);
       setGallery((galleryResult.data ?? []) as WorkerGalleryItem[]);
       setSocialLinks(
@@ -878,6 +891,33 @@ export default function PublicWorkerProfilePage() {
     openContactUrl(url);
   }
 
+  function handleOpenServiceRequest() {
+    if (!worker) return;
+
+    if (!currentUserId) {
+      showLockedMessage('Register to request this service.');
+      return;
+    }
+
+    const selectedCategory =
+      linkedServiceCategories.find(
+        (category) => category.id === selectedServiceCategoryId
+      ) ??
+      linkedServiceCategories[0] ??
+      null;
+
+    if (!selectedCategory) {
+      return;
+    }
+
+    const query = new URLSearchParams({
+      providerType: 'worker',
+      providerId: worker.id,
+    });
+
+    router.push(`/services/${selectedCategory.slug}?${query.toString()}`);
+  }
+
   async function refreshWorkerReviews(workerId: string) {
     const [workerResult, reviewsResult] = await Promise.all([
       supabase.from('workers').select('*').eq('id', workerId).maybeSingle(),
@@ -896,122 +936,6 @@ export default function PublicWorkerProfilePage() {
     if (reviewsResult.data) {
       setReviews(reviewsResult.data as WorkerReview[]);
     }
-  }
-
-  async function handleSendRequest(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-
-    if (!worker || requestSending) return;
-
-    if (!currentUserId) {
-      showLockedMessage('Register to request this service.');
-      return;
-    }
-
-    setRequestStatus(null);
-
-    const cleanName = requestName.trim();
-    const cleanEmail = requestEmail.trim().toLowerCase();
-    const cleanPhone = requestPhone.trim();
-    const cleanMessage = requestMessage.trim();
-
-    if (cleanName.length < 2) {
-      setRequestStatus('Please enter your real name.');
-      return;
-    }
-
-    const hasRequestEmail = cleanEmail.length > 0;
-    const hasRequestPhone = cleanPhone.length > 0;
-
-    if (!hasRequestEmail && !hasRequestPhone) {
-      setRequestStatus('Please add either your email or your phone number.');
-      return;
-    }
-
-    if (hasRequestEmail && !isValidEmail(cleanEmail)) {
-      setRequestStatus('Please enter a valid email address or leave it empty.');
-      return;
-    }
-
-    if (hasRequestPhone && !isValidPhone(cleanPhone)) {
-      setRequestStatus(
-        'Please enter a valid phone number with at least 8 digits or leave it empty.'
-      );
-      return;
-    }
-
-    if (isWeakRequestMessage(cleanMessage)) {
-      setRequestStatus('Please describe your request clearly.');
-      return;
-    }
-
-    setRequestSending(true);
-
-    const requestEmailForSave = cleanEmail || currentUserEmail.trim();
-
-    await ensureClientRecord(currentUserId, cleanName, requestEmailForSave);
-
-         const { data, error } = await supabase
-      .from('worker_requests')
-      .insert({
-        worker_id: worker.id,
-        client_id: currentUserId,
-        name: cleanName,
-        email: requestEmailForSave || null,
-        phone: cleanPhone || null,
-        message: cleanMessage,
-        status: 'new',
-        worker_seen: false,
-        admin_seen: false,
-        is_archived: false,
-        moderation_status: 'normal',
-        source_channel: 'sendio',
-        source_url: null,
-        event_type: 'request',
-      })
-      .select('id')
-      .maybeSingle();
-
-    setRequestSending(false);
-
-    if (error || !data) {
-      setRequestStatus(
-        'Request could not be sent. Please try another contact option.'
-      );
-      return;
-    }
-         const insertedRequest = data as WorkerRequestInsertResult;
-
-    await createWorkerContactNotification({
-      requestId: insertedRequest.id,
-      channel: 'sendio',
-      sourceUrl: null,
-      messageBody: cleanMessage,
-      clientName: cleanName,
-      clientEmail: requestEmailForSave,
-    });
-    setWorkerRequestsCount((currentCount) =>
-      typeof currentCount === 'number' ? currentCount + 1 : 1
-    );
-    setWorker((currentWorker) =>
-      currentWorker
-        ? {
-            ...currentWorker,
-            requests_count:
-              typeof currentWorker.requests_count === 'number'
-                ? currentWorker.requests_count + 1
-                : 1,
-          }
-        : currentWorker
-    );
-
-    setRequestName('');
-    setRequestEmail('');
-    setRequestPhone('');
-    setRequestMessage('');
-    setRequestStatus(
-      '✅ Your request was sent successfully. The worker can now see it in their dashboard.'
-    );
   }
 
   async function handleSubmitReview(event: FormEvent<HTMLFormElement>) {
@@ -1468,65 +1392,43 @@ if (loading) {
             </div>
 
             {isLoggedIn ? (
-              <form onSubmit={handleSendRequest} className="request-form mini-request-form">
-                <div className="request-two-fields">
-                  <input
-                    type="text"
-                    value={requestName}
-                    onChange={(event) => {
-                      setRequestName(event.target.value);
-                      setRequestStatus(null);
-                    }}
-                    placeholder="Your name"
-                  />
+              linkedServiceCategories.length > 0 ? (
+                <div className="request-form mini-request-form">
+                  <p className="request-service-hint">
+                    Choose one of this worker&apos;s linked Sendio services.
+                  </p>
 
-                  <input
-                    type="email"
-                    value={requestEmail}
-                    onChange={(event) => {
-                      setRequestEmail(event.target.value);
-                      setRequestStatus(null);
-                    }}
-                    placeholder="Your email (optional)"
-                  />
+                  {linkedServiceCategories.length > 1 ? (
+                    <select
+                      value={selectedServiceCategoryId}
+                      onChange={(event) =>
+                        setManualServiceCategoryId(event.target.value)
+                      }
+                      aria-label="Choose service"
+                    >
+                      {linkedServiceCategories.map((category) => (
+                        <option key={category.id} value={category.id}>
+                          {category.name}
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
+                    <div className="selected-service-category">
+                      {linkedServiceCategories[0]?.name}
+                    </div>
+                  )}
+
+                  <button type="button" onClick={handleOpenServiceRequest}>
+                    Continue to Service Request
+                  </button>
                 </div>
-
-                <input
-                  type="text"
-                  value={requestPhone}
-                  onChange={(event) => {
-                    setRequestPhone(event.target.value);
-                    setRequestStatus(null);
-                  }}
-                  placeholder="Your phone (optional)"
-                />
-
-                <textarea
-                  value={requestMessage}
-                  onChange={(event) => {
-                    setRequestMessage(event.target.value);
-                    setRequestStatus(null);
-                  }}
-                  placeholder="Describe what you need"
-                  rows={3}
-                />
-
-                <button type="submit" disabled={requestSending}>
-                  {requestSending ? 'Sending...' : 'Send Free Request'}
-                </button>
-
-                {requestStatus ? (
-                  <div
-                    className={`request-status-box ${
-                      requestStatus.startsWith('✅')
-                        ? 'request-status-success'
-                        : 'request-status-error'
-                    }`}
-                  >
-                    {requestStatus}
-                  </div>
-                ) : null}
-              </form>
+              ) : (
+                <div className="locked-request-box compact-locked-box">
+                  <p>
+                    This worker has not linked a Sendio service category yet.
+                  </p>
+                </div>
+              )
             ) : (
               <div className="locked-request-box compact-locked-box">
                 <p>Sign in to request this worker for free.</p>
@@ -2494,6 +2396,7 @@ if (loading) {
         }
 
         .request-form input,
+        .request-form select,
         .request-form textarea {
           width: 100%;
           border: 1px solid var(--border);
@@ -2511,9 +2414,31 @@ if (loading) {
         }
 
         .request-form input:focus,
+        .request-form select:focus,
         .request-form textarea:focus {
           border-color: var(--primary-blue);
           background: var(--card-bg);
+        }
+
+        .request-service-hint {
+          margin: 0;
+          color: var(--muted);
+          font-size: 12px;
+          font-weight: 800;
+          line-height: 1.45;
+        }
+
+        .selected-service-category {
+          min-height: 36px;
+          display: flex;
+          align-items: center;
+          padding: 8px 10px;
+          border: 1px solid var(--border);
+          border-radius: 13px;
+          background: var(--soft-card-bg);
+          color: var(--text);
+          font-size: 12px;
+          font-weight: 900;
         }
 
         .request-form button,

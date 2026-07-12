@@ -10,6 +10,7 @@ type RequestStatus = string | null;
 
 type ServiceRequestRow = {
   id: string;
+  service_category_id: string | null;
   service_name: string | null;
   service_slug: string | null;
   client_id: string | null;
@@ -64,6 +65,13 @@ type WorkerRow = {
   status: string | null;
 };
 
+type ServiceCategoryRow = {
+  id: string;
+  name: string;
+  slug: string;
+  icon: string | null;
+};
+
 type ProviderInfo = {
   id: string;
   kind: 'company' | 'worker';
@@ -80,6 +88,7 @@ type ProviderInfo = {
 type ClientRequestItem = ServiceRequestRow & {
   match: ServiceRequestMatchRow | null;
   provider: ProviderInfo | null;
+  category: ServiceCategoryRow | null;
 };
 
 type ClientActivityRow = {
@@ -93,6 +102,54 @@ type ClientActivityRow = {
   is_archived: boolean | null;
   created_at: string;
 };
+
+const SERVICE_ICON_MAP: Record<string, string> = {
+  sparkles: '🧹',
+  home: '🏠',
+  brush: '🎨',
+  building: '🏢',
+  window: '🪟',
+  layers: '🧽',
+  wrench: '🔧',
+  pipe: '🚰',
+  drop: '💧',
+  toilet: '🚽',
+  faucet: '🚰',
+  bulb: '💡',
+  plug: '🔌',
+  fan: '🌀',
+  camera: '📷',
+  paint: '🖌️',
+  truck: '🚚',
+  box: '📦',
+  tree: '🌳',
+  leaf: '🍃',
+  scissors: '✂️',
+  hammer: '🔨',
+  key: '🔑',
+  roof: '🏠',
+  chimney: '🏚️',
+  bug: '🐞',
+  floor: '🧱',
+  tile: '▦',
+  kitchen: '🍽️',
+  water: '💧',
+  cabinet: '🗄️',
+  store: '🏪',
+  phone: '📱',
+  computer: '💻',
+  printer: '🖨️',
+};
+
+function getServiceIcon(category: ServiceCategoryRow | null) {
+  const icon = category?.icon?.trim().toLowerCase();
+
+  if (!icon) {
+    return '🧰';
+  }
+
+  return SERVICE_ICON_MAP[icon] ?? category?.icon ?? '🧰';
+}
 
 function cleanPhone(phone: string | null) {
   return phone?.replace(/[^\d+]/g, '') ?? '';
@@ -191,6 +248,17 @@ function canCancelRequest(request: ClientRequestItem) {
   );
 }
 
+function canReviewRequest(request: ClientRequestItem) {
+  const requestStatus = request.status?.toLowerCase() ?? '';
+  const matchStatus = request.match?.status?.toLowerCase() ?? '';
+
+  return requestStatus.includes('completed') || matchStatus.includes('completed');
+}
+
+function canComplainAboutRequest(request: ClientRequestItem) {
+  return Boolean(request.provider);
+}
+
 export default function ClientsPage() {
   const router = useRouter();
   const [menuOpen, setMenuOpen] = useState(false);
@@ -202,7 +270,13 @@ export default function ClientsPage() {
   const [showArchivedActivities, setShowArchivedActivities] = useState(false);
   const [activityActionId, setActivityActionId] = useState('');
   const [warning, setWarning] = useState('');
+  const [notice, setNotice] = useState('');
   const [cancellingId, setCancellingId] = useState('');
+  const [complaintActionId, setComplaintActionId] = useState('');
+  const [reviewActionId, setReviewActionId] = useState('');
+  const [complaintsSupported, setComplaintsSupported] = useState(false);
+  const [companyVerifiedReviewsSupported, setCompanyVerifiedReviewsSupported] = useState(false);
+  const [workerVerifiedReviewsSupported, setWorkerVerifiedReviewsSupported] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -210,6 +284,7 @@ export default function ClientsPage() {
     async function loadClientRequests() {
       setLoading(true);
       setWarning('');
+      setNotice('');
 
       const { data: userData, error: userError } = await supabase.auth.getUser();
       const user = userData.user;
@@ -234,6 +309,30 @@ export default function ClientsPage() {
       setCurrentUserEmail(user.email ?? '');
       setCurrentUserId(user.id);
 
+      const [
+        complaintsCapability,
+        companyReviewsCapability,
+        workerReviewsCapability,
+      ] = await Promise.all([
+        supabase.from('request_complaints').select('id').limit(1),
+        supabase
+          .from('company_reviews')
+          .select('id, request_id, service_category_id, is_verified')
+          .limit(1),
+        supabase
+          .from('worker_reviews')
+          .select('id, request_id, service_category_id, is_verified')
+          .limit(1),
+      ]);
+
+      if (!active) {
+        return;
+      }
+
+      setComplaintsSupported(!complaintsCapability.error);
+      setCompanyVerifiedReviewsSupported(!companyReviewsCapability.error);
+      setWorkerVerifiedReviewsSupported(!workerReviewsCapability.error);
+
       const { data: activityRows, error: activitiesError } = await supabase
         .from('sendio_notifications')
         .select('id, title, body, event_type, target_url, metadata, is_seen, is_archived, created_at')
@@ -256,7 +355,7 @@ export default function ClientsPage() {
       const { data: requestRows, error: requestError } = await supabase
         .from('service_requests')
         .select(
-          'id, service_name, service_slug, client_id, selected_provider_type, selected_company_id, selected_worker_id, phone, city, postal_code, street, house_number, preferred_date, preferred_time, preferred_time_window, project_description, status, submitted_at, created_at, cancelled_reason'
+          'id, service_category_id, service_name, service_slug, client_id, selected_provider_type, selected_company_id, selected_worker_id, phone, city, postal_code, street, house_number, preferred_date, preferred_time, preferred_time_window, project_description, status, submitted_at, created_at, cancelled_reason'
         )
         .eq('client_id', user.id)
         .order('created_at', { ascending: false })
@@ -306,6 +405,14 @@ export default function ClientsPage() {
         }
       });
 
+      const serviceCategoryIds = Array.from(
+        new Set(
+          safeRequests
+            .map((request) => request.service_category_id)
+            .filter(Boolean) as string[]
+        )
+      );
+
       const companyIds = Array.from(
         new Set(
           safeRequests
@@ -324,7 +431,7 @@ export default function ClientsPage() {
         )
       );
 
-      const [companiesResult, workersResult] = await Promise.all([
+      const [companiesResult, workersResult, categoriesResult] = await Promise.all([
         companyIds.length > 0
           ? supabase
               .from('companies')
@@ -337,6 +444,12 @@ export default function ClientsPage() {
               .select('id, name, slug, avatar, city, phone, email, status')
               .in('id', workerIds)
           : Promise.resolve({ data: [] as WorkerRow[], error: null }),
+        serviceCategoryIds.length > 0
+          ? supabase
+              .from('service_categories')
+              .select('id, name, slug, icon')
+              .in('id', serviceCategoryIds)
+          : Promise.resolve({ data: [] as ServiceCategoryRow[], error: null }),
       ]);
 
       if (!active) {
@@ -351,7 +464,12 @@ export default function ClientsPage() {
         setWarning(workersResult.error.message);
       }
 
+      if (categoriesResult.error) {
+        setWarning(categoriesResult.error.message);
+      }
+
       const companyMap = new Map<string, ProviderInfo>();
+      const categoryMap = new Map<string, ServiceCategoryRow>();
       const workerMap = new Map<string, ProviderInfo>();
 
       ((companiesResult.data ?? []) as CompanyRow[]).forEach((company) => {
@@ -384,6 +502,10 @@ export default function ClientsPage() {
         });
       });
 
+      ((categoriesResult.data ?? []) as ServiceCategoryRow[]).forEach((category) => {
+        categoryMap.set(category.id, category);
+      });
+
       const items = safeRequests.map((request) => {
         const match = matchByRequestId.get(request.id) ?? null;
         const companyId = request.selected_company_id || match?.company_id || '';
@@ -393,6 +515,9 @@ export default function ClientsPage() {
           ...request,
           match,
           provider: companyId ? companyMap.get(companyId) ?? null : workerMap.get(workerId) ?? null,
+          category: request.service_category_id
+            ? categoryMap.get(request.service_category_id) ?? null
+            : null,
         };
       });
 
@@ -464,14 +589,28 @@ export default function ClientsPage() {
       return;
     }
 
+    const optionalReason = window.prompt(
+      'Optional: add a short cancellation reason.',
+      ''
+    );
+
+    if (optionalReason === null) {
+      return;
+    }
+
+    const cancellationReason =
+      optionalReason.trim() ||
+      'Client cancelled the request from the clients page.';
+
     setCancellingId(requestId);
     setWarning('');
+    setNotice('');
 
     const { error: requestError } = await supabase
       .from('service_requests')
       .update({
         status: 'cancelled',
-        cancelled_reason: 'Client cancelled the request from the clients page.',
+        cancelled_reason: cancellationReason,
       })
       .eq('id', requestId)
       .eq('client_id', currentUserId);
@@ -497,14 +636,193 @@ export default function ClientsPage() {
           ? {
               ...request,
               status: 'cancelled',
-              cancelled_reason: 'Client cancelled the request from the clients page.',
-              match: request.match ? { ...request.match, status: 'cancelled' } : request.match,
+              cancelled_reason: cancellationReason,
+              match: request.match
+                ? { ...request.match, status: 'cancelled' }
+                : request.match,
             }
           : request
       )
     );
 
+    setNotice('Your request was cancelled.');
     setCancellingId('');
+  }
+
+  async function submitComplaint(request: ClientRequestItem) {
+    if (
+      !currentUserId ||
+      !request.provider ||
+      !complaintsSupported ||
+      complaintActionId
+    ) {
+      return;
+    }
+
+    const complaintType = window.prompt(
+      'Complaint type, for example: no show, delay, service quality, price, conduct, or other.',
+      'other'
+    );
+
+    if (complaintType === null) {
+      return;
+    }
+
+    const description = window.prompt(
+      'Describe the complaint clearly.',
+      ''
+    );
+
+    if (description === null) {
+      return;
+    }
+
+    const cleanDescription = description.trim();
+
+    if (cleanDescription.length < 10) {
+      setWarning('Please add at least 10 characters describing the complaint.');
+      return;
+    }
+
+    setComplaintActionId(request.id);
+    setWarning('');
+    setNotice('');
+
+    const { data: existingComplaint, error: existingComplaintError } =
+      await supabase
+        .from('request_complaints')
+        .select('id, status')
+        .eq('request_id', request.id)
+        .eq('client_id', currentUserId)
+        .in('status', ['open', 'under_review'])
+        .limit(1)
+        .maybeSingle();
+
+    if (existingComplaintError) {
+      setWarning(existingComplaintError.message);
+      setComplaintActionId('');
+      return;
+    }
+
+    if (existingComplaint) {
+      setWarning('An open complaint already exists for this request.');
+      setComplaintActionId('');
+      return;
+    }
+
+    const { error } = await supabase.from('request_complaints').insert({
+      request_id: request.id,
+      request_source: 'service_requests',
+      client_id: currentUserId,
+      provider_type: request.provider.kind,
+      provider_id: request.provider.id,
+      service_category_id: request.service_category_id,
+      complaint_type: complaintType.trim() || 'other',
+      description: cleanDescription,
+      status: 'open',
+    });
+
+    if (error) {
+      setWarning(error.message);
+      setComplaintActionId('');
+      return;
+    }
+
+    setNotice('Your complaint was submitted to Sendio for review.');
+    setComplaintActionId('');
+  }
+
+  async function submitVerifiedReview(request: ClientRequestItem) {
+    if (!currentUserId || !request.provider || reviewActionId) {
+      return;
+    }
+
+    const supported =
+      request.provider.kind === 'company'
+        ? companyVerifiedReviewsSupported
+        : workerVerifiedReviewsSupported;
+
+    if (!supported) {
+      return;
+    }
+
+    const ratingInput = window.prompt('Rating from 1 to 5.', '5');
+
+    if (ratingInput === null) {
+      return;
+    }
+
+    const rating = Number(ratingInput);
+
+    if (!Number.isInteger(rating) || rating < 1 || rating > 5) {
+      setWarning('Rating must be a whole number from 1 to 5.');
+      return;
+    }
+
+    const commentInput = window.prompt('Optional review comment.', '');
+
+    if (commentInput === null) {
+      return;
+    }
+
+    const table =
+      request.provider.kind === 'company'
+        ? 'company_reviews'
+        : 'worker_reviews';
+
+    setReviewActionId(request.id);
+    setWarning('');
+    setNotice('');
+
+    const { data: existingReview, error: existingReviewError } = await supabase
+      .from(table)
+      .select('id')
+      .eq('request_id', request.id)
+      .eq('user_id', currentUserId)
+      .limit(1)
+      .maybeSingle();
+
+    if (existingReviewError) {
+      setWarning(existingReviewError.message);
+      setReviewActionId('');
+      return;
+    }
+
+    const reviewPayload = {
+      user_name: currentUserEmail.split('@')[0] || 'Sendio Client',
+      rating,
+      comment: commentInput.trim() || null,
+      request_id: request.id,
+      service_category_id: request.service_category_id,
+      is_verified: true,
+    };
+
+    const reviewResult = existingReview
+      ? await supabase
+          .from(table)
+          .update(reviewPayload)
+          .eq('id', existingReview.id)
+          .eq('user_id', currentUserId)
+      : await supabase.from(table).insert({
+          ...(request.provider.kind === 'company'
+            ? { company_id: request.provider.id }
+            : { worker_id: request.provider.id }),
+          user_id: currentUserId,
+          ...reviewPayload,
+        });
+
+    if (reviewResult.error) {
+      setWarning(reviewResult.error.message);
+      setReviewActionId('');
+      return;
+    }
+
+    setNotice(
+      existingReview
+        ? 'Your verified review was updated.'
+        : 'Your verified review was added.'
+    );
+    setReviewActionId('');
   }
 
   function getActivityProviderHref(activity: ClientActivityRow) {
@@ -713,6 +1031,7 @@ export default function ClientsPage() {
       <PlatformNotice compact />
 
       {warning ? <p className="warningBox">{warning}</p> : null}
+      {notice ? <p className="noticeBox">{notice}</p> : null}
 
       {loading ? (
         <section className="section">
@@ -853,12 +1172,31 @@ export default function ClientsPage() {
                   const whatsappHref = provider ? getWhatsappHref(provider.phone) : '';
                   const requestTone = getRequestTone(request.status);
                   const matchTone = getRequestTone(request.match?.status ?? null);
+                  const serviceHref =
+                    request.category?.slug || request.service_slug
+                      ? `/services/${request.category?.slug || request.service_slug}`
+                      : '';
+                  const canUseVerifiedReview =
+                    Boolean(provider) &&
+                    canReviewRequest(request) &&
+                    (provider?.kind === 'company'
+                      ? companyVerifiedReviewsSupported
+                      : workerVerifiedReviewsSupported);
 
                   return (
                     <article className="requestCard" key={request.id}>
                       <div className="requestCardHead">
                         <div>
-                          <p className="serviceName">{request.service_name || 'Service request'}</p>
+                          <p className="serviceName">
+                            <span className="serviceIcon" aria-hidden="true">
+                              {getServiceIcon(request.category)}
+                            </span>
+                            <span>
+                              {request.category?.name ||
+                                request.service_name ||
+                                'Service request'}
+                            </span>
+                          </p>
                           <span className="createdAt">
                             Sent {formatDateTime(request.submitted_at || request.created_at)}
                           </span>
@@ -924,6 +1262,15 @@ export default function ClientsPage() {
                           </div>
 
                           <div>
+                            <span>Service identity</span>
+                            <strong>
+                              {request.category?.name ||
+                                request.service_name ||
+                                'Not available'}
+                            </strong>
+                          </div>
+
+                          <div>
                             <span>Client phone</span>
                             <strong>{request.phone || 'No phone added'}</strong>
                           </div>
@@ -932,12 +1279,19 @@ export default function ClientsPage() {
                             <span>Request details</span>
                             <strong>{request.project_description || 'No description added'}</strong>
                           </div>
+
+                          {request.cancelled_reason ? (
+                            <div>
+                              <span>Cancellation reason</span>
+                              <strong>{request.cancelled_reason}</strong>
+                            </div>
+                          ) : null}
                         </div>
                       </div>
 
                       <div className="cardActions">
-                        {request.service_slug ? (
-                          <Link href={`/services/${request.service_slug}`}>View service</Link>
+                        {serviceHref ? (
+                          <Link href={serviceHref}>View service</Link>
                         ) : null}
 
                         {provider ? <Link href={getProviderHref(provider)}>Open provider</Link> : null}
@@ -958,9 +1312,37 @@ export default function ClientsPage() {
 
                         {provider?.email ? <a href={`mailto:${provider.email}`}>Email</a> : null}
 
+                        {complaintsSupported &&
+                        canComplainAboutRequest(request) ? (
+                          <button
+                            type="button"
+                            className="complaintButton"
+                            onClick={() => submitComplaint(request)}
+                            disabled={complaintActionId === request.id}
+                          >
+                            {complaintActionId === request.id
+                              ? 'Submitting...'
+                              : 'Submit complaint'}
+                          </button>
+                        ) : null}
+
+                        {canUseVerifiedReview ? (
+                          <button
+                            type="button"
+                            className="reviewButton"
+                            onClick={() => submitVerifiedReview(request)}
+                            disabled={reviewActionId === request.id}
+                          >
+                            {reviewActionId === request.id
+                              ? 'Saving...'
+                              : 'Rate provider'}
+                          </button>
+                        ) : null}
+
                         {canCancelRequest(request) ? (
                           <button
                             type="button"
+                            className="cancelButton"
                             onClick={() => cancelRequest(request.id)}
                             disabled={cancellingId === request.id}
                           >
@@ -1037,7 +1419,8 @@ const styles = `
   .hero,
   .section,
   .summaryGrid,
-  .warningBox {
+  .warningBox,
+  .noticeBox {
     max-width: 1120px;
     margin-left: auto;
     margin-right: auto;
@@ -1245,6 +1628,17 @@ const styles = `
     font-weight: 850;
   }
 
+  .noticeBox {
+    margin-top: 18px;
+    border: 1px solid rgba(22, 163, 74, 0.3);
+    background: rgba(22, 163, 74, 0.08);
+    color: #166534;
+    border-radius: 18px;
+    padding: 14px 18px;
+    font-size: 13px;
+    font-weight: 850;
+  }
+
   .section {
     margin-top: 28px;
     background: var(--sendio-card-bg, #ffffff);
@@ -1328,6 +1722,22 @@ const styles = `
     font-size: 21px;
     font-weight: 950;
     letter-spacing: -0.03em;
+    display: inline-flex;
+    align-items: center;
+    gap: 9px;
+  }
+
+  .serviceIcon {
+    width: 34px;
+    height: 34px;
+    border-radius: 12px;
+    border: 1px solid var(--sendio-border, #dbeafe);
+    background: var(--sendio-card-bg, #ffffff);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 auto;
+    font-size: 18px;
   }
 
   .createdAt {
@@ -1486,8 +1896,19 @@ const styles = `
     cursor: pointer;
   }
 
-  .cardActions button {
+  .cardActions .cancelButton {
     background: rgba(220, 38, 38, 0.08);
+    border-color: rgba(220, 38, 38, 0.22);
+  }
+
+  .cardActions .complaintButton {
+    background: rgba(245, 158, 11, 0.1);
+    border-color: rgba(245, 158, 11, 0.28);
+  }
+
+  .cardActions .reviewButton {
+    background: rgba(22, 163, 74, 0.1);
+    border-color: rgba(22, 163, 74, 0.24);
   }
 
   .cardActions button:disabled {

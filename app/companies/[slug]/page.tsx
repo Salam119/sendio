@@ -9,7 +9,7 @@ import {
   type FormEvent,
   type ReactNode,
 } from 'react';
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import {
   FaEnvelope,
   FaFacebookF,
@@ -52,6 +52,13 @@ type CompanyService = {
   company_id: string | null;
   title: string;
   description: string | null;
+};
+
+type LinkedServiceCategory = {
+  id: string;
+  name: string;
+  slug: string;
+  sort_order: number | null;
 };
 
 type CompanyProject = {
@@ -389,6 +396,7 @@ function createMediaPreviewLayout(
 
 export default function PublicCompanyPage() {
   const params = useParams();
+  const router = useRouter();
   const slugParam = params?.slug;
   const slug = Array.isArray(slugParam)
     ? slugParam[0]
@@ -397,6 +405,9 @@ export default function PublicCompanyPage() {
   const [themeIndex, setThemeIndex] = useState(0);
   const [company, setCompany] = useState<Company | null>(null);
   const [services, setServices] = useState<CompanyService[]>([]);
+  const [linkedServiceCategories, setLinkedServiceCategories] = useState<
+    LinkedServiceCategory[]
+  >([]);
   const [projects, setProjects] = useState<CompanyProject[]>([]);
   const [gallery, setGallery] = useState<CompanyGalleryItem[]>([]);
   const [features, setFeatures] = useState<CompanyFeature[]>([]);
@@ -427,14 +438,7 @@ export default function PublicCompanyPage() {
   const [messageSending, setMessageSending] = useState(false);
   const [messageStatus, setMessageStatus] = useState<string | null>(null);
 
-  const [serviceRequestName, setServiceRequestName] = useState('');
-  const [serviceRequestEmail, setServiceRequestEmail] = useState('');
-  const [serviceRequestPhone, setServiceRequestPhone] = useState('');
-  const [serviceRequestText, setServiceRequestText] = useState('');
-  const [serviceRequestSending, setServiceRequestSending] = useState(false);
-  const [serviceRequestStatus, setServiceRequestStatus] = useState<
-    string | null
-  >(null);
+  const [manualServiceCategoryId, setManualServiceCategoryId] = useState('');
 
   const [reviewRating, setReviewRating] = useState(5);
   const [reviewComment, setReviewComment] = useState('');
@@ -450,6 +454,9 @@ export default function PublicCompanyPage() {
   const currentUserReview = currentUser
     ? reviews.find((review) => review.user_id === currentUser.id) ?? null
     : null;
+
+  const selectedServiceCategoryId =
+    manualServiceCategoryId || linkedServiceCategories[0]?.id || '';
 
   useEffect(() => {
     const timer = window.setInterval(() => {
@@ -568,6 +575,7 @@ export default function PublicCompanyPage() {
 
       const [
         servicesResult,
+        serviceCategoryLinksResult,
         projectsResult,
         galleryResult,
         featuresResult,
@@ -583,6 +591,11 @@ export default function PublicCompanyPage() {
           .select('*')
           .eq('company_id', selectedCompany.id)
           .order('title', { ascending: true }),
+
+        supabase
+          .from('company_service_categories')
+          .select('service_category_id')
+          .eq('company_id', selectedCompany.id),
 
         supabase
           .from('company_projects')
@@ -646,6 +659,37 @@ export default function PublicCompanyPage() {
 
       if (!isMounted) return;
 
+      const linkedServiceCategoryIds = (
+        serviceCategoryLinksResult.data ?? []
+      )
+        .map((row) => row.service_category_id as string)
+        .filter(Boolean);
+
+      let linkedCategoryRows: LinkedServiceCategory[] = [];
+
+      if (linkedServiceCategoryIds.length > 0) {
+        const { data: linkedCategoryData, error: linkedCategoryError } =
+          await supabase
+            .from('service_categories')
+            .select('id, name, slug, sort_order')
+            .in('id', linkedServiceCategoryIds)
+            .eq('is_active', true)
+            .order('sort_order', { ascending: true })
+            .order('name', { ascending: true });
+
+        if (linkedCategoryError) {
+          console.error(
+            'COMPANY LINKED SERVICE CATEGORIES ERROR:',
+            linkedCategoryError
+          );
+        } else {
+          linkedCategoryRows =
+            (linkedCategoryData ?? []) as LinkedServiceCategory[];
+        }
+      }
+
+      if (!isMounted) return;
+
       const selectedShowcase =
         (showcaseResult.data?.[0] as CompanyShowcase | undefined) ?? null;
 
@@ -661,6 +705,7 @@ export default function PublicCompanyPage() {
       if (!isMounted) return;
 
       setServices((servicesResult.data ?? []) as CompanyService[]);
+      setLinkedServiceCategories(linkedCategoryRows);
       setProjects((projectsResult.data ?? []) as CompanyProject[]);
       setGallery((galleryResult.data ?? []) as CompanyGalleryItem[]);
       setFeatures((featuresResult.data ?? []) as CompanyFeature[]);
@@ -900,100 +945,31 @@ export default function PublicCompanyPage() {
     );
   }
 
-  async function handleSendServiceRequest(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-
-    if (!company || serviceRequestSending) return;
+  function handleOpenServiceRequest() {
+    if (!company) return;
 
     if (!isLoggedIn || !currentUser) {
       showLockedMessage('Sign in to request a service from this company.');
       return;
     }
 
-    setServiceRequestStatus(null);
+    const selectedCategory =
+      linkedServiceCategories.find(
+        (category) => category.id === selectedServiceCategoryId
+      ) ??
+      linkedServiceCategories[0] ??
+      null;
 
-    const cleanName = serviceRequestName.trim();
-    const cleanEmail = serviceRequestEmail.trim() || currentUser.email?.trim() || '';
-    const cleanPhone = serviceRequestPhone.trim();
-    const cleanMessage = serviceRequestText.trim();
-
-    if (!cleanName || !cleanMessage) {
-      setServiceRequestStatus('Please add your name and request details.');
+    if (!selectedCategory) {
       return;
     }
 
-    if (!cleanEmail && !cleanPhone) {
-      setServiceRequestStatus('Please add your email or phone.');
-      return;
-    }
-
-    setServiceRequestSending(true);
-
-    await ensureClientRecord(currentUser.id, cleanName, cleanEmail || null);
-
-    const serviceName =
-      services[0]?.title || company.category || 'Company service request';
-
-    const requestMessage = [
-      `Service request: ${serviceName}`,
-      '',
-      `Client name: ${cleanName}`,
-      cleanEmail ? `Email: ${cleanEmail}` : null,
-      cleanPhone ? `Phone: ${cleanPhone}` : null,
-      '',
-      'Request details:',
-      cleanMessage,
-    ]
-      .filter(Boolean)
-      .join('\n');
-
-    const { data, error } = await supabase
-      .from('company_messages')
-      .insert({
-        company_id: company.id,
-        client_id: currentUser.id,
-        name: cleanName,
-        email: cleanEmail || getClientContactEmail(),
-        phone: cleanPhone || null,
-        message: requestMessage,
-        status: 'new',
-        request_status: 'new',
-        company_seen: false,
-        admin_seen: false,
-        is_archived: false,
-        moderation_status: 'normal',
-        source_channel: 'sendio_service_request',
-        source_url: null,
-        event_type: 'service_request',
-      })
-      .select('id')
-      .maybeSingle();
-
-    setServiceRequestSending(false);
-
-    if (error || !data) {
-      setServiceRequestStatus(
-        `Service request could not be sent: ${error?.message || 'Unknown error'}`
-      );
-      return;
-    }
-
-    const insertedMessage = data as CompanyMessageInsertResult;
-
-    await createCompanyContactNotification({
-      messageId: insertedMessage.id,
-      sourceChannel: 'sendio_service_request',
-      sourceUrl: null,
-      messageBody: requestMessage,
-      clientName: cleanName,
-      clientEmail: cleanEmail || getClientContactEmail(),
+    const query = new URLSearchParams({
+      providerType: 'company',
+      providerId: company.id,
     });
 
-    setServiceRequestName('');
-    setServiceRequestEmail('');
-    setServiceRequestPhone('');
-    setServiceRequestText('');
-    setServiceRequestStatus('Service request sent successfully.');
+    router.push(`/services/${selectedCategory.slug}?${query.toString()}`);
   }
 
   async function handleSendMessage(event: FormEvent<HTMLFormElement>) {
@@ -1498,54 +1474,43 @@ export default function PublicCompanyPage() {
             <SectionHeading title="Request Service" />
 
             {isLoggedIn ? (
-              <form
-                onSubmit={handleSendServiceRequest}
-                className="service-request-form"
-              >
-                <input
-                  type="text"
-                  value={serviceRequestName}
-                  onChange={(event) =>
-                    setServiceRequestName(event.target.value)
-                  }
-                  placeholder="Your name"
-                />
+              linkedServiceCategories.length > 0 ? (
+                <div className="service-request-form">
+                  <p className="service-request-hint">
+                    Choose one of this company&apos;s linked Sendio services.
+                  </p>
 
-                <input
-                  type="email"
-                  value={serviceRequestEmail}
-                  onChange={(event) =>
-                    setServiceRequestEmail(event.target.value)
-                  }
-                  placeholder="Your email (optional)"
-                />
+                  {linkedServiceCategories.length > 1 ? (
+                    <select
+                      value={selectedServiceCategoryId}
+                      onChange={(event) =>
+                        setManualServiceCategoryId(event.target.value)
+                      }
+                      aria-label="Choose service"
+                    >
+                      {linkedServiceCategories.map((category) => (
+                        <option key={category.id} value={category.id}>
+                          {category.name}
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
+                    <div className="selected-service-category">
+                      {linkedServiceCategories[0]?.name}
+                    </div>
+                  )}
 
-                <input
-                  type="tel"
-                  value={serviceRequestPhone}
-                  onChange={(event) =>
-                    setServiceRequestPhone(event.target.value)
-                  }
-                  placeholder="Your phone (optional)"
-                />
-
-                <textarea
-                  value={serviceRequestText}
-                  onChange={(event) =>
-                    setServiceRequestText(event.target.value)
-                  }
-                  placeholder="Describe what you need"
-                  rows={3}
-                />
-
-                <button type="submit" disabled={serviceRequestSending}>
-                  {serviceRequestSending ? 'Sending...' : 'Send Service Request'}
-                </button>
-
-                {serviceRequestStatus ? (
-                  <p className="status-message">{serviceRequestStatus}</p>
-                ) : null}
-              </form>
+                  <button type="button" onClick={handleOpenServiceRequest}>
+                    Continue to Service Request
+                  </button>
+                </div>
+              ) : (
+                <div className="locked-box">
+                  <p>
+                    This company has not linked a Sendio service category yet.
+                  </p>
+                </div>
+              )
             ) : (
               <div className="locked-box">
                 <p>Sign in to request a service.</p>
@@ -1669,11 +1634,18 @@ export default function PublicCompanyPage() {
             </div>
           </section>
 
-          {services.length > 0 ? (
+          {services.length > 0 || linkedServiceCategories.length > 0 ? (
             <section className="card profile-grid-card">
-              <SectionHeading title="Services" count={services.length} />
+              <SectionHeading
+                title="Services"
+                count={services.length + linkedServiceCategories.length}
+              />
 
               <div className="chips-wrap compact-scroll">
+                {linkedServiceCategories.map((category) => (
+                  <span key={`category-${category.id}`}>{category.name}</span>
+                ))}
+
                 {services.slice(0, 10).map((service) => (
                   <span key={service.id}>{service.title}</span>
                 ))}
@@ -2599,6 +2571,7 @@ const pageStyles = `
   .message-form input,
   .message-form textarea,
   .service-request-form input,
+  .service-request-form select,
   .service-request-form textarea {
     width: 100%;
     min-height: 34px;
@@ -2620,6 +2593,27 @@ const pageStyles = `
     min-height: 72px;
     resize: vertical;
     overflow: auto;
+  }
+
+  .service-request-hint {
+    margin: 0;
+    color: var(--sendio-muted);
+    font-size: 12px;
+    font-weight: 700;
+    line-height: 1.55;
+  }
+
+  .selected-service-category {
+    min-height: 36px;
+    display: flex;
+    align-items: center;
+    padding: 8px 10px;
+    border: 1px solid var(--sendio-border);
+    border-radius: 15px;
+    background: var(--sendio-soft);
+    color: var(--sendio-text);
+    font-size: 12px;
+    font-weight: 900;
   }
 
   .tiny-review-form button[type='submit'],
