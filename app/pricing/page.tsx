@@ -1,10 +1,14 @@
 import Link from 'next/link';
 import PlatformNotice from '@/components/site/PlatformNotice';
-import PageNavigation from '@/components/site/PageNavigation';
 
 export default function PricingPage() {
   return (
     <main className="pricingPage">
+        <div className="pricing-top-navigation">
+      <Link href="/" className="pricing-back-link">
+        Back
+      </Link>
+    </div>
       <section className="hero">
         <p className="eyebrow">PRICING & ADS</p>
 
@@ -29,13 +33,6 @@ export default function PricingPage() {
       </section>
 
       <PlatformNotice compact />
-
-      <PageNavigation
-       backHref="/"
-        backLabel="Back"
-        nextHref="/legal"
-        nextLabel="Legal"
-      />
 
       <section className="section split">
         <article className="panel">
@@ -419,6 +416,25 @@ export default function PricingPage() {
             align-items: flex-start;
           }
         }
+      .pricing-top-navigation {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 14px;
+}
+
+.pricing-back-link {
+  color: #374151;
+  background: transparent;
+  border: 0;
+  padding: 6px 4px;
+  font-size: 14px;
+  font-weight: 800;
+  text-decoration: none;
+}
+
+.pricing-back-link:hover {
+  color: #29b9f3;
+}
       `}</style>
     </main>
   );

@@ -1846,13 +1846,13 @@ export default function HomePage() {
           line-height: 1.4;
           scroll-behavior: smooth;
         }
-
+  
         .container {
-          max-width: 1280px;
-          margin: 0 auto;
-          padding: 0 24px;
+         width: 100%;
+          max-width: none;
+          margin: 0;
+          padding: 0 clamp(16px, 2vw, 32px);
         }
-
         .navbar {
           display: flex;
           justify-content: space-between;

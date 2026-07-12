@@ -1,10 +1,12 @@
 import Link from 'next/link';
 import PlatformNotice from '@/components/site/PlatformNotice';
-import PageNavigation from '@/components/site/PageNavigation';
 
 export default function LegalPage() {
   return (
     <main className="legalPage">
+      <Link href="/" className="legal-home-link">
+       Home
+     </Link>
       <section className="hero">
         <p className="eyebrow">LEGAL & TRUST</p>
 
@@ -29,20 +31,9 @@ export default function LegalPage() {
 
       <PlatformNotice compact />
 
-      <PageNavigation
-        backHref="/pricing"
-        backLabel="Back"
-        nextHref="/"
-        nextLabel="Home"
-      />
-
       <section className="section legalIntro">
         <p>
-          This page provides a practical summary of Sendio platform rules. It is
-          not a replacement for final legal review. Before official public launch,
-          Sendio legal text should be reviewed and adjusted for the countries,
-          payment systems, privacy requirements, and business model used by the
-          platform.
+         This page presents the main legal principles, user responsibilities, privacy standards, and platform rules that govern the use of Sendio. These rules are designed to provide clarity, transparency, and a safe experience for clients, workers, and companies.
         </p>
       </section>
 
@@ -249,18 +240,21 @@ export default function LegalPage() {
       <section className="trustSection">
         <div>
           <p className="sectionLabel light">FINAL REVIEW NEEDED</p>
-          <h2>This page is a launch foundation, not final legal advice.</h2>
+          <h2>Clear legal standards for a trusted Sendio experience.</h2>
 
           <p>
-            Before public production launch, Sendio should review this legal
-            content with a qualified legal professional and connect official
-            contact details, company details, privacy rules, and payment terms
-            through Admin Platform Settings.
+           <p>
+             Sendio is committed to clear legal standards, responsible platform use,
+             transparent communication, and reliable protection for clients, workers,
+             and companies. Official contact details, privacy information, company
+             information, and payment terms are managed through the platform’s legal
+             and administrative settings.
+          </p>
           </p>
         </div>
 
         <Link href="/" className="primaryButton">
-          Back to Home
+           Home
         </Link>
       </section>
 
