@@ -2296,19 +2296,19 @@ export default function HomePage() {
           color: #111827;
         }
 
-        .new-section-wrapper {
-          width: 100%;
-          margin: 26px auto 24px;
-          overflow: hidden;
-        }
+          .new-section-wrapper {
+  width: auto;
+  margin: 26px calc(-1 * clamp(16px, 2vw, 32px)) 24px;
+  overflow: hidden;
+}
 
-        .ads-section {
-          width: 100%;
-          max-width: 980px;
-          overflow: hidden;
-          margin: 0 auto 32px;
-          padding: 4px 0;
-        }
+.ads-section {
+  width: 100%;
+  max-width: none;
+  overflow: hidden;
+  margin: 0 0 32px;
+  padding: 4px 0;
+}
 
         .companies-marquee {
           width: 100%;
