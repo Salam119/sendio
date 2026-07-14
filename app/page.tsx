@@ -3835,7 +3835,7 @@ export default function HomePage() {
             </button>
           </div>
 
-          <div className="hero-stats">
+          <div className="hero-stats" style={{ display: "none" }}>
             <div className="stat-item">
               <span className="stat-number">{formatCount(stats.clients)}</span>
               <br />
