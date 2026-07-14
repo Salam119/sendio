@@ -22,6 +22,28 @@ type RegisterNotice = {
   body?: string;
 };
 
+type ConfirmationPhase = 'idle' | 'waiting' | 'ready' | 'resending';
+
+type ResendFeedback = {
+  type: 'success' | 'error';
+  message: string;
+};
+
+type StoredPendingConfirmation = {
+  email: string;
+  deadline: number;
+};
+
+const CONFIRMATION_WAIT_SECONDS = 3 * 60;
+const CONFIRMATION_WAIT_MS = CONFIRMATION_WAIT_SECONDS * 1000;
+const PENDING_CONFIRMATION_STORAGE_KEY = 'sendio_pending_email_confirmation';
+
+const pendingConfirmationNotice: RegisterNotice = {
+  type: 'pending',
+  title: 'Waiting for email confirmation',
+  body: 'We sent a verification link if this email address is valid. Please check your inbox and Spam/Junk folder. After confirming your email, Sendio will continue from the confirmation link.',
+};
+
 const accountOptions: AccountOption[] = [
   {
     value: 'client',
@@ -119,6 +141,107 @@ function saveAccountTypeNotice(savedType: UserType, requestedType: UserType) {
   );
 }
 
+function getRemainingConfirmationSeconds(deadline: number) {
+  return Math.max(0, Math.ceil((deadline - Date.now()) / 1000));
+}
+
+function formatConfirmationCountdown(totalSeconds: number) {
+  const safeSeconds = Math.max(0, totalSeconds);
+  const minutes = Math.floor(safeSeconds / 60);
+  const seconds = safeSeconds % 60;
+
+  return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+}
+
+function savePendingConfirmation(email: string, deadline: number) {
+  if (typeof window === 'undefined') return;
+
+  const value: StoredPendingConfirmation = { email, deadline };
+
+  window.sessionStorage.setItem(
+    PENDING_CONFIRMATION_STORAGE_KEY,
+    JSON.stringify(value),
+  );
+}
+
+function readPendingConfirmation(): StoredPendingConfirmation | null {
+  if (typeof window === 'undefined') return null;
+
+  const storedValue = window.sessionStorage.getItem(
+    PENDING_CONFIRMATION_STORAGE_KEY,
+  );
+
+  if (!storedValue) return null;
+
+  try {
+    const parsed = JSON.parse(storedValue) as Partial<StoredPendingConfirmation>;
+
+    if (typeof parsed.email !== 'string' || !parsed.email.trim()) {
+      return null;
+    }
+
+    if (typeof parsed.deadline !== 'number') {
+      return null;
+    }
+
+    return {
+      email: parsed.email.trim(),
+      deadline: parsed.deadline,
+    };
+  } catch {
+    return null;
+  }
+}
+
+function clearPendingConfirmation() {
+  if (typeof window === 'undefined') return;
+
+  window.sessionStorage.removeItem(PENDING_CONFIRMATION_STORAGE_KEY);
+}
+
+function getResendErrorMessage(message: string) {
+  const normalizedMessage = message.toLowerCase();
+
+  if (normalizedMessage.includes('rate limit')) {
+    return 'Too many email requests were made. Please wait a few minutes, then try again.';
+  }
+
+  if (normalizedMessage.includes('invalid') && normalizedMessage.includes('email')) {
+    return 'The email address is not valid. Please return and check the address.';
+  }
+
+  return `We could not resend the confirmation email. ${message}`;
+}
+
+function getAccountTypeLabel(value: string | null | undefined) {
+  if (value === 'client') return 'Client';
+  if (value === 'worker') return 'Worker';
+  if (value === 'company') return 'Company';
+
+  return 'Sendio';
+}
+
+function getExistingEmailNotice(
+  existingUserType?: string | null,
+): RegisterNotice {
+  const accountLabel = getAccountTypeLabel(existingUserType);
+
+  return {
+    type: 'error',
+    title: 'This email is already registered.',
+    body:
+      accountLabel === 'Sendio'
+        ? 'Please sign in to your existing account or use a different email address.'
+        : `This email already belongs to a ${accountLabel} account. Please sign in to your existing account or use a different email address.`,
+  };
+}
+
+function isObfuscatedExistingUser(
+  user: { identities?: unknown[] | null } | null | undefined,
+) {
+  return Array.isArray(user?.identities) && user.identities.length === 0;
+}
+
 export default function RegisterPage() {
   const router = useRouter();
 
@@ -126,10 +249,85 @@ export default function RegisterPage() {
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
   const [notice, setNotice] = useState<RegisterNotice | null>(null);
+  const [pendingEmail, setPendingEmail] = useState('');
+  const [confirmationDeadline, setConfirmationDeadline] = useState<number | null>(
+    null,
+  );
+  const [confirmationSeconds, setConfirmationSeconds] = useState(0);
+  const [confirmationPhase, setConfirmationPhase] =
+    useState<ConfirmationPhase>('idle');
+  const [resendFeedback, setResendFeedback] = useState<ResendFeedback | null>(
+    null,
+  );
 
   const selectedAccount = useMemo(() => {
     return accountOptions.find((option) => option.value === userType) ?? null;
   }, [userType]);
+
+  function startConfirmationWait(
+    email: string,
+    feedback: ResendFeedback | null = null,
+  ) {
+    const deadline = Date.now() + CONFIRMATION_WAIT_MS;
+
+    setPendingEmail(email);
+    setConfirmationDeadline(deadline);
+    setConfirmationSeconds(CONFIRMATION_WAIT_SECONDS);
+    setConfirmationPhase('waiting');
+    setResendFeedback(feedback);
+    setNotice({ ...pendingConfirmationNotice });
+    savePendingConfirmation(email, deadline);
+  }
+
+   useEffect(() => {
+   const storedConfirmation = readPendingConfirmation();
+
+  if (!storedConfirmation) return;
+
+   const restoreTimer = window.setTimeout(() => {
+    const remainingSeconds = getRemainingConfirmationSeconds(
+      storedConfirmation.deadline,
+    );
+
+    setPendingEmail(storedConfirmation.email);
+    setConfirmationSeconds(remainingSeconds);
+    setConfirmationPhase(remainingSeconds > 0 ? 'waiting' : 'ready');
+    setConfirmationDeadline(
+      remainingSeconds > 0 ? storedConfirmation.deadline : null,
+    );
+    setNotice({ ...pendingConfirmationNotice });
+  }, 0);
+
+  return () => window.clearTimeout(restoreTimer);
+}, []);
+
+  useEffect(() => {
+    if (notice?.type !== 'pending' || !confirmationDeadline) return;
+
+    const updateCountdown = () => {
+      const remainingSeconds = getRemainingConfirmationSeconds(
+        confirmationDeadline,
+      );
+
+      setConfirmationSeconds(remainingSeconds);
+
+      if (remainingSeconds > 0) return;
+
+      setConfirmationDeadline(null);
+      setConfirmationPhase('ready');
+      setResendFeedback(null);
+
+      if (pendingEmail) {
+        savePendingConfirmation(pendingEmail, 0);
+      }
+    };
+
+    updateCountdown();
+
+    const timer = window.setInterval(updateCountdown, 1000);
+
+    return () => window.clearInterval(timer);
+  }, [confirmationDeadline, notice?.type, pendingEmail]);
 
   useEffect(() => {
     async function redirectSignedInUser() {
@@ -168,6 +366,7 @@ export default function RegisterPage() {
         saveAccountTypeNotice(savedUserType, requestedType);
       }
 
+      clearPendingConfirmation();
       router.replace(getRedirectPath(savedUserType));
     }
 
@@ -222,6 +421,38 @@ export default function RegisterPage() {
     }
   }
 
+  async function handleResendConfirmation() {
+    if (!pendingEmail || confirmationPhase === 'resending') return;
+
+    setConfirmationPhase('resending');
+    setResendFeedback(null);
+
+    const redirectTo = `${window.location.origin}/auth/callback`;
+
+    const { error } = await supabase.auth.resend({
+      type: 'signup',
+      email: pendingEmail,
+      options: {
+        emailRedirectTo: redirectTo,
+      },
+    });
+
+    if (error) {
+      setConfirmationPhase('ready');
+      setResendFeedback({
+        type: 'error',
+        message: getResendErrorMessage(error.message),
+      });
+      return;
+    }
+
+    startConfirmationWait(pendingEmail, {
+      type: 'success',
+      message:
+        'A new confirmation email was sent. Please check your inbox and Spam/Junk folder.',
+    });
+  }
+
   async function handleRegister(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setLoading(true);
@@ -241,7 +472,7 @@ export default function RegisterPage() {
 
     const formData = new FormData(e.currentTarget);
 
-    const email = String(formData.get('email') || '').trim();
+    const email = String(formData.get('email') || '').trim().toLowerCase();
     const password = String(formData.get('password') || '');
     const confirmPassword = String(formData.get('confirmPassword') || '');
     const fullName = String(formData.get('fullName') || '').trim();
@@ -252,6 +483,32 @@ export default function RegisterPage() {
         title: 'Passwords do not match.',
         body: 'Please type the same password in both password fields.',
       });
+      setLoading(false);
+      return;
+    }
+
+    const { data: existingProfile, error: existingProfileError } =
+      await supabase
+        .from('profiles')
+        .select('user_type')
+        .ilike('email', email)
+        .limit(1)
+        .maybeSingle();
+
+    if (existingProfileError) {
+      console.error(
+        'Existing email lookup error:',
+        existingProfileError.message,
+      );
+    }
+
+    if (existingProfile) {
+      clearPendingConfirmation();
+      setNotice(
+        getExistingEmailNotice(
+          (existingProfile as { user_type: string | null }).user_type,
+        ),
+      );
       setLoading(false);
       return;
     }
@@ -271,52 +528,40 @@ export default function RegisterPage() {
     });
 
     if (error) {
-      setNotice({
-        type: 'error',
-        title: error.message,
-        body: 'Please check your email address and try again.',
-      });
+      const normalizedError = error.message.toLowerCase();
+
+      if (
+        normalizedError.includes('already registered') ||
+        normalizedError.includes('already been registered')
+      ) {
+        clearPendingConfirmation();
+        setNotice(getExistingEmailNotice());
+      } else {
+        setNotice({
+          type: 'error',
+          title: error.message,
+          body: 'Please check your email address and try again.',
+        });
+      }
+
       setLoading(false);
       return;
     }
 
-    const userId = data.user?.id;
-
-    if (userId && selectedType === 'company') {
-      const { error: companyError } = await supabase.from('companies').insert([
-        {
-          user_id: userId,
-          name: fullName,
-          email,
-          status: 'available',
-          views: 0,
-          connections: 0,
-          rating: 0,
-          reviews_count: 0,
-        },
-      ]);
-
-      if (companyError) {
-        setNotice({
-          type: 'error',
-          title: companyError.message,
-          body: 'Your account was created, but the company profile could not be prepared.',
-        });
-        setLoading(false);
-        return;
-      }
+    if (isObfuscatedExistingUser(data.user)) {
+      clearPendingConfirmation();
+      setNotice(getExistingEmailNotice());
+      setLoading(false);
+      return;
     }
 
     if (data.session) {
+      clearPendingConfirmation();
       router.replace(getRedirectPath(selectedType));
       return;
     }
 
-    setNotice({
-      type: 'pending',
-      title: 'Waiting for email confirmation',
-      body: 'We sent a verification link if this email address is valid. Please check your inbox and Spam/Junk folder. After confirming your email, Sendio will continue from the confirmation link.',
-    });
+    startConfirmationWait(email);
 
     setLoading(false);
   }
@@ -345,7 +590,19 @@ export default function RegisterPage() {
             }`}
           >
             {notice.type === 'pending' ? (
-              <div className="mx-auto mb-4 h-9 w-9 animate-spin rounded-full border-[3px] border-sky-100 border-t-sky-600" />
+              <div className="relative mx-auto mb-4 h-9 w-9">
+                <div
+                  className={`absolute inset-0 rounded-full border-[3px] border-sky-100 border-t-sky-600 ${
+                    confirmationPhase === 'waiting' ||
+                    confirmationPhase === 'resending'
+                      ? 'animate-spin'
+                      : ''
+                  }`}
+                />
+                <span className="absolute inset-0 flex items-center justify-center text-[7px] font-black tracking-[-0.04em] text-emerald-900 tabular-nums">
+                  {formatConfirmationCountdown(confirmationSeconds)}
+                </span>
+              </div>
             ) : (
               <div className="mx-auto mb-4 flex h-10 w-10 items-center justify-center rounded-full bg-red-500 text-lg font-black text-white">
                 !
@@ -365,9 +622,42 @@ export default function RegisterPage() {
             ) : null}
 
             {notice.type === 'pending' ? (
-              <p className="mt-4 rounded-2xl bg-sky-50 px-3 py-2 text-[10px] font-bold leading-4 text-sky-800">
-                Keep this page open, then confirm your email from the link.
-              </p>
+              <>
+                <p className="mt-4 rounded-2xl bg-sky-50 px-3 py-2 text-[10px] font-bold leading-4 text-sky-800">
+                  Keep this page open, then confirm your email from the link.
+                </p>
+
+                {confirmationPhase === 'ready' ||
+                confirmationPhase === 'resending' ? (
+                  <div className="mt-3">
+                    <p className="text-[10px] font-bold leading-4 text-sky-800">
+                      Didn&apos;t receive the confirmation email?
+                    </p>
+                    <button
+                      type="button"
+                      onClick={handleResendConfirmation}
+                      disabled={confirmationPhase === 'resending'}
+                      className="mt-2 rounded-full bg-sky-600 px-4 py-2 text-xs font-black text-white transition hover:bg-sky-700 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      {confirmationPhase === 'resending'
+                        ? 'Sending again...'
+                        : 'Resend confirmation email'}
+                    </button>
+                  </div>
+                ) : null}
+
+                {resendFeedback ? (
+                  <p
+                    className={`mt-3 text-[10px] font-bold leading-4 ${
+                      resendFeedback.type === 'success'
+                        ? 'text-emerald-800'
+                        : 'text-red-600'
+                    }`}
+                  >
+                    {resendFeedback.message}
+                  </p>
+                ) : null}
+              </>
             ) : (
               <button
                 type="button"
