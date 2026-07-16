@@ -4,7 +4,7 @@ import Image from 'next/image';
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
-
+import TrackedCompanyAdLink from '@/components/TrackedCompanyAdLink';
 type UserProfile = {
   full_name: string | null;
   user_type: 'client' | 'worker' | 'company' | string | null;
@@ -51,6 +51,11 @@ type CompanyAd = {
   cta_text?: string | null;
   target_url?: string | null;
   ad_slot?: CategoryAdSlot | string | null;
+    show_home_slider?: boolean | null;
+  show_home_fixed?: boolean | null;
+  show_services_page?: boolean | null;
+  home_fixed_slot?: CategoryAdSlot | string | null;
+  services_slider_level?: number | null;
   payment_status?:
     | 'unpaid'
     | 'pending'
@@ -88,6 +93,11 @@ type RawCompanyAd = {
   cta_text?: string | null;
   target_url?: string | null;
   ad_slot?: CategoryAdSlot | string | null;
+  show_home_slider?: boolean | null;
+show_home_fixed?: boolean | null;
+show_services_page?: boolean | null;
+home_fixed_slot?: CategoryAdSlot | string | null;
+services_slider_level?: number | null;
   payment_status?:
     | 'unpaid'
     | 'pending'
@@ -663,8 +673,6 @@ function isVideoAd(ad: CompanyAd) {
 function isPublicActiveAd(ad: CompanyAd) {
   if (ad.active !== true) return false;
   if (ad.status && ad.status !== 'active') return false;
-  if (ad.payment_status && ad.payment_status !== 'paid') return false;
-
   const now = new Date();
 
   if (ad.starts_at) {
@@ -686,7 +694,7 @@ function isPublicActiveAd(ad: CompanyAd) {
   return true;
 }
 
-function normalizeCompanyAd(ad: RawCompanyAd): CompanyAd {
+   function normalizeCompanyAd(ad: RawCompanyAd): CompanyAd {
   return {
     id: ad.id,
     company_id: ad.company_id,
@@ -702,6 +710,11 @@ function normalizeCompanyAd(ad: RawCompanyAd): CompanyAd {
     cta_text: ad.cta_text ?? null,
     target_url: ad.target_url ?? null,
     ad_slot: ad.ad_slot ?? null,
+    show_home_slider: ad.show_home_slider ?? false,
+    show_home_fixed: ad.show_home_fixed ?? false,
+    show_services_page: ad.show_services_page ?? false,
+    home_fixed_slot: ad.home_fixed_slot ?? null,
+    services_slider_level: ad.services_slider_level ?? null,
     payment_status: ad.payment_status ?? null,
     status: ad.status ?? null,
     starts_at: ad.starts_at ?? null,
@@ -1177,7 +1190,7 @@ export default function HomePage() {
     return ads.filter(isPublicActiveAd);
   }, [ads]);
 
-  const categoryAdsBySlot = useMemo(() => {
+         const categoryAdsBySlot = useMemo(() => {
     const grouped: Record<CategoryAdSlot, CompanyAd[]> = {
       general: [],
       household: [],
@@ -1186,19 +1199,25 @@ export default function HomePage() {
     };
 
     publicActiveAds.forEach((ad) => {
+      if (ad.show_home_fixed !== true) {
+        return;
+      }
+
+      const fixedSlot =
+        ad.home_fixed_slot ?? ad.ad_slot;
+
       if (
-        ad.ad_slot === 'general' ||
-        ad.ad_slot === 'household' ||
-        ad.ad_slot === 'gardening' ||
-        ad.ad_slot === 'logistics'
+        fixedSlot === 'general' ||
+        fixedSlot === 'household' ||
+        fixedSlot === 'gardening' ||
+        fixedSlot === 'logistics'
       ) {
-        grouped[ad.ad_slot].push(ad);
+        grouped[fixedSlot].push(ad);
       }
     });
 
     return grouped;
   }, [publicActiveAds]);
-
   const marqueeAds = useMemo(() => {
     const sliderOnlyAds = publicActiveAds.filter((ad) => !ad.ad_slot);
 
@@ -1846,7 +1865,7 @@ export default function HomePage() {
           line-height: 1.4;
           scroll-behavior: smooth;
         }
-  
+
         .container {
          width: 100%;
           max-width: none;
@@ -3872,11 +3891,12 @@ export default function HomePage() {
                     const ctaText = ad.cta_text || 'View Company';
 
                     return (
-                      <Link
-                        href={getAdHref(ad)}
-                        className="company-card"
-                        key={`${ad.id}-${index}`}
-                      >
+                              <TrackedCompanyAdLink
+  adId={ad.id}
+  href={getAdHref(ad)}
+  className="company-card"
+  key={`${ad.id}-${index}`}
+>
                         <div className="ad-media">
                           {media && videoAd ? (
                             <video
@@ -3920,7 +3940,7 @@ export default function HomePage() {
                         )}
 
                         <div className="ad-cta">{ctaText}</div>
-                      </Link>
+                         </TrackedCompanyAdLink>
                     );
                   })}
                 </div>
