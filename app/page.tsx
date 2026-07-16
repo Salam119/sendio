@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
 import TrackedCompanyAdLink from '@/components/TrackedCompanyAdLink';
+import CompanyAdMediaPreview from '@/components/CompanyAdMediaPreview';
 type UserProfile = {
   full_name: string | null;
   user_type: 'client' | 'worker' | 'company' | string | null;
@@ -3888,59 +3889,57 @@ export default function HomePage() {
                     const media = getAdMedia(ad);
                     const videoAd = isVideoAd(ad);
                     const description = ad.description?.trim();
-                    const ctaText = ad.cta_text || 'View Company';
 
                     return (
-                              <TrackedCompanyAdLink
-  adId={ad.id}
-  href={getAdHref(ad)}
+                        <div
   className="company-card"
   key={`${ad.id}-${index}`}
 >
-                        <div className="ad-media">
-                          {media && videoAd ? (
-                            <video
-                              src={media}
-                              muted
-                              playsInline
-                              preload="metadata"
-                              autoPlay
-                              loop
-                            />
-                          ) : null}
+  <CompanyAdMediaPreview
+    adId={ad.id}
+    mediaUrl={media}
+    isVideo={videoAd}
+    alt={`${name} advertisement`}
+    fallbackLetter={firstLetter}
+  />
 
-                          {media && !videoAd ? (
-                            <Image
-                              src={media}
-                              alt={`${name} advertisement`}
-                              width={320}
-                              height={180}
-                              style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                              sizes="(max-width: 768px) 100vw, 320px"
-                            />
-                          ) : null}
+  <TrackedCompanyAdLink
+    adId={ad.id}
+    href={getAdHref(ad)}
+    className="ad-cta"
+  >
+    <span
+      style={{
+        display: 'block',
+        overflow: 'hidden',
+        textOverflow: 'ellipsis',
+        whiteSpace: 'nowrap',
+        fontSize: '0.72rem',
+        fontWeight: 900,
+        lineHeight: 1.15,
+      }}
+    >
+      {name}
+    </span>
 
-                          {!media ? <span>{firstLetter}</span> : null}
-                        </div>
-
-                        <div className="ad-title">{name}</div>
-
-                        {description ? (
-                          <div className="ad-description">{description}</div>
-                        ) : null}
-
-                        {(ad.company?.category || ad.company?.city) && (
-                          <div className="company-meta">
-                            {ad.company?.category}
-                            {ad.company?.category && ad.company?.city
-                              ? ' • '
-                              : ''}
-                            {ad.company?.city}
-                          </div>
-                        )}
-
-                        <div className="ad-cta">{ctaText}</div>
-                         </TrackedCompanyAdLink>
+    {description ? (
+      <span
+        style={{
+          display: 'block',
+          marginTop: '2px',
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+          whiteSpace: 'nowrap',
+          fontSize: '0.58rem',
+          fontWeight: 700,
+          lineHeight: 1.1,
+        }}
+      >
+        {description}
+      </span>
+    ) : null}
+  </TrackedCompanyAdLink>
+</div>
                     );
                   })}
                 </div>
