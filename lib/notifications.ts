@@ -231,6 +231,14 @@ export function isImportantFloatingSendioNotification(
 export function getSendioNotificationTargetUrl(
   notification: SendioNotification
 ) {
+        if (notification.source_table === 'company_ads') {
+  if (notification.recipient_type === 'admin') {
+    return notification.target_url || '/dashboard/admin/ads';
+  }
+
+  return notification.target_url || '/dashboard/company/ads';
+}
+
   if (notification.recipient_type === 'client') {
     return '/clients';
   }
