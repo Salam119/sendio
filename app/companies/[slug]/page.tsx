@@ -1461,9 +1461,9 @@ export default function PublicCompanyPage() {
           </div>
 
           <div className="legal-mini-card">
-            <span>Legal</span>
-            <strong>Registered company</strong>
-            <small>TVR / official records when provided</small>
+                 <span>Profile</span>
+             <strong>Educational profile</strong>
+            <small>Not an official business listing</small>
           </div>
         </aside>
       </section>
