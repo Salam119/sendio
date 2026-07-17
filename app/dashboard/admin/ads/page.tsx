@@ -70,6 +70,14 @@ type StatusFilter =
   | 'rejected'
   | 'draft';
 
+type AdminConfirmAction =
+  | 'reject'
+  | 'pause'
+  | 'resume'
+  | 'archive'
+  | 'restore'
+  | 'delete';
+
 function normalizeCompany(
   company: CompanyInfo | CompanyInfo[] | null
 ) {
@@ -384,6 +392,18 @@ export default function AdminAdsPage() {
   const [actionLoading, setActionLoading] =
     useState<string | null>(null);
 
+  const [confirmApproveAdId, setConfirmApproveAdId] =
+    useState<string | null>(null);
+
+  const [confirmAdminAction, setConfirmAdminAction] =
+    useState<{
+      adId: string;
+      action: AdminConfirmAction;
+    } | null>(null);
+
+  const [rejectReason, setRejectReason] =
+    useState('');
+
   const [pageError, setPageError] =
     useState<string | null>(null);
 
@@ -627,6 +647,9 @@ export default function AdminAdsPage() {
   async function handleToggleAd(ad: AdminAd) {
     setPageError(null);
     setPageMessage(null);
+    setConfirmApproveAdId(null);
+    setConfirmAdminAction(null);
+    setRejectReason('');
 
     if (openAdId === ad.id) {
       setOpenAdId(null);
@@ -670,13 +693,9 @@ export default function AdminAdsPage() {
   }
 
   async function handleApprove(ad: AdminAd) {
-    const confirmed = window.confirm(
-      `Approve and publish this advertisement?\n\n${ad.title}`
-    );
-
-    if (!confirmed) {
-      return;
-    }
+    setConfirmApproveAdId(null);
+    setConfirmAdminAction(null);
+    setRejectReason('');
 
     setActionLoading(`approve-${ad.id}`);
     setPageError(null);
@@ -713,15 +732,7 @@ export default function AdminAdsPage() {
   }
 
   async function handleReject(ad: AdminAd) {
-    const reason = window.prompt(
-      `Why is this advertisement being rejected?\n\n${ad.title}`
-    );
-
-    if (reason === null) {
-      return;
-    }
-
-    const cleanReason = reason.trim();
+    const cleanReason = rejectReason.trim();
 
     if (!cleanReason) {
       setPageError(
@@ -729,6 +740,10 @@ export default function AdminAdsPage() {
       );
       return;
     }
+
+    setConfirmApproveAdId(null);
+    setConfirmAdminAction(null);
+    setRejectReason('');
 
     setActionLoading(`reject-${ad.id}`);
     setPageError(null);
@@ -765,13 +780,9 @@ export default function AdminAdsPage() {
   }
 
   async function handlePause(ad: AdminAd) {
-    const confirmed = window.confirm(
-      `Pause this published advertisement?\n\n${ad.title}`
-    );
-
-    if (!confirmed) {
-      return;
-    }
+    setConfirmApproveAdId(null);
+    setConfirmAdminAction(null);
+    setRejectReason('');
 
     setActionLoading(`pause-${ad.id}`);
     setPageError(null);
@@ -806,13 +817,9 @@ export default function AdminAdsPage() {
   }
 
   async function handleResume(ad: AdminAd) {
-    const confirmed = window.confirm(
-      `Publish this advertisement again?\n\n${ad.title}`
-    );
-
-    if (!confirmed) {
-      return;
-    }
+    setConfirmApproveAdId(null);
+    setConfirmAdminAction(null);
+    setRejectReason('');
 
     setActionLoading(`resume-${ad.id}`);
     setPageError(null);
@@ -850,15 +857,9 @@ export default function AdminAdsPage() {
     ad: AdminAd,
     archived: boolean
   ) {
-    const confirmed = window.confirm(
-      archived
-        ? `Archive this advertisement inside the admin dashboard?\n\n${ad.title}\n\nArchiving does not pause a published advertisement.`
-        : `Restore this advertisement from the admin archive?\n\n${ad.title}`
-    );
-
-    if (!confirmed) {
-      return;
-    }
+    setConfirmApproveAdId(null);
+    setConfirmAdminAction(null);
+    setRejectReason('');
 
     setActionLoading(`archive-${ad.id}`);
     setPageError(null);
@@ -903,13 +904,9 @@ export default function AdminAdsPage() {
   }
 
   async function handleDelete(ad: AdminAd) {
-    const confirmed = window.confirm(
-      `Permanently delete this advertisement?\n\n${ad.title}\n\nThis action cannot be undone.`
-    );
-
-    if (!confirmed) {
-      return;
-    }
+    setConfirmApproveAdId(null);
+    setConfirmAdminAction(null);
+    setRejectReason('');
 
     setActionLoading(`delete-${ad.id}`);
     setPageError(null);
@@ -1112,6 +1109,9 @@ export default function AdminAdsPage() {
                       (current) => !current
                     );
                     setOpenAdId(null);
+                    setConfirmApproveAdId(null);
+                    setConfirmAdminAction(null);
+                    setRejectReason('');
                   }}
                   className={`h-9 rounded-full px-4 text-xs font-black ${
                     showArchived
@@ -1361,11 +1361,11 @@ export default function AdminAdsPage() {
                             ) ? (
                               <button
                                 type="button"
-                                onClick={() =>
-                                  void handleApprove(
-                                    ad
-                                  )
-                                }
+                                onClick={() => {
+                                  setConfirmAdminAction(null);
+                                  setRejectReason('');
+                                  setConfirmApproveAdId(ad.id);
+                                }}
                                 disabled={isBusy}
                                 className="rounded-full bg-green-600 px-3 py-2 text-[11px] font-black text-white hover:bg-green-700 disabled:opacity-50"
                               >
@@ -1382,9 +1382,14 @@ export default function AdminAdsPage() {
                             ) ? (
                               <button
                                 type="button"
-                                onClick={() =>
-                                  void handleReject(ad)
-                                }
+                                onClick={() => {
+                                  setConfirmApproveAdId(null);
+                                  setRejectReason('');
+                                  setConfirmAdminAction({
+                                    adId: ad.id,
+                                    action: 'reject',
+                                  });
+                                }}
                                 disabled={isBusy}
                                 className="rounded-full bg-red-600 px-3 py-2 text-[11px] font-black text-white hover:bg-red-700 disabled:opacity-50"
                               >
@@ -1397,9 +1402,14 @@ export default function AdminAdsPage() {
                             ad.active === true ? (
                               <button
                                 type="button"
-                                onClick={() =>
-                                  void handlePause(ad)
-                                }
+                                onClick={() => {
+                                  setConfirmApproveAdId(null);
+                                  setRejectReason('');
+                                  setConfirmAdminAction({
+                                    adId: ad.id,
+                                    action: 'pause',
+                                  });
+                                }}
                                 disabled={isBusy}
                                 className="rounded-full bg-slate-700 px-3 py-2 text-[11px] font-black text-white hover:bg-slate-800 disabled:opacity-50"
                               >
@@ -1411,9 +1421,14 @@ export default function AdminAdsPage() {
                             'paused' ? (
                               <button
                                 type="button"
-                                onClick={() =>
-                                  void handleResume(ad)
-                                }
+                                onClick={() => {
+                                  setConfirmApproveAdId(null);
+                                  setRejectReason('');
+                                  setConfirmAdminAction({
+                                    adId: ad.id,
+                                    action: 'resume',
+                                  });
+                                }}
                                 disabled={isBusy}
                                 className="rounded-full bg-[#0b5b2f] px-3 py-2 text-[11px] font-black text-white hover:bg-[#084625] disabled:opacity-50"
                               >
@@ -1423,12 +1438,16 @@ export default function AdminAdsPage() {
 
                             <button
                               type="button"
-                              onClick={() =>
-                                void handleArchive(
-                                  ad,
-                                  !showArchived
-                                )
-                              }
+                              onClick={() => {
+                                setConfirmApproveAdId(null);
+                                setRejectReason('');
+                                setConfirmAdminAction({
+                                  adId: ad.id,
+                                  action: showArchived
+                                    ? 'restore'
+                                    : 'archive',
+                                });
+                              }}
                               disabled={isBusy}
                               className="rounded-full bg-[#eef6ff] px-3 py-2 text-[11px] font-black text-[#0b5b2f] hover:bg-[#e3efff] disabled:opacity-50"
                             >
@@ -1439,15 +1458,181 @@ export default function AdminAdsPage() {
 
                             <button
                               type="button"
-                              onClick={() =>
-                                void handleDelete(ad)
-                              }
+                              onClick={() => {
+                                setConfirmApproveAdId(null);
+                                setRejectReason('');
+                                setConfirmAdminAction({
+                                  adId: ad.id,
+                                  action: 'delete',
+                                });
+                              }}
                               disabled={isBusy}
                               className="rounded-full border border-red-200 bg-white px-3 py-2 text-[11px] font-black text-red-600 hover:bg-red-50 disabled:opacity-50"
                             >
                               Delete
                             </button>
                           </div>
+
+                          {confirmApproveAdId === ad.id ? (
+                            <div className="mt-3 rounded-xl border border-green-200 bg-green-50 px-3 py-3 text-center">
+                              <p className="text-xs font-bold text-green-800">
+                                Approve and publish this advertisement?
+                              </p>
+
+                              <button
+                                type="button"
+                                onClick={() => void handleApprove(ad)}
+                                disabled={isBusy}
+                                className="mt-2 rounded-full bg-green-600 px-6 py-2 text-xs font-black text-white hover:bg-green-700 disabled:cursor-not-allowed disabled:opacity-60"
+                              >
+                                {actionLoading === `approve-${ad.id}`
+                                  ? 'Publishing...'
+                                  : 'OK'}
+                              </button>
+                            </div>
+                          ) : null}
+
+                          {confirmAdminAction?.adId === ad.id &&
+                          confirmAdminAction.action === 'reject' ? (
+                            <div className="mt-3 rounded-xl border border-red-200 bg-red-50 px-3 py-3 text-center">
+                              <p className="text-xs font-bold text-red-700">
+                                Why is this advertisement being rejected?
+                              </p>
+
+                              <input
+                                type="text"
+                                value={rejectReason}
+                                onChange={(event) =>
+                                  setRejectReason(event.target.value)
+                                }
+                                placeholder="Write the rejection reason"
+                                className="mt-2 h-10 w-full rounded-xl border border-red-200 bg-white px-3 text-xs font-semibold text-[#173321] outline-none"
+                              />
+
+                              <button
+                                type="button"
+                                onClick={() => void handleReject(ad)}
+                                disabled={isBusy || !rejectReason.trim()}
+                                className="mt-2 rounded-full bg-red-600 px-6 py-2 text-xs font-black text-white hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-60"
+                              >
+                                {actionLoading === `reject-${ad.id}`
+                                  ? 'Rejecting...'
+                                  : 'OK'}
+                              </button>
+                            </div>
+                          ) : null}
+
+                          {confirmAdminAction?.adId === ad.id &&
+                          confirmAdminAction.action === 'pause' ? (
+                            <div className="mt-3 rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 text-center">
+                              <p className="text-xs font-bold text-slate-700">
+                                Pause this published advertisement?
+                              </p>
+
+                              <button
+                                type="button"
+                                onClick={() => void handlePause(ad)}
+                                disabled={isBusy}
+                                className="mt-2 rounded-full bg-slate-700 px-6 py-2 text-xs font-black text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
+                              >
+                                {actionLoading === `pause-${ad.id}`
+                                  ? 'Pausing...'
+                                  : 'OK'}
+                              </button>
+                            </div>
+                          ) : null}
+
+                          {confirmAdminAction?.adId === ad.id &&
+                          confirmAdminAction.action === 'resume' ? (
+                            <div className="mt-3 rounded-xl border border-green-200 bg-green-50 px-3 py-3 text-center">
+                              <p className="text-xs font-bold text-green-800">
+                                Publish this advertisement again?
+                              </p>
+
+                              <button
+                                type="button"
+                                onClick={() => void handleResume(ad)}
+                                disabled={isBusy}
+                                className="mt-2 rounded-full bg-[#0b5b2f] px-6 py-2 text-xs font-black text-white hover:bg-[#084625] disabled:cursor-not-allowed disabled:opacity-60"
+                              >
+                                {actionLoading === `resume-${ad.id}`
+                                  ? 'Publishing...'
+                                  : 'OK'}
+                              </button>
+                            </div>
+                          ) : null}
+
+                          {confirmAdminAction?.adId === ad.id &&
+                          confirmAdminAction.action === 'archive' ? (
+                            <div className="mt-3 rounded-xl border border-sky-200 bg-sky-50 px-3 py-3 text-center">
+                              <p className="text-xs font-bold text-sky-800">
+                                Archive this advertisement inside the admin dashboard?
+                              </p>
+
+                              <p className="mt-1 text-[10px] font-semibold text-sky-700">
+                                Archiving does not pause a published advertisement.
+                              </p>
+
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  void handleArchive(ad, true)
+                                }
+                                disabled={isBusy}
+                                className="mt-2 rounded-full bg-sky-600 px-6 py-2 text-xs font-black text-white hover:bg-sky-700 disabled:cursor-not-allowed disabled:opacity-60"
+                              >
+                                {actionLoading === `archive-${ad.id}`
+                                  ? 'Archiving...'
+                                  : 'OK'}
+                              </button>
+                            </div>
+                          ) : null}
+
+                          {confirmAdminAction?.adId === ad.id &&
+                          confirmAdminAction.action === 'restore' ? (
+                            <div className="mt-3 rounded-xl border border-sky-200 bg-sky-50 px-3 py-3 text-center">
+                              <p className="text-xs font-bold text-sky-800">
+                                Restore this advertisement from the admin archive?
+                              </p>
+
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  void handleArchive(ad, false)
+                                }
+                                disabled={isBusy}
+                                className="mt-2 rounded-full bg-sky-600 px-6 py-2 text-xs font-black text-white hover:bg-sky-700 disabled:cursor-not-allowed disabled:opacity-60"
+                              >
+                                {actionLoading === `archive-${ad.id}`
+                                  ? 'Restoring...'
+                                  : 'OK'}
+                              </button>
+                            </div>
+                          ) : null}
+
+                          {confirmAdminAction?.adId === ad.id &&
+                          confirmAdminAction.action === 'delete' ? (
+                            <div className="mt-3 rounded-xl border border-red-200 bg-red-50 px-3 py-3 text-center">
+                              <p className="text-xs font-bold text-red-700">
+                                Permanently delete this advertisement?
+                              </p>
+
+                              <p className="mt-1 text-[10px] font-semibold text-red-600">
+                                This action cannot be undone.
+                              </p>
+
+                              <button
+                                type="button"
+                                onClick={() => void handleDelete(ad)}
+                                disabled={isBusy}
+                                className="mt-2 rounded-full bg-red-600 px-6 py-2 text-xs font-black text-white hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-60"
+                              >
+                                {actionLoading === `delete-${ad.id}`
+                                  ? 'Deleting...'
+                                  : 'OK'}
+                              </button>
+                            </div>
+                          ) : null}
 
                           <p className="mt-2 text-[10px] font-semibold text-[#8b5a2b]">
                             Preview does not add views or
