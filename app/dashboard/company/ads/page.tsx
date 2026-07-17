@@ -468,11 +468,15 @@ export default function CompanyAdsPage() {
   const [saving, setSaving] = useState(false);
 
   const [submittingAdId, setSubmittingAdId] =
-    useState<string | null>(null);
+  useState<string | null>(null);
+
+  const [confirmSubmitAdId, setConfirmSubmitAdId] =
+  useState<string | null>(null);
 
   const [deletingAdId, setDeletingAdId] =
     useState<string | null>(null);
-
+  const [confirmDeleteAdId, setConfirmDeleteAdId] =
+   useState<string | null>(null);
   const [previewData, setPreviewData] =
     useState<PreviewData | null>(null);
 
@@ -906,12 +910,7 @@ export default function CompanyAdsPage() {
   async function handleSubmitForReview(
     ad: CompanyAd
   ) {
-    const confirmed = window.confirm(
-      'Send this advertisement to the administration for approval?'
-    );
-
-    if (!confirmed) return;
-
+     setConfirmSubmitAdId(null);
     setSubmittingAdId(ad.id);
     setPageError(null);
     setPageMessage(null);
@@ -949,11 +948,7 @@ export default function CompanyAdsPage() {
   }
 
   async function handleDeleteAd(ad: CompanyAd) {
-    const confirmed = window.confirm(
-      `Delete "${ad.title}" permanently? This action cannot be undone.`
-    );
-
-    if (!confirmed) return;
+    setConfirmDeleteAdId(null);
 
     setDeletingAdId(ad.id);
     setPageError(null);
@@ -1589,9 +1584,9 @@ export default function CompanyAdsPage() {
                             <div className="mt-4 flex flex-wrap gap-2">
                               <button
                                 type="button"
-                                onClick={() =>
-                                  openSavedAdPreview(ad)
-                                }
+                                    onClick={() =>
+                                   setConfirmSubmitAdId(ad.id)
+                                  }
                                 className="rounded-full border border-[#45cfe7] bg-white px-4 py-2 text-xs font-black text-[#0b5b2f] hover:bg-[#eef6ff]"
                               >
                                 Preview
@@ -1600,9 +1595,9 @@ export default function CompanyAdsPage() {
                               {canSubmitAd(ad) ? (
                                 <button
                                   type="button"
-                                  onClick={() =>
-                                    handleSubmitForReview(ad)
-                                  }
+                                   onClick={() =>
+  setConfirmSubmitAdId(ad.id)
+}
                                   disabled={isSubmitting}
                                   className="rounded-full bg-sky-500 px-4 py-2 text-xs font-black text-white hover:bg-sky-600 disabled:cursor-not-allowed disabled:opacity-60"
                                 >
@@ -1614,9 +1609,10 @@ export default function CompanyAdsPage() {
 
                               <button
                                 type="button"
-                                onClick={() =>
-                                  handleDeleteAd(ad)
-                                }
+                                 onClick={() => {
+  setConfirmSubmitAdId(null);
+  setConfirmDeleteAdId(ad.id);
+}}
                                 disabled={isDeleting}
                                 className="rounded-full bg-red-600 px-4 py-2 text-xs font-black text-white hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-60"
                               >
@@ -1633,9 +1629,41 @@ export default function CompanyAdsPage() {
                                   View Published Ad
                                 </Link>
                               ) : null}
-                            </div>
+                              </div>
 
-                            <p className="mt-2 text-[11px] font-semibold text-[#8b5a2b]">
+{confirmSubmitAdId === ad.id ? (
+  <div className="mt-3 rounded-xl border border-sky-200 bg-sky-50 px-3 py-3 text-center">
+    <p className="text-xs font-bold text-sky-800">
+      Send this advertisement for approval?
+    </p>
+
+    <button
+      type="button"
+      onClick={() => void handleSubmitForReview(ad)}
+      disabled={isSubmitting}
+      className="mt-2 rounded-full bg-sky-500 px-6 py-2 text-xs font-black text-white hover:bg-sky-600 disabled:cursor-not-allowed disabled:opacity-60"
+    >
+      {isSubmitting ? 'Sending...' : 'OK'}
+    </button>
+  </div>
+) : null}
+   {confirmDeleteAdId === ad.id ? (
+  <div className="mt-3 rounded-xl border border-red-200 bg-red-50 px-3 py-3 text-center">
+    <p className="text-xs font-bold text-red-700">
+      Delete this advertisement permanently?
+    </p>
+
+    <button
+      type="button"
+      onClick={() => void handleDeleteAd(ad)}
+      disabled={isDeleting}
+      className="mt-2 rounded-full bg-red-600 px-6 py-2 text-xs font-black text-white hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-60"
+    >
+      {isDeleting ? 'Deleting...' : 'OK'}
+    </button>
+  </div>
+) : null}
+<p className="mt-2 text-[11px] font-semibold text-[#8b5a2b]">
                               {ad.status === 'draft' ||
                               ad.status === 'rejected'
                                 ? 'Preview the advertisement and send it for approval.'

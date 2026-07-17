@@ -4,7 +4,8 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { FormEvent, useEffect, useRef, useState } from 'react';
 import { supabase } from '@/lib/supabase';
-
+ import CompanyAdMediaPreview from '@/components/CompanyAdMediaPreview';
+import TrackedCompanyAdLink from '@/components/TrackedCompanyAdLink';
 type ServiceCategoryRow = {
   id: string;
   name: string;
@@ -82,7 +83,60 @@ type ProviderLayer = {
   direction: 'left' | 'right';
   items: ProviderCardItem[];
 };
+ type ServicesAdCompany = {
+  id: string;
+  name: string | null;
+  slug: string | null;
+  logo: string | null;
+  city: string | null;
+};
 
+type RawServicesPageAd = {
+  id: string;
+  company_id: string | null;
+  title: string | null;
+  description: string | null;
+  image_url: string | null;
+  video_url: string | null;
+  thumbnail_url: string | null;
+  logo: string | null;
+  media_type: string | null;
+  cta_text: string | null;
+  target_url: string | null;
+  active: boolean | null;
+  status: string | null;
+  starts_at: string | null;
+  ends_at: string | null;
+  show_services_page: boolean | null;
+  services_slider_level: number | null;
+  company:
+    | ServicesAdCompany
+    | ServicesAdCompany[]
+    | null;
+};
+
+type ServicesPageAd = Omit<
+  RawServicesPageAd,
+  'company'
+> & {
+  company: ServicesAdCompany | null;
+};
+  type EmptyServicesAdSlot = {
+  id: string;
+  placeholder: true;
+};
+
+type ServicesAdCardItem =
+  | ServicesPageAd
+  | EmptyServicesAdSlot;
+
+type ServicesAdLayer = {
+  key: string;
+  level: 1 | 2 | 3 | 4;
+  title: string;
+  direction: 'left' | 'right';
+  items: ServicesAdCardItem[];
+};
 const SERVICE_ICON_MAP: Record<string, string> = {
   sparkles: '🧹',
   home: '🏠',
@@ -229,13 +283,185 @@ function shortDescription(value: string) {
   const words = value.split(/\s+/).filter(Boolean).slice(0, 9);
   return words.length > 0 ? words.join(' ') : 'Service details available on profile';
 }
+ function normalizeServicesPageAd(
+  ad: RawServicesPageAd
+): ServicesPageAd {
+  const company = Array.isArray(ad.company)
+    ? ad.company[0] ?? null
+    : ad.company;
 
+  return {
+    ...ad,
+    services_slider_level: Number(
+      ad.services_slider_level ?? 0
+    ),
+    company,
+  };
+}
+
+function isServicesPageAdActive(ad: ServicesPageAd) {
+  if (ad.active !== true) {
+    return false;
+  }
+
+  if (ad.status !== 'active') {
+    return false;
+  }
+
+  if (ad.show_services_page !== true) {
+    return false;
+  }
+
+  if (
+    ad.services_slider_level !== 1 &&
+    ad.services_slider_level !== 2 &&
+    ad.services_slider_level !== 3 &&
+    ad.services_slider_level !== 4
+  ) {
+    return false;
+  }
+
+  const now = new Date();
+
+  if (ad.starts_at) {
+    const startsAt = new Date(ad.starts_at);
+
+    if (
+      !Number.isNaN(startsAt.getTime()) &&
+      startsAt > now
+    ) {
+      return false;
+    }
+  }
+
+  if (ad.ends_at) {
+    const endsAt = new Date(ad.ends_at);
+
+    if (
+      !Number.isNaN(endsAt.getTime()) &&
+      endsAt < now
+    ) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+function getServicesAdMedia(ad: ServicesPageAd) {
+  return (
+    ad.video_url ||
+    ad.image_url ||
+    ad.thumbnail_url ||
+    ad.logo ||
+    ad.company?.logo ||
+    null
+  );
+}
+
+function isServicesVideoAd(ad: ServicesPageAd) {
+  return (
+    Boolean(ad.video_url) ||
+    ad.media_type === 'video'
+  );
+}
+
+function getServicesAdCompanyHref(
+  ad: ServicesPageAd
+) {
+  const companySlug =
+    ad.company?.slug || ad.company?.id;
+
+  return companySlug
+    ? `/companies/${companySlug}`
+    : '/companies';
+}
+
+function isEmptyServicesAd(
+  item: ServicesAdCardItem
+): item is EmptyServicesAdSlot {
+  return 'placeholder' in item;
+}
+
+function fillServicesAdSlots(
+  ads: ServicesPageAd[],
+  key: string
+) {
+  const items: ServicesAdCardItem[] =
+    ads.slice(0, 14);
+
+  while (items.length < 10) {
+    items.push({
+      id: `${key}-empty-${items.length}`,
+      placeholder: true,
+    });
+  }
+
+  return items;
+}
+
+function buildServicesAdLayers(
+  ads: ServicesPageAd[]
+): ServicesAdLayer[] {
+  return [
+    {
+      key: 'services-ad-level-1',
+      level: 1,
+      title: 'Services advertisements — Level 1',
+      direction: 'left',
+      items: fillServicesAdSlots(
+        ads.filter(
+          (ad) => ad.services_slider_level === 1
+        ),
+        'services-ad-level-1'
+      ),
+    },
+    {
+      key: 'services-ad-level-2',
+      level: 2,
+      title: 'Services advertisements — Level 2',
+      direction: 'right',
+      items: fillServicesAdSlots(
+        ads.filter(
+          (ad) => ad.services_slider_level === 2
+        ),
+        'services-ad-level-2'
+      ),
+    },
+    {
+      key: 'services-ad-level-3',
+      level: 3,
+      title: 'Services advertisements — Level 3',
+      direction: 'left',
+      items: fillServicesAdSlots(
+        ads.filter(
+          (ad) => ad.services_slider_level === 3
+        ),
+        'services-ad-level-3'
+      ),
+    },
+    {
+      key: 'services-ad-level-4',
+      level: 4,
+      title: 'Services advertisements — Level 4',
+      direction: 'right',
+      items: fillServicesAdSlots(
+        ads.filter(
+          (ad) => ad.services_slider_level === 4
+        ),
+        'services-ad-level-4'
+      ),
+    },
+  ];
+}
 export default function ServicesPage() {
   const router = useRouter();
   const heroSearchRef = useRef<HTMLFormElement | null>(null);
 
   const [services, setServices] = useState<ServiceCategoryRow[]>([]);
   const [providers, setProviders] = useState<FeaturedProvider[]>([]);
+  const [serviceAds, setServiceAds] =
+  useState<ServicesPageAd[]>([]);
   const [loadingServices, setLoadingServices] = useState(true);
   const [warning, setWarning] = useState('');
   const [searchText, setSearchText] = useState('');
@@ -246,7 +472,72 @@ export default function ServicesPage() {
   const [subscriberLocation, setSubscriberLocation] = useState('');
   const [subscribeStatus, setSubscribeStatus] = useState('');
   const [isUserLoggedIn, setIsUserLoggedIn] = useState(false);
+   useEffect(() => {
+  let active = true;
 
+  async function loadServicesPageAds() {
+    const { data, error } = await supabase
+      .from('company_ads')
+      .select(`
+        id,
+        company_id,
+        title,
+        description,
+        image_url,
+        video_url,
+        thumbnail_url,
+        logo,
+        media_type,
+        cta_text,
+        target_url,
+        active,
+        status,
+        starts_at,
+        ends_at,
+        show_services_page,
+        services_slider_level,
+        company:companies (
+          id,
+          name,
+          slug,
+          logo,
+          city
+        )
+      `)
+      .eq('show_services_page', true)
+      .eq('active', true)
+      .eq('status', 'active')
+      .order('created_at', {
+        ascending: false,
+      });
+
+    if (!active) {
+      return;
+    }
+
+    if (error) {
+      setServiceAds([]);
+      setWarning(
+        'Service advertisements could not be loaded.'
+      );
+      return;
+    }
+
+    const normalizedAds = (
+      (data ?? []) as RawServicesPageAd[]
+    )
+      .map(normalizeServicesPageAd)
+      .filter(isServicesPageAdActive);
+
+    setServiceAds(normalizedAds);
+  }
+
+  void loadServicesPageAds();
+
+  return () => {
+    active = false;
+  };
+}, []);
   useEffect(() => {
     let active = true;
 
@@ -504,7 +795,8 @@ export default function ServicesPage() {
     return cityMatches && serviceMatches;
   });
 
-  const providerLayers = splitProviderLayers(visibleProviders);
+   const serviceAdLayers =
+   buildServicesAdLayers(serviceAds);
   const cvImages = providers.filter((provider) => provider.image).slice(0, 3);
   const serviceMarqueeItems = services.length > 0 ? services : visibleServices;
 
@@ -872,92 +1164,105 @@ export default function ServicesPage() {
 
       {warning ? <p className="warningBox">{warning}</p> : null}
 
-      <section className="providerLayers">
-        {providerLayers.map((layer) => (
-          <div className="providerLayer" key={layer.key}>
-            <h2>{layer.title}</h2>
+         <section
+  className="providerLayers"
+  aria-label="Services advertisements"
+>
+  {serviceAdLayers.map((layer) => (
+    <div
+      className="providerLayer"
+      key={layer.key}
+    >
+      <h2>{layer.title}</h2>
 
-            <div className="providerAutoSlider">
-              <div
-                className={
-                  layer.direction === 'left'
-                    ? 'providerTrack providerTrackLeft'
-                    : 'providerTrack providerTrackRight'
-                }
-              >
-                {[...layer.items, ...layer.items].map((item, index) => {
-                  if (isEmptyProvider(item)) {
-                    return (
-                      <article className="floatingProviderCard emptyProviderCard" key={`${item.id}-${index}`}>
-                        <div className="floatingProviderImage emptyProviderImage" />
-                        <div className="floatingProviderInfo">
-                          <span className="emptyLine emptyWide" />
-                          <span className="emptyLine emptyShort" />
-                          <span className="emptyLine emptyMedium" />
-                        </div>
-                      </article>
-                    );
-                  }
+      <div className="providerAutoSlider">
+        <div
+          className={
+            layer.direction === 'left'
+              ? 'providerTrack providerTrackLeft'
+              : 'providerTrack providerTrackRight'
+          }
+        >
+          {[...layer.items, ...layer.items].map(
+            (item, index) => {
+              if (isEmptyServicesAd(item)) {
+                return (
+                  <article
+                    className="floatingProviderCard emptyProviderCard"
+                    key={`${item.id}-${index}`}
+                  >
+                    <div className="floatingProviderImage emptyProviderImage" />
 
-                  const whatsappHref = getWhatsappHref(item.phone);
+                    <div className="floatingProviderInfo">
+                      <span className="emptyLine emptyWide" />
+                      <span className="emptyLine emptyShort" />
+                      <span className="emptyLine emptyMedium" />
+                    </div>
+                  </article>
+                );
+              }
 
-                  return (
-                    <article className="floatingProviderCard" key={`${layer.key}-${item.kind}-${item.id}-${index}`}>
-                      <Link
-                        href={getProviderRequestHref(item)}
-                        className="floatingProviderImage"
-                        style={
-                          item.image
-                            ? {
-                                backgroundImage: `url("${item.image}")`,
-                              }
-                            : undefined
-                        }
-                      >
-                        {!item.image ? item.name.charAt(0).toUpperCase() : null}
-                      </Link>
+              const media =
+                getServicesAdMedia(item);
 
-                      <div className="floatingProviderInfo">
-                        <Link href={getProviderRequestHref(item)} className="providerNameLink">
-                          {item.name}
-                        </Link>
+              const videoAd =
+                isServicesVideoAd(item);
 
-                        <span className="providerStars">
-                          {item.rating ? `★ ${item.rating.toFixed(1)}` : '☆ ☆ ☆ ☆ ☆'}
-                        </span>
+              const adTitle =
+                item.title?.trim() ||
+                item.company?.name ||
+                'Advertisement';
 
-                        <p>{shortDescription(item.description)}</p>
+              const adDescription =
+                item.description?.trim() ||
+                'Open this company profile on Sendio.';
 
-                        <div className="providerTinyActions">
-                          {item.phone ? (
-                            <a
-                              href={isUserLoggedIn ? `tel:${cleanPhone(item.phone)}` : '/login'}
-                              aria-label="Call provider"
-                            >
-                              ☎
-                            </a>
-                          ) : null}
+              return (
+                <article
+                  className="floatingProviderCard serviceAdCard"
+                  key={`${layer.key}-${item.id}-${index}`}
+                >
+                  <CompanyAdMediaPreview
+                    adId={item.id}
+                    mediaUrl={media}
+                    isVideo={videoAd}
+                    alt={`${adTitle} advertisement`}
+                    fallbackLetter={adTitle
+                      .charAt(0)
+                      .toUpperCase()}
+                  />
 
-                          {whatsappHref ? (
-                            <a
-                              href={isUserLoggedIn ? whatsappHref : '/login'}
-                              target={isUserLoggedIn ? '_blank' : undefined}
-                              rel={isUserLoggedIn ? 'noreferrer' : undefined}
-                              aria-label="Open WhatsApp"
-                            >
-                              ●
-                            </a>
-                          ) : null}
-                        </div>
-                      </div>
-                    </article>
-                  );
-                })}
-              </div>
-            </div>
-          </div>
-        ))}
-      </section>
+                  <div className="floatingProviderInfo">
+                    <TrackedCompanyAdLink
+                      adId={item.id}
+                      href={getServicesAdCompanyHref(
+                        item
+                      )}
+                      className="providerNameLink"
+                    >
+                      {adTitle}
+                    </TrackedCompanyAdLink>
+
+                    <span className="providerStars">
+                      Advertisement • Level{' '}
+                      {layer.level}
+                    </span>
+
+                    <p>
+                      {shortDescription(
+                        adDescription
+                      )}
+                    </p>
+                  </div>
+                </article>
+              );
+            }
+          )}
+        </div>
+      </div>
+    </div>
+  ))}
+</section>
 
       <footer className="servicesFooter">
         <strong>Sendio</strong>
@@ -1550,7 +1855,33 @@ export default function ServicesPage() {
           font-weight: 950;
           overflow: hidden;
         }
+         .serviceAdCard .ad-media {
+  position: relative;
+  width: 218px;
+  height: 128px;
+  border-radius: 11px;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--sendio-rectangle-bg);
+  color: var(--sendio-button-bg);
+  font-size: 30px;
+  font-weight: 950;
+}
 
+.serviceAdCard .ad-media video,
+.serviceAdCard .ad-media img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.serviceAdCard .ad-media span {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
         .floatingProviderInfo {
           width: 218px;
           min-height: 78px;
@@ -1800,7 +2131,11 @@ export default function ServicesPage() {
             height: 104px;
             border-radius: 10px;
           }
-
+            .serviceAdCard .ad-media {
+  width: 176px;
+  height: 104px;
+  border-radius: 10px;
+}
           .floatingProviderInfo {
             width: 176px;
             min-height: 74px;
