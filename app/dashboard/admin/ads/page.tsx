@@ -1352,64 +1352,55 @@ export default function AdminAdsPage() {
                               Company
                             </Link>
 
-                            {[
-                              'pending_review',
-                              'under_review',
-                              'approved',
-                            ].includes(
-                              ad.status || ''
-                            ) ? (
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setConfirmAdminAction(null);
-                                  setRejectReason('');
-                                  setConfirmApproveAdId(ad.id);
-                                }}
-                                disabled={isBusy}
-                                className="rounded-full bg-green-600 px-3 py-2 text-[11px] font-black text-white hover:bg-green-700 disabled:opacity-50"
-                              >
-                                Approve & Publish
-                              </button>
-                            ) : null}
+                           {ad.status !== 'active' &&
+ad.status !== 'paused' &&
+ad.status !== 'rejected' ? (
+  <button
+    type="button"
+    onClick={() => {
+      setConfirmAdminAction(null);
+      setRejectReason('');
+      setConfirmApproveAdId(ad.id);
+    }}
+    disabled={isBusy}
+    className="rounded-full bg-green-600 px-3 py-2 text-[11px] font-black text-white hover:bg-green-700 disabled:opacity-50"
+  >
+    Approve & Publish
+  </button>
+) : null}
 
-                            {[
-                              'pending_review',
-                              'under_review',
-                              'approved',
-                            ].includes(
-                              ad.status || ''
-                            ) ? (
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setConfirmApproveAdId(null);
-                                  setRejectReason('');
-                                  setConfirmAdminAction({
-                                    adId: ad.id,
-                                    action: 'reject',
-                                  });
-                                }}
-                                disabled={isBusy}
-                                className="rounded-full bg-red-600 px-3 py-2 text-[11px] font-black text-white hover:bg-red-700 disabled:opacity-50"
-                              >
-                                Reject
-                              </button>
-                            ) : null}
+{ad.status !== 'active' &&
+ad.status !== 'paused' &&
+ad.status !== 'rejected' ? (
+  <button
+    type="button"
+    onClick={() => {
+      setConfirmApproveAdId(null);
+      setRejectReason('');
+      setConfirmAdminAction({
+        adId: ad.id,
+        action: 'reject',
+      });
+    }}
+    disabled={isBusy}
+    className="rounded-full bg-red-600 px-3 py-2 text-[11px] font-black text-white hover:bg-red-700 disabled:opacity-50"
+  >
+    Reject
+  </button>
+) : null}
 
-                            {ad.status ===
-                              'active' &&
-                            ad.active === true ? (
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setConfirmApproveAdId(null);
-                                  setRejectReason('');
-                                  setConfirmAdminAction({
-                                    adId: ad.id,
-                                    action: 'pause',
-                                  });
-                                }}
+{ad.status === 'active' &&
+ad.active === true ? (
+  <button
+    type="button"
+    onClick={() => {
+      setConfirmApproveAdId(null);
+      setRejectReason('');
+      setConfirmAdminAction({
+        adId: ad.id,
+        action: 'pause',
+      });
+    }}
                                 disabled={isBusy}
                                 className="rounded-full bg-slate-700 px-3 py-2 text-[11px] font-black text-white hover:bg-slate-800 disabled:opacity-50"
                               >
