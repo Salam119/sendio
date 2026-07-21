@@ -243,14 +243,12 @@ export default function LegalPage() {
           <h2>Clear legal standards for a trusted Sendio experience.</h2>
 
           <p>
-           <p>
-             Sendio is committed to clear legal standards, responsible platform use,
-             transparent communication, and reliable protection for clients, workers,
-             and companies. Official contact details, privacy information, company
-             information, and payment terms are managed through the platform’s legal
-             and administrative settings.
-          </p>
-          </p>
+  Sendio is committed to clear legal standards, responsible platform use,
+  transparent communication, and reliable protection for clients, workers,
+  and companies. Official contact details, privacy information, company
+  information, and payment terms are managed through the platform’s legal
+  and administrative settings.
+</p>
         </div>
 
         <Link href="/" className="primaryButton">

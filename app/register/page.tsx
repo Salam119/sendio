@@ -248,6 +248,7 @@ export default function RegisterPage() {
   const [userType, setUserType] = useState<UserType | null>(getInitialUserType);
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
+  const [facebookLoading, setFacebookLoading] = useState(false);
   const [notice, setNotice] = useState<RegisterNotice | null>(null);
   const [pendingEmail, setPendingEmail] = useState('');
   const [confirmationDeadline, setConfirmationDeadline] = useState<number | null>(
@@ -420,7 +421,40 @@ export default function RegisterPage() {
       setGoogleLoading(false);
     }
   }
+        async function handleFacebookRegister() {
+  setNotice(null);
 
+  if (!requireAccountType()) return;
+
+  const selectedType = userType;
+
+  if (!selectedType) return;
+
+  setFacebookLoading(true);
+
+  const redirectTo = `${window.location.origin}/auth/callback`;
+
+  window.localStorage.setItem('sendio_pending_user_type', selectedType);
+  window.localStorage.setItem('sendio_pending_auth_provider', 'facebook');
+
+  const { error } = await supabase.auth.signInWithOAuth({
+    provider: 'facebook',
+    options: {
+      redirectTo,
+      queryParams: {
+        auth_type: 'reauthorize',
+      },
+    },
+  });
+
+  if (error) {
+    setNotice({
+      type: 'error',
+      title: error.message,
+    });
+    setFacebookLoading(false);
+  }
+}
   async function handleResendConfirmation() {
     if (!pendingEmail || confirmationPhase === 'resending') return;
 
@@ -793,15 +827,16 @@ export default function RegisterPage() {
                 {googleLoading ? 'Opening Google...' : 'Sign up with Google'}
               </button>
 
-              <button
-                type="button"
-                disabled
-                className="flex h-8 w-full cursor-not-allowed items-center justify-center gap-2 rounded-xl border border-slate-200 bg-slate-50/80 text-sm font-black text-slate-400"
-                title="Facebook login is not enabled yet"
-              >
-                <FacebookIcon />
-                Sign up with Facebook
-              </button>
+                          <button
+  type="button"
+  onClick={handleFacebookRegister}
+  disabled={loading || facebookLoading}
+  className="flex h-8 w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white/90 text-sm font-black text-slate-700 shadow-sm transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-60"
+>
+  <FacebookIcon />
+  {facebookLoading ? 'Opening Facebook...' : 'Sign up with Facebook'}
+</button>
+               
             </div>
 
             <p className="mt-2 text-center text-xs font-semibold text-slate-500">

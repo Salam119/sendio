@@ -4373,7 +4373,7 @@ export default function HomePage() {
             <Link href="/about">About</Link>
             <Link href="/contact">FAQ</Link>
             <Link href="/contact">Contact</Link>
-            <Link href="/pricing">Pricing</Link>
+            <Link href="/pricing">Advertising</Link>
             <Link href="/legal">Legal</Link>
           </div>
 
