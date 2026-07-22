@@ -249,6 +249,7 @@ export default function RegisterPage() {
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
   const [facebookLoading, setFacebookLoading] = useState(false);
+  const [linkedinLoading, setLinkedinLoading] = useState(false);
   const [notice, setNotice] = useState<RegisterNotice | null>(null);
   const [pendingEmail, setPendingEmail] = useState('');
   const [confirmationDeadline, setConfirmationDeadline] = useState<number | null>(
@@ -455,7 +456,46 @@ export default function RegisterPage() {
     setFacebookLoading(false);
   }
 }
-  async function handleResendConfirmation() {
+ async function handleLinkedInRegister() {
+  setNotice(null);
+
+  if (!requireAccountType()) return;
+
+  const selectedType = userType;
+
+  if (!selectedType) return;
+
+  setLinkedinLoading(true);
+
+  const redirectTo = `${window.location.origin}/auth/callback`;
+
+  window.localStorage.setItem(
+    'sendio_pending_user_type',
+    selectedType,
+  );
+
+  window.localStorage.setItem(
+    'sendio_pending_auth_provider',
+    'linkedin_oidc',
+  );
+
+  const { error } = await supabase.auth.signInWithOAuth({
+    provider: 'linkedin_oidc',
+    options: {
+      redirectTo,
+    },
+  });
+
+  if (error) {
+    setNotice({
+      type: 'error',
+      title: error.message,
+    });
+
+    setLinkedinLoading(false);
+  }
+}
+async function handleResendConfirmation() {
     if (!pendingEmail || confirmationPhase === 'resending') return;
 
     setConfirmationPhase('resending');
@@ -836,7 +876,20 @@ export default function RegisterPage() {
   <FacebookIcon />
   {facebookLoading ? 'Opening Facebook...' : 'Sign up with Facebook'}
 </button>
-               
+            <button
+  type="button"
+  onClick={handleLinkedInRegister}
+  disabled={loading || linkedinLoading}
+  className="flex h-8 w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white/90 text-sm font-black text-slate-700 shadow-sm transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-60"
+>
+  <span className="text-[#0A66C2] font-black text-base">
+    in
+  </span>
+
+  {linkedinLoading
+    ? 'Opening LinkedIn...'
+    : 'Sign up with LinkedIn'}
+</button>   
             </div>
 
             <p className="mt-2 text-center text-xs font-semibold text-slate-500">

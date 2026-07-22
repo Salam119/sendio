@@ -628,14 +628,14 @@ export default function CompanyAdsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  useEffect(() => {
+  useEffect(() => { 
     if (!mediaFile) {
+     // eslint-disable-next-line react-hooks/set-state-in-effect
       setMediaPreviewUrl(null);
       return;
     }
 
     const objectUrl = URL.createObjectURL(mediaFile);
-
     setMediaPreviewUrl(objectUrl);
 
     return () => {
