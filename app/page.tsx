@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import Image from 'next/image';
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
@@ -4457,6 +4457,171 @@ export default function HomePage() {
             transform-origin: center;
           }
           }
+        @media (min-width: 1000px) {
+          .services-row {
+            display: flex;
+            gap: 18px;
+            justify-content: center;
+            margin: 34px auto 42px;
+            flex-wrap: nowrap;
+          }
+
+          .service-card-new {
+            position: relative;
+            isolation: isolate;
+            flex: 0 0 320px;
+            width: 320px;
+            min-width: 320px;
+            max-width: 320px;
+            min-height: 0;
+            padding: 0;
+            display: flex;
+            flex-direction: column;
+            background-color: transparent;
+            border: 0;
+            border-radius: 24px;
+            box-shadow: none;
+            filter: drop-shadow(0 10px 25px rgba(0, 0, 0, 0.12));
+            overflow: visible;
+            font-family: system-ui, -apple-system, sans-serif;
+            direction: ltr;
+          }
+
+          .service-card-new::after {
+            content: '';
+            position: absolute;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            z-index: 0;
+            height: 24px;
+            border-radius: 0 0 24px 24px;
+            background: linear-gradient(180deg, #e8ebf0 0%, #cfd5de 100%);
+            clip-path: polygon(0 48%, 100% 0, 100% 100%, 0 100%);
+            pointer-events: none;
+          }
+
+          .service-card-new:hover {
+            transform: none;
+          }
+
+          .service-card-with-ad {
+            min-height: 0;
+            background-color: transparent;
+            color: inherit;
+          }
+
+          .service-ad-media {
+            position: relative;
+            inset: auto;
+            z-index: 2;
+            width: 100%;
+            height: 220px;
+            min-height: 220px;
+            flex: 0 0 220px;
+            border-radius: 24px 24px 0 0;
+            clip-path: polygon(0 0, 100% 12%, 100% 100%, 0 100%);
+            background-color: #f0f0f0;
+            overflow: hidden;
+          }
+
+          .service-ad-media img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+          }
+
+          .service-card-overlay {
+            display: none;
+          }
+
+          .service-card-content {
+            position: relative;
+            z-index: 2;
+            flex: 1 1 auto;
+            min-height: 148px;
+            padding: 16px 20px 40px 20px;
+            border-radius: 0 0 24px 24px;
+            background-color: #ffffff;
+            clip-path: polygon(
+              0 0,
+              100% 0,
+              100% calc(100% - 18px),
+              0 100%
+            );
+          }
+
+          .service-ad-label {
+            display: flex;
+            gap: 15px;
+            margin: 0 0 8px 0;
+            padding: 0;
+            background: transparent;
+            color: #666;
+            font-size: 14px;
+            font-weight: 400;
+            text-transform: none;
+          }
+
+          .service-ad-meta {
+            margin: 0 0 6px 0;
+            color: #888;
+            font-size: 12px;
+            font-weight: 400;
+            text-shadow: none;
+          }
+
+          .service-ad-title {
+            margin: 0 0 12px 0;
+            color: #111;
+            font-size: 18px;
+            font-weight: 700;
+            line-height: 1.25;
+            text-shadow: none;
+          }
+
+          .service-ad-count {
+            display: flex;
+            gap: 15px;
+            margin: 0 0 8px 0;
+            color: #666;
+            font-size: 14px;
+            font-weight: 400;
+            text-transform: none;
+          }
+
+          .service-card-new:not(.service-card-with-ad)::before {
+            content: '';
+            position: relative;
+            z-index: 2;
+            width: 100%;
+            height: 220px;
+            min-height: 220px;
+            flex: 0 0 220px;
+            border-radius: 24px 24px 0 0;
+            clip-path: polygon(0 0, 100% 12%, 100% 100%, 0 100%);
+            background-color: #f0f0f0;
+          }
+
+          .service-card-new:not(.service-card-with-ad)
+            .service-icon-new {
+            position: absolute;
+            top: -145px;
+            left: 50%;
+            margin: 0;
+            transform: translateX(-50%);
+          }
+
+          .service-card-new:not(.service-card-with-ad)
+            .service-title-new {
+            margin: 0 0 12px 0;
+            color: #111;
+            font-size: 18px;
+            font-weight: 700;
+            line-height: 1.25;
+          }
+        }
+
         /* SENDIO MOBILE HEADER HERO COMPLETE V1 */
         @media (max-width: 700px) {
           .container {
