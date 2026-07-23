@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 
 import Image from 'next/image';
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
@@ -6,6 +6,9 @@ import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
 import TrackedCompanyAdLink from '@/components/TrackedCompanyAdLink';
 import CompanyAdMediaPreview from '@/components/CompanyAdMediaPreview';
+import HeroAdPhonePreview, {
+  openHeroAdPhonePreview,
+} from '@/components/HeroAdPhonePreview';
 type UserProfile = {
   full_name: string | null;
   user_type: 'client' | 'worker' | 'company' | string | null;
@@ -15,6 +18,42 @@ type UserProfile = {
 type ResultTypeFilter = 'all' | 'workers' | 'companies';
 type SortFilter = 'best_match' | 'highest_rated' | 'most_reviewed' | 'newest';
 type CategoryAdSlot = 'general' | 'household' | 'gardening' | 'logistics';
+
+type HeroLayout =
+  | 'single'
+  | 'split_2'
+  | 'feature_left_3'
+  | 'feature_right_3'
+  | 'equal_3'
+  | 'grid_4'
+  | 'grid_6';
+
+type HeroSettings = {
+  enabled: boolean;
+  layout: HeroLayout;
+};
+
+type HeroSlotRow = {
+  slot_index: number;
+  ad_id: string | null;
+  is_enabled: boolean;
+};
+
+function getHeroSlotCount(layout: HeroLayout) {
+  if (layout === 'single') return 1;
+  if (layout === 'split_2') return 2;
+
+  if (
+    layout === 'feature_left_3' ||
+    layout === 'feature_right_3' ||
+    layout === 'equal_3'
+  ) {
+    return 3;
+  }
+
+  if (layout === 'grid_4') return 4;
+  return 6;
+}
 
 type SearchIntentRule = {
   id: string;
@@ -53,6 +92,7 @@ type CompanyAd = {
   target_url?: string | null;
   ad_slot?: CategoryAdSlot | string | null;
     show_home_slider?: boolean | null;
+  show_home_hero?: boolean | null;
   show_home_fixed?: boolean | null;
   show_services_page?: boolean | null;
   home_fixed_slot?: CategoryAdSlot | string | null;
@@ -95,6 +135,7 @@ type RawCompanyAd = {
   target_url?: string | null;
   ad_slot?: CategoryAdSlot | string | null;
   show_home_slider?: boolean | null;
+show_home_hero?: boolean | null;
 show_home_fixed?: boolean | null;
 show_services_page?: boolean | null;
 home_fixed_slot?: CategoryAdSlot | string | null;
@@ -712,6 +753,7 @@ function isPublicActiveAd(ad: CompanyAd) {
     target_url: ad.target_url ?? null,
     ad_slot: ad.ad_slot ?? null,
     show_home_slider: ad.show_home_slider ?? false,
+    show_home_hero: ad.show_home_hero ?? false,
     show_home_fixed: ad.show_home_fixed ?? false,
     show_services_page: ad.show_services_page ?? false,
     home_fixed_slot: ad.home_fixed_slot ?? null,
@@ -1153,6 +1195,11 @@ export default function HomePage() {
   const [userEmail, setUserEmail] = useState<string | null>(null);
   const [companyUnreadMessages, setCompanyUnreadMessages] = useState(0);
   const [ads, setAds] = useState<CompanyAd[]>([]);
+  const [heroSettings, setHeroSettings] = useState<HeroSettings>({
+    enabled: false,
+    layout: 'single',
+  });
+  const [heroSlots, setHeroSlots] = useState<HeroSlotRow[]>([]);
   const [publicCompanies, setPublicCompanies] = useState<PublicCompany[]>([]);
   const [publicWorkers, setPublicWorkers] = useState<PublicWorker[]>([]);
   const [companySearchTerms, setCompanySearchTerms] = useState<
@@ -1165,6 +1212,7 @@ export default function HomePage() {
   const [homeLocation, setHomeLocation] = useState('');
   const [homeSearchNotice, setHomeSearchNotice] = useState<string | null>(null);
   const [filtersOpen, setFiltersOpen] = useState(false);
+  const [navMenuOpen, setNavMenuOpen] = useState(false);
   const [resultTypeFilter, setResultTypeFilter] =
     useState<ResultTypeFilter>('all');
   const [filterCitySearch, setFilterCitySearch] = useState('');
@@ -1190,6 +1238,32 @@ export default function HomePage() {
   const publicActiveAds = useMemo(() => {
     return ads.filter(isPublicActiveAd);
   }, [ads]);
+
+  const heroAds = useMemo(() => {
+    if (!heroSettings.enabled) {
+      return [] as Array<CompanyAd | null>;
+    }
+
+    const slotCount = getHeroSlotCount(heroSettings.layout);
+    const slotByIndex = new Map(
+      heroSlots.map((slot) => [slot.slot_index, slot])
+    );
+
+    return Array.from({ length: slotCount }, (_, index) => {
+      const slot = slotByIndex.get(index + 1);
+
+      if (!slot || slot.is_enabled !== true || !slot.ad_id) {
+        return null;
+      }
+
+      return (
+        publicActiveAds.find((ad) => ad.id === slot.ad_id) ??
+        null
+      );
+    });
+  }, [heroSettings, heroSlots, publicActiveAds]);
+
+  const hasHeroAds = heroAds.some(Boolean);
 
          const categoryAdsBySlot = useMemo(() => {
     const grouped: Record<CategoryAdSlot, CompanyAd[]> = {
@@ -1556,6 +1630,31 @@ export default function HomePage() {
         setAds(normalizedAds);
       }
 
+      const [heroSettingsResult, heroSlotsResult] = await Promise.all([
+        supabase
+          .from('home_hero_settings')
+          .select('enabled, layout')
+          .eq('id', 1)
+          .maybeSingle(),
+        supabase
+          .from('home_hero_slots')
+          .select('slot_index, ad_id, is_enabled')
+          .order('slot_index', { ascending: true }),
+      ]);
+
+      if (heroSettingsResult.data) {
+        setHeroSettings({
+          enabled: heroSettingsResult.data.enabled === true,
+          layout:
+            (heroSettingsResult.data.layout as HeroLayout) ||
+            'single',
+        });
+      }
+
+      if (heroSlotsResult.data) {
+        setHeroSlots(heroSlotsResult.data as HeroSlotRow[]);
+      }
+
       const { data: publicWorkersData } = await supabase
         .from('workers')
         .select(
@@ -1874,8 +1973,9 @@ export default function HomePage() {
           padding: 0 clamp(16px, 2vw, 32px);
         }
         .navbar {
+          min-height: 90px;
           display: flex;
-          justify-content: space-between;
+          justify-content: flex-end;
           align-items: center;
           padding: 10px 0 14px;
           flex-wrap: wrap;
@@ -1908,11 +2008,15 @@ export default function HomePage() {
         }
 
         .nav-links {
+          position: relative;
+          z-index: 20;
           display: flex;
-          gap: 24px;
+          gap: 8px;
           list-style: none;
           align-items: center;
           flex-wrap: wrap;
+          margin-right: 30px;
+          transform: translateY(22px);
         }
 
         .nav-links a {
@@ -1924,6 +2028,33 @@ export default function HomePage() {
 
         .nav-links a:hover {
           color: var(--sendio-button-bg);
+        }
+
+        .nav-home-link {
+          width: 56px;
+          height: 56px;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          padding: 0;
+          border: 10px solid var(--sendio-page-bg);
+          border-radius: 50%;
+          background: #111111;
+          box-sizing: border-box;
+          box-shadow: none;
+        }
+
+        .nav-home-link:hover {
+          background: #111111;
+          opacity: 0.9;
+        }
+
+        .nav-home-square {
+          width: 9px;
+          height: 9px;
+          display: block;
+          border-radius: 2px;
+          background: #ffffff;
         }
 
         .filter-nav-button {
@@ -1958,6 +2089,89 @@ export default function HomePage() {
         .book-btn-nav:hover {
           background: var(--sendio-button-bg-hover);
           color: #111827 !important;
+        }
+
+        .nav-menu-wrap {
+          position: relative;
+        }
+
+        .nav-menu-toggle {
+          width: 62px;
+          height: 62px;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          border: 10px solid var(--sendio-page-bg);
+          border-radius: 18px;
+          background: var(--sendio-button-bg);
+          color: #111827;
+          cursor: pointer;
+          box-sizing: border-box;
+          box-shadow: none;
+          transition: 0.2s;
+        }
+
+        .nav-menu-toggle:hover,
+        .nav-menu-toggle-active {
+          background: var(--sendio-button-bg-hover);
+          transform: translateY(-1px);
+        }
+
+        .nav-menu-lines {
+          width: 21px;
+          display: flex;
+          flex-direction: column;
+          gap: 4px;
+        }
+
+        .nav-menu-lines span {
+          width: 100%;
+          height: 2px;
+          display: block;
+          border-radius: 999px;
+          background: #111827;
+        }
+
+        .nav-menu-panel {
+          position: absolute;
+          top: calc(100% + 9px);
+          right: 0;
+          z-index: 40;
+          width: 180px;
+          display: flex;
+          flex-direction: column;
+          gap: 6px;
+          padding: 8px;
+          border: 1px solid var(--sendio-soft-border);
+          border-radius: 16px;
+          background: #ffffff;
+          box-shadow: 0 18px 36px -22px rgba(0, 0, 0, 0.35);
+        }
+
+        .nav-menu-panel a,
+        .nav-menu-panel button {
+          width: 100%;
+          min-height: 38px;
+          display: flex;
+          align-items: center;
+          justify-content: flex-start;
+          border: 0;
+          border-radius: 10px;
+          padding: 9px 11px;
+          background: transparent;
+          color: #111827;
+          font: inherit;
+          font-size: 0.82rem;
+          font-weight: 800;
+          text-decoration: none;
+          text-align: left;
+          cursor: pointer;
+        }
+
+        .nav-menu-panel a:hover,
+        .nav-menu-panel button:hover {
+          background: var(--sendio-button-bg);
+          color: #111827;
         }
 
         .filter-panel {
@@ -2111,80 +2325,391 @@ export default function HomePage() {
         }
 
         .hero {
+          height: 655px;
+          min-height: 655px;
           background: var(--sendio-hero-bg);
           border-radius: 30px;
-          margin: 16px 0 34px 0;
-          padding: 28px 34px;
-          min-height: 440px;
+          margin: -44px 0 0 0;
+          padding: 28px 34px 76px;
           display: flex;
           flex-wrap: wrap;
           gap: 24px;
           align-items: center;
           justify-content: space-between;
+          overflow: visible;
+          position: relative;
+        }
+
+        .hero-ad-grid {
+          position: absolute;
+          inset: 0;
+          z-index: 0;
+          display: grid;
+          gap: 0;
           overflow: hidden;
+          border-radius: inherit;
+          background: #000000;
+          isolation: isolate;
+        }
+
+        .hero-layout-single {
+          grid-template-columns: 1fr;
+          grid-template-rows: 1fr;
+        }
+
+        .hero-layout-split_2 {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+          grid-template-rows: 1fr;
+        }
+
+        .hero-layout-feature_left_3 {
+          grid-template-columns: 2fr 1fr;
+          grid-template-rows: repeat(2, minmax(0, 1fr));
+        }
+
+        .hero-layout-feature_left_3 .hero-ad-slot:first-child,
+        .hero-layout-feature_left_3 .hero-ad-empty-slot:first-child {
+          grid-row: 1 / 3;
+        }
+
+        .hero-layout-feature_right_3 {
+          grid-template-columns: 1fr 2fr;
+          grid-template-rows: repeat(2, minmax(0, 1fr));
+        }
+
+        .hero-layout-feature_right_3 .hero-ad-slot:nth-child(3),
+        .hero-layout-feature_right_3 .hero-ad-empty-slot:nth-child(3) {
+          grid-column: 2;
+          grid-row: 1 / 3;
+        }
+
+        .hero-layout-equal_3 {
+          grid-template-columns: repeat(3, minmax(0, 1fr));
+          grid-template-rows: 1fr;
+        }
+
+        .hero-layout-grid_4 {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+          grid-template-rows: repeat(2, minmax(0, 1fr));
+        }
+
+        .hero-layout-grid_6 {
+          grid-template-columns: repeat(3, minmax(0, 1fr));
+          grid-template-rows: repeat(2, minmax(0, 1fr));
+        }
+
+        .hero-ad-slot,
+        .hero-ad-empty-slot {
+          position: relative;
+          min-width: 0;
+          min-height: 0;
+          overflow: hidden;
+          border: 0;
+          border-radius: 0;
+          padding: 0;
+          margin: -2px;
+          background: transparent;
+        }
+
+        .hero-ad-slot {
+          cursor: pointer;
+        }
+
+        .hero-ad-slot img {
+          width: 100%;
+          height: 100%;
+          display: block;
+          object-fit: cover;
+        }
+
+        .hero-ad-video {
+          position: absolute;
+          inset: -4px;
+          z-index: 1;
+          width: calc(100% + 8px);
+          height: calc(100% + 8px);
+          display: block;
+          object-fit: cover;
+          background: transparent;
+          transform: translateZ(0);
+        }
+
+        @media (max-width: 700px) {
+          .hero-layout-feature_left_3,
+          .hero-layout-feature_right_3,
+          .hero-layout-equal_3 {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            grid-template-rows: repeat(2, minmax(0, 1fr));
+          }
+
+          .hero-layout-feature_left_3 .hero-ad-slot:first-child,
+          .hero-layout-feature_left_3 .hero-ad-empty-slot:first-child,
+          .hero-layout-equal_3 .hero-ad-slot:first-child,
+          .hero-layout-equal_3 .hero-ad-empty-slot:first-child {
+            grid-column: 1 / 3;
+            grid-row: 1;
+          }
+
+          .hero-layout-feature_right_3 .hero-ad-slot:nth-child(3),
+          .hero-layout-feature_right_3 .hero-ad-empty-slot:nth-child(3) {
+            grid-column: 1 / 3;
+            grid-row: 1;
+          }
+
+          .hero-layout-grid_6 {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            grid-template-rows: repeat(3, minmax(0, 1fr));
+          }
+        }
+
+        .hero-content,
+        .hero-search-area,
+        .hero-services-link {
+          z-index: 2;
+        }
+
+        .hero-copy {
+          padding: 12px 14px;
+          border-radius: 16px;
+          background: rgba(255, 255, 255, 0.22);
+          backdrop-filter: blur(2px);
+        }
+
+        .hero-search-area .home-search {
+          background: rgba(255, 255, 255, 0.78);
+          backdrop-filter: blur(8px);
+        }
+
+        .hero-preview-modal {
+          position: fixed;
+          inset: 0;
+          z-index: 200;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          padding: 18px;
+          background: rgba(0, 0, 0, 0.78);
+        }
+
+        .hero-preview-shell {
+          position: relative;
+          width: min(1100px, 96vw);
+          height: min(680px, 88vh);
+          overflow: hidden;
+          border-radius: 24px;
+          background: #000;
+        }
+
+        .hero-preview-shell img,
+        .hero-preview-shell video {
+          width: 100%;
+          height: 100%;
+          display: block;
+          object-fit: contain;
+          background: #000;
+        }
+
+        .hero-preview-close {
+          position: absolute;
+          top: 14px;
+          right: 14px;
+          z-index: 3;
+          width: 42px;
+          height: 42px;
+          border: 0;
+          border-radius: 50%;
+          background: rgba(255,255,255,0.92);
+          color: #111;
+          font-size: 25px;
+          font-weight: 900;
+          cursor: pointer;
+        }
+
+        .hero-services-link {
+          position: absolute;
+          left: 0;
+          bottom: -28px;
+          width: min(40%, 430px);
+          min-width: 320px;
+          height: 56px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          background: #111111;
+          color: #ffffff;
+          border: 10px solid var(--sendio-page-bg);
+          border-radius: 999px;
+          font-size: 0.72rem;
+          font-weight: 600;
+          letter-spacing: 0.02em;
+          line-height: 1;
+          text-decoration: none;
+          box-shadow: none;
+          z-index: 5;
+          transition: opacity 0.2s ease;
+        }
+
+        .hero-services-link:hover {
+          color: #ffffff;
+          opacity: 0.9;
+        }
+
+        .hero-brand-inset {
+          position: absolute;
+          left: 0;
+          top: -28px;
+          z-index: 6;
+          min-width: 250px;
+          height: 66px;
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          padding: 0 22px 0 12px;
+          border: 10px solid var(--sendio-page-bg);
+          border-radius: 999px;
+          background: #111111;
+          box-shadow: none;
+          text-decoration: none;
+          cursor: pointer;
+        }
+
+        .hero-brand-inset .logo-img {
+          width: 44px;
+          height: 44px;
+          flex: 0 0 44px;
+        }
+
+        .hero-brand-inset .logo-text {
+          font-size: 1.85rem;
+          color: #ffffff;
         }
 
         .hero-content {
-          flex: 1.2;
+          flex: 1 1 100%;
+          align-self: stretch;
+          min-width: 0;
+          min-height: 336px;
           color: #111827;
-          min-width: 280px;
+          position: relative;
+          pointer-events: none;
+        }
+
+        .hero-copy {
+          position: absolute;
+          left: 0;
+          bottom: 8px;
+          width: min(42%, 430px);
+          z-index: 2;
         }
 
         .hero-badge {
-          font-size: 0.74rem;
-          letter-spacing: 2px;
+          font-size: 0.62rem;
+          letter-spacing: 1.4px;
           color: #374151;
           font-weight: 700;
-          margin-bottom: 12px;
+          margin-bottom: 7px;
         }
 
         .hero-title {
-          font-size: 2.45rem;
+          font-size: 1.72rem;
           font-weight: 800;
-          line-height: 1.1;
-          margin-bottom: 14px;
+          line-height: 1.08;
+          margin-bottom: 8px;
           color: #111827;
         }
 
         .hero-desc {
-          font-size: 0.96rem;
+          font-size: 0.76rem;
+          line-height: 1.5;
           color: #374151;
-          margin-bottom: 16px;
-          max-width: 82%;
+          margin-bottom: 0;
+          max-width: 100%;
+        }
+
+        .hero-search-area {
+          position: absolute;
+          right: 0;
+          bottom: -28px;
+          width: 240px;
+          display: flex;
+          flex-direction: column;
+          align-items: flex-end;
+          gap: 7px;
+          z-index: 5;
+        }
+
+        .hero-search-fields-below {
+          width: 240px;
+          max-width: 240px;
+          margin: 34px 0 0 auto;
+          position: relative;
+          z-index: 6;
+        }
+
+        .hero-search-fields-below + .new-section-wrapper {
+          margin-top: 12px;
+        }
+
+        .hero-search-fields-below .search-suggestions-wrap,
+        .hero-search-fields-below .search-intent-hint,
+        .hero-search-fields-below .home-search-notice {
+          width: 240px;
+          max-width: 240px;
+          margin: 7px 0 0;
+        }
+
+        .hero-search-fields-below .search-suggestions-wrap {
+          gap: 5px;
+        }
+
+        .hero-search-fields-below .search-suggestions {
+          gap: 5px;
+        }
+
+        .hero-search-fields-below .search-suggestions button {
+          padding: 5px 7px;
+          font-size: 0.62rem;
+        }
+
+        .hero-search-fields-below .search-intent-hint,
+        .hero-search-fields-below .home-search-notice {
+          padding: 6px 8px;
+          font-size: 0.65rem;
+          line-height: 1.35;
         }
 
         .home-search-stack {
-          width: 100%;
-          max-width: 520px;
-          margin-bottom: 16px;
+          width: 240px;
+          max-width: 240px;
+          margin: 0;
           display: flex;
           flex-direction: column;
-          gap: 9px;
+          gap: 7px;
         }
 
         .home-search {
-          width: 100%;
-          height: 58px;
+          width: 240px;
+          height: 38px;
           background: var(--sendio-cream);
           border: 1px solid var(--sendio-soft-border);
           border-radius: 8px;
-          padding: 7px;
+          padding: 4px;
           display: flex;
           align-items: center;
-          box-shadow: 0 10px 20px rgba(37, 99, 235, 0.06);
+          box-shadow: 0 8px 16px rgba(37, 99, 235, 0.05);
         }
 
         .home-search-icon {
-          width: 34px;
-          height: 34px;
-          min-width: 34px;
-          border-radius: 8px;
+          width: 28px;
+          height: 28px;
+          min-width: 28px;
+          border-radius: 7px;
           background: var(--sendio-button-bg);
           color: #111827;
           display: flex;
           align-items: center;
           justify-content: center;
-          font-size: 0.92rem;
+          font-size: 0.74rem;
           font-weight: 900;
           border: 1px solid var(--sendio-soft-border);
           box-shadow: none;
@@ -2192,17 +2717,50 @@ export default function HomePage() {
 
         .home-search input {
           width: 100%;
+          min-width: 0;
           border: none;
           outline: none;
           background: transparent;
           color: #111827;
-          padding: 10px 14px;
-          font-size: 0.9rem;
+          padding: 6px 8px;
+          font-size: 0.72rem;
           font-weight: 700;
         }
 
         .home-search input::placeholder {
           color: #7a6a58;
+        }
+
+        .hero-home-button {
+          width: 56px;
+          height: 56px;
+          align-self: flex-end;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          padding: 0;
+          border: 10px solid var(--sendio-page-bg);
+          border-radius: 50%;
+          background: #111111;
+          color: #ffffff;
+          text-decoration: none;
+          cursor: pointer;
+          box-sizing: border-box;
+          box-shadow: none;
+          transition: opacity 0.2s ease;
+        }
+
+        .hero-home-button:hover {
+          color: #ffffff;
+          opacity: 0.9;
+        }
+
+        .hero-home-button-square {
+          width: 9px;
+          height: 9px;
+          display: block;
+          border-radius: 2px;
+          background: #ffffff;
         }
 
         .search-suggestions-wrap {
@@ -2282,6 +2840,41 @@ export default function HomePage() {
           font-weight: 800;
           max-width: 520px;
           margin: -8px 0 16px;
+        }
+
+        .hero-search-area .search-suggestions-wrap,
+        .hero-search-area .search-intent-hint,
+        .hero-search-area .home-search-notice {
+          width: 240px;
+          max-width: 240px;
+          margin: 0;
+        }
+
+        .hero-search-area .search-suggestions-wrap {
+          gap: 5px;
+        }
+
+        .hero-search-area .search-suggestions {
+          gap: 5px;
+        }
+
+        .hero-search-area .search-suggestions button {
+          padding: 5px 7px;
+          font-size: 0.62rem;
+        }
+
+        .hero-search-area .search-intent-hint,
+        .hero-search-area .home-search-notice {
+          padding: 6px 8px;
+          font-size: 0.65rem;
+          line-height: 1.35;
+        }
+
+        .hero-search-area .btn-primary {
+          width: 240px;
+          min-height: 38px;
+          padding: 8px 14px;
+          font-size: 0.74rem;
         }
 
         .hero-stats {
@@ -3504,20 +4097,70 @@ export default function HomePage() {
           }
 
           .hero {
-            padding: 24px 20px;
-            min-height: auto;
+            height: 520px;
+            min-height: 520px;
+            padding: 24px 20px 72px;
+            margin: 16px 0 0;
+          }
+
+          .hero-services-link {
+            left: 0;
+            bottom: -26px;
+            width: min(86%, 430px);
+            min-width: 0;
+            height: 52px;
+            border-width: 9px;
+            font-size: 0.7rem;
+          }
+
+          .hero-content {
+            min-height: 420px;
+          }
+
+          .hero-brand-inset {
+            top: -26px;
+            min-width: 0;
+            width: min(78%, 300px);
+            height: 60px;
+            padding: 0 16px 0 10px;
+            border-width: 9px;
+          }
+
+          .hero-brand-inset .logo-img {
+            width: 40px;
+            height: 40px;
+            flex-basis: 40px;
+          }
+
+          .hero-brand-inset .logo-text {
+            font-size: 1.65rem;
+          }
+
+          .hero-copy {
+            left: 0;
+            bottom: 152px;
+            width: min(100%, 320px);
+          }
+
+          .hero-search-area {
+            right: 0;
+            bottom: -26px;
+            width: 240px;
           }
 
           .hero-title {
-            font-size: 2.25rem;
+            font-size: 1.55rem;
           }
 
           .hero-desc {
             max-width: 100%;
+            font-size: 0.72rem;
           }
 
           .navbar {
-            flex-direction: column;
+            min-height: 78px;
+            flex-direction: row;
+            justify-content: flex-end;
           }
 
           .nav-links {
@@ -3582,49 +4225,65 @@ export default function HomePage() {
 
       <div className="container">
         <div className="navbar">
-          <div className="logo-area">
-            <Image
-  src="/logo.png"
-  alt="Sendio logo"
-  width={74}
-  height={74}
-  className="logo-img"
-  priority
-/>
-            <span className="logo-text">Send<span className="logo-dot">i</span>o</span>
-          </div>
-
           <ul className="nav-links">
             <li>
-              <Link href="/">Home</Link>
+              <Link href="/get-quote" className="nav-home-link" aria-label="Get Quote">
+                <span className="nav-home-square" aria-hidden="true" />
+              </Link>
             </li>
-            <li>
-              <a href="#companies-panel">Companies</a>
-            </li>
-            <li>
-              <Link href="/services">Services</Link>
-            </li>
-            <li>
+
+            <li className="nav-menu-wrap">
               <button
                 type="button"
-                onClick={() => setFiltersOpen((current) => !current)}
-                className={`filter-nav-button ${
-                  filtersOpen ? 'filter-nav-button-active' : ''
+                className={`nav-menu-toggle ${
+                  navMenuOpen ? 'nav-menu-toggle-active' : ''
                 }`}
+                aria-label="Open navigation menu"
+                aria-expanded={navMenuOpen}
+                onClick={() => setNavMenuOpen((current) => !current)}
               >
-                Filter{activeFilterCount > 0 ? ` (${activeFilterCount})` : ''}
+                <span className="nav-menu-lines" aria-hidden="true">
+                  <span />
+                  <span />
+                  <span />
+                </span>
               </button>
-            </li>
-            <li>
-              <a href="#workers-panel">Workers</a>
-            </li>
-            <li>
-              <Link href="/clients">Clients</Link>
-            </li>
-            <li>
-              <Link href="/get-quote" className="book-btn-nav">
-                Get Quote
-              </Link>
+
+              {navMenuOpen ? (
+                <div className="nav-menu-panel">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setNavMenuOpen(false);
+                      setFiltersOpen((current) => !current);
+                    }}
+                  >
+                    Filter
+                    {activeFilterCount > 0 ? ` (${activeFilterCount})` : ''}
+                  </button>
+
+                  <a
+                    href="#companies-panel"
+                    onClick={() => setNavMenuOpen(false)}
+                  >
+                    Companies
+                  </a>
+
+                  <a
+                    href="#workers-panel"
+                    onClick={() => setNavMenuOpen(false)}
+                  >
+                    Workers
+                  </a>
+
+                  <Link
+                    href="/clients"
+                    onClick={() => setNavMenuOpen(false)}
+                  >
+                    Clients
+                  </Link>
+                </div>
+              ) : null}
             </li>
           </ul>
         </div>
@@ -3760,98 +4419,92 @@ export default function HomePage() {
         ) : null}
 
         <div className="hero">
-          <div className="hero-content">
-            <div className="hero-badge">✦ SENDIO PREMIUM ✦</div>
-
-            <h1 className="hero-title">
-              Welcome to <br />
-              Elite Service Suite
-            </h1>
-
-            <p className="hero-desc">
-              Sophisticated features, sleek design, and elegant comfort. Connect
-              with trusted clients, expert workers, and top-tier companies. Book
-              now and elevate your experience.
-            </p>
-
-            <form
-              id="home-search-form"
-              className="home-search-stack"
-              onSubmit={handleHomeSearchSubmit}
+          {hasHeroAds ? (
+            <div
+              className={`hero-ad-grid hero-layout-${heroSettings.layout}`}
+              aria-label="Homepage Hero advertisements"
             >
-              <div className="home-search">
-                <span className="home-search-icon" aria-hidden="true">
-                  🔍
-                </span>
+              {heroAds.map((ad, index) =>
+                ad ? (
+                  <button
+                    type="button"
+                    key={`${ad.id}-${index}`}
+                    className="hero-ad-slot"
+                    onClick={() => {
+                      const mediaUrl =
+                        isVideoAd(ad) && ad.video_url
+                          ? ad.video_url
+                          : getAdMedia(ad);
 
-                <input
-                  type="search"
-                  value={homeSearch}
-                  onChange={(event) => setHomeSearch(event.target.value)}
-                  placeholder="Search service, worker, company, profession, skill, or meaning"
-                />
-              </div>
+                      if (!mediaUrl) return;
 
-              <div className="home-search">
-                <span className="home-search-icon" aria-hidden="true">
-                  📍
-                </span>
+                      openHeroAdPhonePreview({
+                        title: ad.title,
+                        mediaUrl,
+                        mediaType:
+                          isVideoAd(ad) && ad.video_url
+                            ? 'video'
+                            : 'image',
+                      });
+                    }}
+                    aria-label={`Open ${ad.title} advertisement preview`}
+                  >
+                    {isVideoAd(ad) && ad.video_url ? (
+                      <video
+                        src={ad.video_url}
+                        muted
+                        playsInline
+                        autoPlay
+                        loop
+                        preload="metadata"
+                        className="hero-ad-video"
+                      />
+                    ) : getAdMedia(ad) ? (
+                      <Image
+                        src={getAdMedia(ad) as string}
+                        alt={`${ad.title} advertisement`}
+                        fill
+                        unoptimized
+                        sizes="100vw"
+                        style={{ objectFit: 'cover' }}
+                      />
+                    ) : null}
 
-                <input
-                  type="search"
-                  value={homeLocation}
-                  onChange={(event) => setHomeLocation(event.target.value)}
-                  placeholder="City or registered location"
-                />
-              </div>
-            </form>
+                  </button>
+                ) : (
+                  <div
+                    key={`empty-${index}`}
+                    className="hero-ad-empty-slot"
+                    aria-hidden="true"
+                  />
+                )
+              )}
+            </div>
+          ) : null}
+          <Link href="/legal" className="hero-brand-inset" aria-label="Legal">
+            <Image
+              src="/logo.png"
+              alt="Sendio logo"
+              width={74}
+              height={74}
+              className="logo-img"
+              priority
+            />
+            <span className="logo-text">
+              Send<span className="logo-dot">i</span>o
+            </span>
+          </Link>
 
-            {searchSuggestions.length > 0 || locationSuggestions.length > 0 ? (
-              <div className="search-suggestions-wrap">
-                {searchSuggestions.length > 0 ? (
-                  <div className="search-suggestions">
-                    {searchSuggestions.map((suggestion) => (
-                      <button
-                        type="button"
-                        key={`search-${suggestion}`}
-                        onClick={() => setHomeSearch(suggestion)}
-                      >
-                        {suggestion}
-                      </button>
-                    ))}
-                  </div>
-                ) : null}
+          <div className="hero-content" aria-hidden="true" />
 
-                {locationSuggestions.length > 0 ? (
-                  <div className="search-suggestions">
-                    {locationSuggestions.map((suggestion) => (
-                      <button
-                        type="button"
-                        key={`location-${suggestion}`}
-                        onClick={() => setHomeLocation(suggestion)}
-                      >
-                        {suggestion}
-                      </button>
-                    ))}
-                  </div>
-                ) : null}
-              </div>
-            ) : null}
-
-            {matchedSearchIntentLabels.length > 0 ? (
-              <p className="search-intent-hint">
-                Related meaning detected:{' '}
-                {matchedSearchIntentLabels.join(' / ')}. Exact matches appear
-                first, then related results.
-              </p>
-            ) : null}
-
-            {homeSearchNotice ? (
-              <p className="home-search-notice">{homeSearchNotice}</p>
-            ) : null}
-
-            <button type="submit" form="home-search-form" className="btn-primary">
-              Search →
+          <div className="hero-search-area">
+            <button
+              type="submit"
+              form="home-search-form"
+              className="hero-home-button"
+              aria-label="Search"
+            >
+              <span className="hero-home-button-square" aria-hidden="true" />
             </button>
           </div>
 
@@ -3876,6 +4529,88 @@ export default function HomePage() {
               Partner Companies
             </div>
           </div>
+
+          <Link href="/services" className="hero-services-link">
+            services
+          </Link>
+        </div>
+
+        <div className="hero-search-fields-below">
+          <form
+            id="home-search-form"
+            className="home-search-stack"
+            onSubmit={handleHomeSearchSubmit}
+          >
+            <div className="home-search">
+              <span className="home-search-icon" aria-hidden="true">
+                🔍
+              </span>
+
+              <input
+                type="search"
+                value={homeSearch}
+                onChange={(event) => setHomeSearch(event.target.value)}
+                placeholder="Search service, worker, company, profession, skill, or meaning"
+              />
+            </div>
+
+            <div className="home-search">
+              <span className="home-search-icon" aria-hidden="true">
+                📍
+              </span>
+
+              <input
+                type="search"
+                value={homeLocation}
+                onChange={(event) => setHomeLocation(event.target.value)}
+                placeholder="City or registered location"
+              />
+            </div>
+          </form>
+
+          {searchSuggestions.length > 0 || locationSuggestions.length > 0 ? (
+            <div className="search-suggestions-wrap">
+              {searchSuggestions.length > 0 ? (
+                <div className="search-suggestions">
+                  {searchSuggestions.map((suggestion) => (
+                    <button
+                      type="button"
+                      key={`search-${suggestion}`}
+                      onClick={() => setHomeSearch(suggestion)}
+                    >
+                      {suggestion}
+                    </button>
+                  ))}
+                </div>
+              ) : null}
+
+              {locationSuggestions.length > 0 ? (
+                <div className="search-suggestions">
+                  {locationSuggestions.map((suggestion) => (
+                    <button
+                      type="button"
+                      key={`location-${suggestion}`}
+                      onClick={() => setHomeLocation(suggestion)}
+                    >
+                      {suggestion}
+                    </button>
+                  ))}
+                </div>
+              ) : null}
+            </div>
+          ) : null}
+
+          {matchedSearchIntentLabels.length > 0 ? (
+            <p className="search-intent-hint">
+              Related meaning detected:{' '}
+              {matchedSearchIntentLabels.join(' / ')}. Exact matches appear
+              first, then related results.
+            </p>
+          ) : null}
+
+          {homeSearchNotice ? (
+            <p className="home-search-notice">{homeSearchNotice}</p>
+          ) : null}
         </div>
 
         <div className="new-section-wrapper">
@@ -4382,6 +5117,8 @@ export default function HomePage() {
           </div>
         </div>
       </div>
+
+      <HeroAdPhonePreview />
     </>
   );
 }

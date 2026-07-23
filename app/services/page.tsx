@@ -137,6 +137,18 @@ type ServicesAdLayer = {
   direction: 'left' | 'right';
   items: ServicesAdCardItem[];
 };
+
+type ServicesAdLayerSettingRow = {
+  level: 1 | 2 | 3 | 4;
+  enabled: boolean;
+};
+
+type ServicesAdSlotRow = {
+  level: 1 | 2 | 3 | 4;
+  slot_index: number;
+  ad_id: string | null;
+  is_enabled: boolean;
+};
 const SERVICE_ICON_MAP: Record<string, string> = {
   sparkles: '🧹',
   home: '🏠',
@@ -308,19 +320,6 @@ function isServicesPageAdActive(ad: ServicesPageAd) {
     return false;
   }
 
-  if (ad.show_services_page !== true) {
-    return false;
-  }
-
-  if (
-    ad.services_slider_level !== 1 &&
-    ad.services_slider_level !== 2 &&
-    ad.services_slider_level !== 3 &&
-    ad.services_slider_level !== 4
-  ) {
-    return false;
-  }
-
   const now = new Date();
 
   if (ad.starts_at) {
@@ -383,77 +382,80 @@ function isEmptyServicesAd(
   return 'placeholder' in item;
 }
 
-function fillServicesAdSlots(
-  ads: ServicesPageAd[],
-  key: string
-) {
-  const items: ServicesAdCardItem[] =
-    ads.slice(0, 14);
-
-  while (items.length < 10) {
-    items.push({
-      id: `${key}-empty-${items.length}`,
-      placeholder: true,
-    });
-  }
-
-  return items;
-}
-
 function buildServicesAdLayers(
-  ads: ServicesPageAd[]
+  ads: ServicesPageAd[],
+  layerSettings: ServicesAdLayerSettingRow[],
+  slots: ServicesAdSlotRow[]
 ): ServicesAdLayer[] {
-  return [
+  const adById = new Map(ads.map((ad) => [ad.id, ad]));
+  const enabledLevels = new Set(
+    layerSettings
+      .filter((layer) => layer.enabled === true)
+      .map((layer) => layer.level)
+  );
+
+  const layerDefinitions: Array<{
+    level: 1 | 2 | 3 | 4;
+    key: string;
+    title: string;
+    direction: 'left' | 'right';
+  }> = [
     {
-      key: 'services-ad-level-1',
       level: 1,
+      key: 'services-ad-level-1',
       title: 'Services advertisements — Level 1',
       direction: 'left',
-      items: fillServicesAdSlots(
-        ads.filter(
-          (ad) => ad.services_slider_level === 1
-        ),
-        'services-ad-level-1'
-      ),
     },
     {
-      key: 'services-ad-level-2',
       level: 2,
+      key: 'services-ad-level-2',
       title: 'Services advertisements — Level 2',
       direction: 'right',
-      items: fillServicesAdSlots(
-        ads.filter(
-          (ad) => ad.services_slider_level === 2
-        ),
-        'services-ad-level-2'
-      ),
     },
     {
-      key: 'services-ad-level-3',
       level: 3,
+      key: 'services-ad-level-3',
       title: 'Services advertisements — Level 3',
       direction: 'left',
-      items: fillServicesAdSlots(
-        ads.filter(
-          (ad) => ad.services_slider_level === 3
-        ),
-        'services-ad-level-3'
-      ),
     },
     {
-      key: 'services-ad-level-4',
       level: 4,
+      key: 'services-ad-level-4',
       title: 'Services advertisements — Level 4',
       direction: 'right',
-      items: fillServicesAdSlots(
-        ads.filter(
-          (ad) => ad.services_slider_level === 4
-        ),
-        'services-ad-level-4'
-      ),
     },
   ];
+
+  return layerDefinitions
+    .filter((layer) => enabledLevels.has(layer.level))
+    .map((layer) => {
+      const layerSlots = slots
+        .filter((slot) => slot.level === layer.level)
+        .sort((a, b) => a.slot_index - b.slot_index);
+
+      const items: ServicesAdCardItem[] = layerSlots.map((slot) => {
+        if (slot.is_enabled !== true || !slot.ad_id) {
+          return {
+            id: `${layer.key}-empty-${slot.slot_index}`,
+            placeholder: true,
+          };
+        }
+
+        return (
+          adById.get(slot.ad_id) ?? {
+            id: `${layer.key}-inactive-${slot.slot_index}`,
+            placeholder: true,
+          }
+        );
+      });
+
+      return {
+        ...layer,
+        items,
+      };
+    });
 }
+
 export default function ServicesPage() {
   const router = useRouter();
   const heroSearchRef = useRef<HTMLFormElement | null>(null);
@@ -462,6 +464,10 @@ export default function ServicesPage() {
   const [providers, setProviders] = useState<FeaturedProvider[]>([]);
   const [serviceAds, setServiceAds] =
   useState<ServicesPageAd[]>([]);
+  const [serviceAdLayerSettings, setServiceAdLayerSettings] =
+    useState<ServicesAdLayerSettingRow[]>([]);
+  const [serviceAdSlots, setServiceAdSlots] =
+    useState<ServicesAdSlotRow[]>([]);
   const [loadingServices, setLoadingServices] = useState(true);
   const [warning, setWarning] = useState('');
   const [searchText, setSearchText] = useState('');
@@ -472,72 +478,87 @@ export default function ServicesPage() {
   const [subscriberLocation, setSubscriberLocation] = useState('');
   const [subscribeStatus, setSubscribeStatus] = useState('');
   const [isUserLoggedIn, setIsUserLoggedIn] = useState(false);
-   useEffect(() => {
-  let active = true;
+  useEffect(() => {
+    let active = true;
 
-  async function loadServicesPageAds() {
-    const { data, error } = await supabase
-      .from('company_ads')
-      .select(`
-        id,
-        company_id,
-        title,
-        description,
-        image_url,
-        video_url,
-        thumbnail_url,
-        logo,
-        media_type,
-        cta_text,
-        target_url,
-        active,
-        status,
-        starts_at,
-        ends_at,
-        show_services_page,
-        services_slider_level,
-        company:companies (
-          id,
-          name,
-          slug,
-          logo,
-          city
-        )
-      `)
-      .eq('show_services_page', true)
-      .eq('active', true)
-      .eq('status', 'active')
-      .order('created_at', {
-        ascending: false,
-      });
+    async function loadServicesPageAds() {
+      const [adsResult, layersResult, slotsResult] = await Promise.all([
+        supabase
+          .from('company_ads')
+          .select(`
+            id,
+            company_id,
+            title,
+            description,
+            image_url,
+            video_url,
+            thumbnail_url,
+            logo,
+            media_type,
+            cta_text,
+            target_url,
+            active,
+            status,
+            starts_at,
+            ends_at,
+            show_services_page,
+            services_slider_level,
+            company:companies (
+              id,
+              name,
+              slug,
+              logo,
+              city
+            )
+          `)
+          .eq('active', true)
+          .eq('status', 'active')
+          .order('created_at', { ascending: false }),
+        supabase
+          .from('services_ad_layers')
+          .select('level, enabled')
+          .order('level', { ascending: true }),
+        supabase
+          .from('services_ad_slots')
+          .select('level, slot_index, ad_id, is_enabled')
+          .order('level', { ascending: true })
+          .order('slot_index', { ascending: true }),
+      ]);
 
-    if (!active) {
-      return;
-    }
+      if (!active) {
+        return;
+      }
 
-    if (error) {
-      setServiceAds([]);
-      setWarning(
-        'Service advertisements could not be loaded.'
+      if (adsResult.error || layersResult.error || slotsResult.error) {
+        setServiceAds([]);
+        setServiceAdLayerSettings([]);
+        setServiceAdSlots([]);
+        setWarning('Service advertisements could not be loaded.');
+        return;
+      }
+
+      const normalizedAds = (
+        (adsResult.data ?? []) as RawServicesPageAd[]
+      )
+        .map(normalizeServicesPageAd)
+        .filter(isServicesPageAdActive);
+
+      setServiceAds(normalizedAds);
+      setServiceAdLayerSettings(
+        (layersResult.data ?? []) as ServicesAdLayerSettingRow[]
       );
-      return;
+      setServiceAdSlots(
+        (slotsResult.data ?? []) as ServicesAdSlotRow[]
+      );
     }
 
-    const normalizedAds = (
-      (data ?? []) as RawServicesPageAd[]
-    )
-      .map(normalizeServicesPageAd)
-      .filter(isServicesPageAdActive);
+    void loadServicesPageAds();
 
-    setServiceAds(normalizedAds);
-  }
+    return () => {
+      active = false;
+    };
+  }, []);
 
-  void loadServicesPageAds();
-
-  return () => {
-    active = false;
-  };
-}, []);
   useEffect(() => {
     let active = true;
 
@@ -795,8 +816,11 @@ export default function ServicesPage() {
     return cityMatches && serviceMatches;
   });
 
-   const serviceAdLayers =
-   buildServicesAdLayers(serviceAds);
+  const serviceAdLayers = buildServicesAdLayers(
+    serviceAds,
+    serviceAdLayerSettings,
+    serviceAdSlots
+  );
   const cvImages = providers.filter((provider) => provider.image).slice(0, 3);
   const serviceMarqueeItems = services.length > 0 ? services : visibleServices;
 
@@ -1164,105 +1188,92 @@ export default function ServicesPage() {
 
       {warning ? <p className="warningBox">{warning}</p> : null}
 
-         <section
-  className="providerLayers"
-  aria-label="Services advertisements"
->
-  {serviceAdLayers.map((layer) => (
-    <div
-      className="providerLayer"
-      key={layer.key}
-    >
-      <h2>{layer.title}</h2>
-
-      <div className="providerAutoSlider">
-        <div
-          className={
-            layer.direction === 'left'
-              ? 'providerTrack providerTrackLeft'
-              : 'providerTrack providerTrackRight'
-          }
+      {serviceAdLayers.length > 0 ? (
+        <section
+          className="providerLayers"
+          aria-label="Services advertisements"
         >
-          {[...layer.items, ...layer.items].map(
-            (item, index) => {
-              if (isEmptyServicesAd(item)) {
-                return (
-                  <article
-                    className="floatingProviderCard emptyProviderCard"
-                    key={`${item.id}-${index}`}
-                  >
-                    <div className="floatingProviderImage emptyProviderImage" />
+          {serviceAdLayers.map((layer) => (
+            <div className="providerLayer" key={layer.key}>
+              <h2>{layer.title}</h2>
 
-                    <div className="floatingProviderInfo">
-                      <span className="emptyLine emptyWide" />
-                      <span className="emptyLine emptyShort" />
-                      <span className="emptyLine emptyMedium" />
-                    </div>
-                  </article>
-                );
-              }
-
-              const media =
-                getServicesAdMedia(item);
-
-              const videoAd =
-                isServicesVideoAd(item);
-
-              const adTitle =
-                item.title?.trim() ||
-                item.company?.name ||
-                'Advertisement';
-
-              const adDescription =
-                item.description?.trim() ||
-                'Open this company profile on Sendio.';
-
-              return (
-                <article
-                  className="floatingProviderCard serviceAdCard"
-                  key={`${layer.key}-${item.id}-${index}`}
+              <div className="providerAutoSlider">
+                <div
+                  className={
+                    layer.direction === 'left'
+                      ? 'providerTrack providerTrackLeft'
+                      : 'providerTrack providerTrackRight'
+                  }
                 >
-                  <CompanyAdMediaPreview
-                    adId={item.id}
-                    mediaUrl={media}
-                    isVideo={videoAd}
-                    alt={`${adTitle} advertisement`}
-                    fallbackLetter={adTitle
-                      .charAt(0)
-                      .toUpperCase()}
-                  />
+                  {[...layer.items, ...layer.items].map(
+                    (item, index) => {
+                      if (isEmptyServicesAd(item)) {
+                        return (
+                          <article
+                            className="floatingProviderCard emptyProviderCard"
+                            key={`${item.id}-${index}`}
+                          >
+                            <div className="floatingProviderImage emptyProviderImage" />
 
-                  <div className="floatingProviderInfo">
-                    <TrackedCompanyAdLink
-                      adId={item.id}
-                      href={getServicesAdCompanyHref(
-                        item
-                      )}
-                      className="providerNameLink"
-                    >
-                      {adTitle}
-                    </TrackedCompanyAdLink>
+                            <div className="floatingProviderInfo">
+                              <span className="emptyLine emptyWide" />
+                              <span className="emptyLine emptyShort" />
+                              <span className="emptyLine emptyMedium" />
+                            </div>
+                          </article>
+                        );
+                      }
 
-                    <span className="providerStars">
-                      Advertisement • Level{' '}
-                      {layer.level}
-                    </span>
+                      const media = getServicesAdMedia(item);
+                      const videoAd = isServicesVideoAd(item);
+                      const adTitle =
+                        item.title?.trim() ||
+                        item.company?.name ||
+                        'Advertisement';
+                      const adDescription =
+                        item.description?.trim() ||
+                        'Open this company profile on Sendio.';
 
-                    <p>
-                      {shortDescription(
-                        adDescription
-                      )}
-                    </p>
-                  </div>
-                </article>
-              );
-            }
-          )}
-        </div>
-      </div>
-    </div>
-  ))}
-</section>
+                      return (
+                        <article
+                          className="floatingProviderCard serviceAdCard"
+                          key={`${layer.key}-${item.id}-${index}`}
+                        >
+                          <CompanyAdMediaPreview
+                            adId={item.id}
+                            mediaUrl={media}
+                            isVideo={videoAd}
+                            alt={`${adTitle} advertisement`}
+                            fallbackLetter={adTitle
+                              .charAt(0)
+                              .toUpperCase()}
+                          />
+
+                          <div className="floatingProviderInfo">
+                            <TrackedCompanyAdLink
+                              adId={item.id}
+                              href={getServicesAdCompanyHref(item)}
+                              className="providerNameLink"
+                            >
+                              {adTitle}
+                            </TrackedCompanyAdLink>
+
+                            <span className="providerStars">
+                              Advertisement • Level {layer.level}
+                            </span>
+
+                            <p>{shortDescription(adDescription)}</p>
+                          </div>
+                        </article>
+                      );
+                    }
+                  )}
+                </div>
+              </div>
+            </div>
+          ))}
+        </section>
+      ) : null}
 
       <footer className="servicesFooter">
         <strong>Sendio</strong>

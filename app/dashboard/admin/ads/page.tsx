@@ -21,6 +21,7 @@ type AdminAd = {
 
   ad_slot: string | null;
   show_home_slider: boolean | null;
+  show_home_hero: boolean | null;
   show_home_fixed: boolean | null;
   show_services_page: boolean | null;
   home_fixed_slot: string | null;
@@ -532,6 +533,7 @@ export default function AdminAdsPage() {
           description,
           ad_slot,
           show_home_slider,
+          show_home_hero,
           show_home_fixed,
           show_services_page,
           home_fixed_slot,
@@ -990,6 +992,16 @@ export default function AdminAdsPage() {
                 >
                   Admin Dashboard
                 </Link>
+
+
+                {currentRole === 'super_admin' ? (
+                  <Link
+                    href="/dashboard/admin/ads/display"
+                    className="rounded-full bg-black px-4 py-2 text-xs font-black text-white hover:bg-zinc-800"
+                  >
+                    Ad Display Dashboard
+                  </Link>
+                ) : null}
               </div>
             </div>
 
@@ -1176,6 +1188,7 @@ export default function AdminAdsPage() {
                               ad.status
                             )}
                           </span>
+
                         </div>
 
                         <p className="mt-1 truncate text-[11px] font-semibold text-[#8b5a2b]">
