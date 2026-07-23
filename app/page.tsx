@@ -716,6 +716,16 @@ function getAdMedia(ad: CompanyAd) {
   );
 }
 
+function getAdPosterMedia(ad: CompanyAd) {
+  return (
+    ad.thumbnail_url ||
+    ad.image_url ||
+    ad.logo ||
+    ad.company?.logo ||
+    null
+  );
+}
+
 function isVideoAd(ad: CompanyAd) {
   return Boolean(ad.video_url) || ad.media_type === 'video';
 }
@@ -2456,6 +2466,46 @@ export default function HomePage() {
           object-fit: cover;
           background: transparent;
           transform: translateZ(0);
+        }
+
+        .hero-ad-poster-fallback {
+          position: absolute;
+          inset: 0;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          background: linear-gradient(135deg, #0b5b2f, #29b9f3);
+          color: white;
+          font-size: clamp(2rem, 7vw, 5rem);
+          font-weight: 900;
+        }
+
+        .hero-ad-play-button,
+        .service-ad-play-button {
+          position: absolute;
+          left: 50%;
+          top: 50%;
+          z-index: 4;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          width: 54px;
+          height: 54px;
+          border: 3px solid rgba(255, 255, 255, 0.94);
+          border-radius: 999px;
+          background: rgba(0, 0, 0, 0.62);
+          color: white;
+          font-size: 1.35rem;
+          line-height: 1;
+          pointer-events: none;
+          transform: translate(-50%, -50%);
+          box-shadow: 0 8px 22px rgba(0, 0, 0, 0.28);
+        }
+
+        .service-ad-play-button {
+          width: 46px;
+          height: 46px;
+          font-size: 1.1rem;
         }
 
         @media (max-width: 700px) {
@@ -4964,15 +5014,26 @@ export default function HomePage() {
                     aria-label={`Open ${ad.title} advertisement preview`}
                   >
                     {isVideoAd(ad) && ad.video_url ? (
-                      <video
-                        src={ad.video_url}
-                        muted
-                        playsInline
-                        autoPlay
-                        loop
-                        preload="metadata"
-                        className="hero-ad-video"
-                      />
+                      getAdPosterMedia(ad) ? (
+                        <Image
+                          src={getAdPosterMedia(ad) as string}
+                          alt={`${ad.title} advertisement`}
+                          fill
+                          unoptimized
+                          sizes="100vw"
+                          style={{ objectFit: 'cover' }}
+                        />
+                      ) : (
+                        <span className="hero-ad-poster-fallback">
+                          {(
+                            ad.title ||
+                            ad.company?.name ||
+                            'S'
+                          )
+                            .charAt(0)
+                            .toUpperCase()}
+                        </span>
+                      )
                     ) : getAdMedia(ad) ? (
                       <Image
                         src={getAdMedia(ad) as string}
@@ -4984,6 +5045,14 @@ export default function HomePage() {
                       />
                     ) : null}
 
+                    {isVideoAd(ad) && ad.video_url ? (
+                      <span
+                        className="hero-ad-play-button"
+                        aria-hidden="true"
+                      >
+                        ▶
+                      </span>
+                    ) : null}
                   </button>
                 ) : (
                   <div
@@ -5280,6 +5349,7 @@ export default function HomePage() {
                     const name = ad.title || ad.company?.name || 'Ad';
                     const firstLetter = name.charAt(0).toUpperCase();
                     const media = getAdMedia(ad);
+                    const poster = getAdPosterMedia(ad);
                     const videoAd = isVideoAd(ad);
                     const description = ad.description?.trim();
 
@@ -5291,6 +5361,8 @@ export default function HomePage() {
   <CompanyAdMediaPreview
     adId={ad.id}
     mediaUrl={media}
+    posterUrl={poster}
+    videoUrl={ad.video_url ?? null}
     isVideo={videoAd}
     alt={`${name} advertisement`}
     fallbackLetter={firstLetter}
@@ -5360,7 +5432,9 @@ export default function HomePage() {
                   ? slotAds[categoryAdIndexes[slot.id] % slotAds.length]
                   : null;
 
-              const media = activeAd ? getAdMedia(activeAd) : null;
+              const poster = activeAd
+                ? getAdPosterMedia(activeAd)
+                : null;
               const videoAd = activeAd ? isVideoAd(activeAd) : false;
               const href = activeAd ? getAdHref(activeAd) : '/services';
               const adTitle =
@@ -5373,41 +5447,53 @@ export default function HomePage() {
                   className={`service-card-new ${
                     activeAd ? 'service-card-with-ad' : ''
                   }`}
+                  onClick={(event) => {
+                    if (
+                      !activeAd ||
+                      !videoAd ||
+                      !activeAd.video_url
+                    ) {
+                      return;
+                    }
+
+                    event.preventDefault();
+
+                    openHeroAdPhonePreview({
+                      title: activeAd.title,
+                      mediaUrl: activeAd.video_url,
+                      mediaType: 'video',
+                    });
+                  }}
                 >
                   {activeAd ? (
                     <>
                       <div className="service-ad-media">
-                        {media && videoAd ? (
-                          <video
-                            src={media}
-                            muted
-                            playsInline
-                            autoPlay
-                            loop
-                            preload="metadata"
-                            onTimeUpdate={(event) => {
-                              if (event.currentTarget.currentTime >= 5) {
-                                event.currentTarget.currentTime = 0;
-                              }
-                            }}
-                          />
-                        ) : null}
-
-                        {media && !videoAd ? (
+                        {poster ? (
                           <Image
-                            src={media}
+                            src={poster}
                             alt={`${adTitle} advertisement`}
                             width={320}
                             height={180}
-                            style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                            style={{
+                              width: '100%',
+                              height: '100%',
+                              objectFit: 'cover',
+                            }}
                             sizes="(max-width: 768px) 100vw, 320px"
                           />
-                        ) : null}
-
-                        {!media ? (
+                        ) : (
                           <div className="service-ad-fallback">
                             {adTitle.charAt(0).toUpperCase()}
                           </div>
+                        )}
+
+                        {videoAd && activeAd.video_url ? (
+                          <span
+                            className="service-ad-play-button"
+                            aria-hidden="true"
+                          >
+                            ▶
+                          </span>
                         ) : null}
                       </div>
 

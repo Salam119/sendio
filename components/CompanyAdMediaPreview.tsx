@@ -12,6 +12,8 @@ import { supabase } from '@/lib/supabase';
 type CompanyAdMediaPreviewProps = {
   adId: string;
   mediaUrl: string | null;
+  posterUrl?: string | null;
+  videoUrl?: string | null;
   isVideo: boolean;
   alt: string;
   fallbackLetter: string;
@@ -73,6 +75,8 @@ async function recordPreviewClick(adId: string) {
 export default function CompanyAdMediaPreview({
   adId,
   mediaUrl,
+  posterUrl = null,
+  videoUrl = null,
   isVideo,
   alt,
   fallbackLetter,
@@ -80,8 +84,16 @@ export default function CompanyAdMediaPreview({
   const [isOpen, setIsOpen] = useState(false);
   const [isMounted, setIsMounted] = useState(false);
 
+  const triggerImageUrl = isVideo
+    ? posterUrl
+    : mediaUrl;
+
+  const previewMediaUrl = isVideo
+    ? videoUrl || mediaUrl
+    : mediaUrl;
+
   useEffect(() => {
-   // eslint-disable-next-line react-hooks/set-state-in-effect
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setIsMounted(true);
   }, []);
 
@@ -115,9 +127,11 @@ export default function CompanyAdMediaPreview({
   }, [isOpen]);
 
   function openPreview() {
-    setIsOpen(true);
+    if (!previewMediaUrl) {
+      return;
+    }
 
-    // Opening the media preview counts as a real click.
+    setIsOpen(true);
     void recordPreviewClick(adId);
   }
 
@@ -165,30 +179,29 @@ export default function CompanyAdMediaPreview({
                     borderRadius: '36px',
                   }}
                 >
-                  {mediaUrl && isVideo ? (
+                  {previewMediaUrl && isVideo ? (
                     <video
-                      src={mediaUrl}
+                      src={previewMediaUrl}
                       controls
                       autoPlay
                       playsInline
-                      preload="metadata"
+                      preload="auto"
                       className="h-full w-full bg-black object-contain"
                     />
                   ) : null}
 
-                  {mediaUrl && !isVideo ? (
+                  {previewMediaUrl && !isVideo ? (
                     <Image
-                      src={mediaUrl}
+                      src={previewMediaUrl}
                       alt={alt}
                       fill
                       unoptimized
-                      priority
                       className="object-contain"
                       sizes="390px"
                     />
                   ) : null}
 
-                  {!mediaUrl ? (
+                  {!previewMediaUrl ? (
                     <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-[#0b5b2f] to-[#29b9f3] text-7xl font-black text-white">
                       {fallbackLetter}
                     </div>
@@ -203,47 +216,45 @@ export default function CompanyAdMediaPreview({
 
   return (
     <>
-
-            <button
-  type="button"
-  onClick={openPreview}
-  className="ad-media ad-media-preview-trigger"
-  style={{
-    border: 0,
-    padding: 0,
-    margin: 0,
-    background: 'transparent',
-    cursor: 'pointer',
-    font: 'inherit',
-    color: 'inherit',
-    appearance: 'none',
-  }}
-  aria-label={`Open ${alt} preview`}
->
-        {mediaUrl && isVideo ? (
-          <video
-            src={mediaUrl}
-            muted
-            playsInline
-            preload="metadata"
-            autoPlay
-            loop
-          />
-        ) : null}
-
-        {mediaUrl && !isVideo ? (
+      <button
+        type="button"
+        onClick={openPreview}
+        className="ad-media ad-media-preview-trigger"
+        style={{
+          position: 'relative',
+          border: 0,
+          padding: 0,
+          margin: 0,
+          background: 'transparent',
+          cursor: previewMediaUrl
+            ? 'pointer'
+            : 'default',
+          font: 'inherit',
+          color: 'inherit',
+          appearance: 'none',
+        }}
+        aria-label={`Open ${alt} preview`}
+      >
+        {triggerImageUrl ? (
           <Image
-            src={mediaUrl}
+            src={triggerImageUrl}
             alt={alt}
             fill
             unoptimized
             className="object-cover"
             sizes="220px"
           />
-        ) : null}
-
-        {!mediaUrl ? (
+        ) : (
           <span>{fallbackLetter}</span>
+        )}
+
+        {isVideo && previewMediaUrl ? (
+          <span
+            aria-hidden="true"
+            className="pointer-events-none absolute left-1/2 top-1/2 z-10 flex h-11 w-11 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border-2 border-white bg-black/65 text-lg font-black text-white shadow-lg"
+          >
+            ▶
+          </span>
         ) : null}
       </button>
 
