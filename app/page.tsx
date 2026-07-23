@@ -15,6 +15,14 @@ type UserProfile = {
   role: string | null;
 };
 
+type HomeServiceCategory = {
+  id: string;
+  name: string;
+  slug: string;
+  icon: string | null;
+  image_url: string | null;
+};
+
 type ResultTypeFilter = 'all' | 'workers' | 'companies';
 type SortFilter = 'best_match' | 'highest_rated' | 'most_reviewed' | 'newest';
 type CategoryAdSlot = 'general' | 'household' | 'gardening' | 'logistics';
@@ -1195,6 +1203,9 @@ export default function HomePage() {
   const [userEmail, setUserEmail] = useState<string | null>(null);
   const [companyUnreadMessages, setCompanyUnreadMessages] = useState(0);
   const [ads, setAds] = useState<CompanyAd[]>([]);
+  const [homeServiceCategories, setHomeServiceCategories] = useState<
+    HomeServiceCategory[]
+  >([]);
   const [heroSettings, setHeroSettings] = useState<HeroSettings>({
     enabled: false,
     layout: 'single',
@@ -1628,6 +1639,19 @@ export default function HomePage() {
           normalizeCompanyAd
         );
         setAds(normalizedAds);
+      }
+
+      const { data: homeServicesData } = await supabase
+        .from('service_categories')
+        .select('id, name, slug, icon, image_url')
+        .eq('is_active', true)
+        .order('sort_order', { ascending: true })
+        .order('name', { ascending: true });
+
+      if (homeServicesData) {
+        setHomeServiceCategories(
+          homeServicesData as HomeServiceCategory[]
+        );
       }
 
       const [heroSettingsResult, heroSlotsResult] = await Promise.all([
@@ -4221,7 +4245,486 @@ export default function HomePage() {
             grid-template-columns: repeat(2, minmax(0, 1fr));
           }
         }
-      `}</style>
+
+        .home-services-slider {
+          display: none;
+        }
+                  @media (min-width: 701px) {
+                    .hero-services-link {
+            left: 10px;
+            right: 10px;
+            bottom: -30px;
+            width: auto;
+            min-width: 0;
+            height: 60px;
+            border-width: 10px;
+            font-size: 0.82rem;
+          }
+
+          .hero-search-area {
+            left: 50%;
+            right: auto;
+            bottom: -72px;
+            width: 60px;
+            height: 60px;
+            transform: translateX(-50%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0;
+            z-index: 10;
+          }
+
+          .hero-search-area .btn-primary {
+            width: 60px;
+            min-width: 60px;
+            height: 60px;
+            min-height: 60px;
+            padding: 0;
+            border: 10px solid var(--sendio-page-bg);
+            border-radius: 999px;
+          }
+
+          .hero-search-fields-below {
+            width: min(900px, calc(100% - 48px));
+            max-width: none;
+            margin: 46px auto 0;
+          }
+
+          .home-search-stack {
+            width: 100%;
+            max-width: none;
+            display: flex;
+            flex-direction: row-reverse;
+            gap: 84px;
+          }
+
+          .home-search {
+            flex: 1 1 0;
+            width: auto;
+            height: 48px;
+            padding: 5px;
+            border-radius: 10px;
+          }
+          .home-search-icon {
+            width: 36px;
+            height: 36px;
+            min-width: 36px;
+            border-radius: 8px;
+            font-size: 0.84rem;
+          }
+
+          .home-services-slider {
+            display: block;
+            width: 100%;
+            margin: 18px 0 22px;
+            padding: 10px 0 6px;
+            overflow: hidden;
+          }
+
+          .home-services-track {
+            display: flex;
+            align-items: flex-start;
+            width: max-content;
+            gap: 36px;
+            animation:
+              homeServicesDesktopLeftToRight 60s linear infinite;
+            will-change: transform;
+          }
+
+          .home-services-track:hover {
+            animation-play-state: paused;
+          }
+
+          .home-service-floating-link {
+            flex: 0 0 92px;
+            width: 92px;
+            margin: 0;
+            padding: 0;
+            display: grid;
+            justify-items: center;
+            gap: 8px;
+            color: #111827;
+            text-decoration: none;
+            text-align: center;
+            background: transparent;
+            border: none;
+            box-shadow: none;
+          }
+
+          .home-service-floating-icon {
+            width: 38px;
+            height: 38px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 38px;
+            line-height: 1;
+            filter: drop-shadow(
+              0 5px 7px rgba(15, 23, 42, 0.12)
+            );
+          }
+
+          .home-service-floating-icon img {
+            width: 38px;
+            height: 38px;
+            object-fit: contain;
+          }
+
+          .home-service-floating-name {
+            width: 92px;
+            color: #334155;
+            font-size: 12px;
+            line-height: 1.15;
+            font-weight: 700;
+            text-align: center;
+            white-space: normal;
+          }
+
+          @keyframes homeServicesDesktopLeftToRight {
+            from {
+              transform: translateX(-50%);
+            }
+
+            to {
+              transform: translateX(0);
+            }
+          }
+                      .hero-brand-inset {
+            transform: translateY(-20px);
+          }
+
+          .nav-links {
+            transform: translateY(-14px);
+          }
+                    .nav-home-link {
+            transform: scale(0.82);
+            transform-origin: center;
+          }
+
+          .nav-menu-wrap > button {
+            transform: scale(0.82);
+            transform-origin: center;
+          }
+          }
+        /* SENDIO MOBILE HEADER HERO COMPLETE V1 */
+        @media (max-width: 700px) {
+          .container {
+            padding-left: 6px;
+            padding-right: 6px;
+          }
+
+          .navbar {
+            height: 58px;
+            min-height: 58px;
+            padding: 0;
+            margin: 0 0 -24px;
+            position: relative;
+            z-index: 30;
+          }
+
+              .nav-links {
+  position: absolute;
+  right: 4px;
+  bottom: 16px;
+  z-index: 35;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: nowrap;
+  gap: 2px;
+  margin: 0;
+  transform: none;
+}
+
+.nav-links li {
+  margin: 0;
+}
+
+        .nav-home-link {
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border: 5px solid var(--sendio-page-bg);
+  border-radius: 50%;
+  background: #111111;
+  box-sizing: border-box;
+  transform: none;
+}
+
+  .nav-menu-toggle {
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: 5px solid var(--sendio-page-bg);
+  border-radius: 12px;
+  background: var(--sendio-button-bg);
+  box-sizing: border-box;
+  transform: none;
+}
+
+          .nav-menu-toggle:hover,
+          .nav-menu-toggle-active {
+            background: var(--sendio-button-bg-hover);
+            transform: none;
+          }
+
+
+             .nav-menu-lines {
+  width: 14px;
+  gap: 3px;
+}
+
+.nav-menu-lines span {
+  height: 2px;
+}
+
+          .nav-menu-panel {
+            top: calc(100% + 6px);
+            right: 0;
+          }
+
+          .hero {
+            height: 250px;
+            min-height: 250px;
+            margin: 0;
+            padding: 0;
+            border-radius: 24px;
+          }
+
+          .hero-content {
+            min-height: 0;
+          }
+
+               .hero-brand-inset {
+  top: -34px;
+  left: 6px;
+  width: 142px;
+  min-width: 0;
+  height: 40px;
+  padding: 0 9px 0 6px;
+  border-width: 5px;
+}
+
+          .hero-brand-inset .logo-img {
+  width: 26px;
+  height: 26px;
+  flex: 0 0 26px;
+}
+
+          .hero-brand-inset .logo-text {
+  font-size: 1.1rem;
+}
+
+          .hero-layout-grid_6 {
+            grid-template-columns:
+              repeat(2, minmax(0, 1fr));
+            grid-template-rows:
+              repeat(2, minmax(0, 1fr));
+          }
+
+          .hero-layout-grid_6 > :nth-child(n + 5) {
+            display: none;
+          }
+
+          .hero-ad-slot,
+          .hero-ad-empty-slot {
+            margin: -2px;
+          }
+
+         .hero-services-link {
+  left: 6px;
+  bottom: -34px;
+  width: calc(100% - 58px);
+  min-width: 0;
+  height: 40px;
+  border-width: 5px;
+}
+         .hero-search-area {
+  right: 6px;
+  bottom: -32px;
+  width: auto;
+}
+
+          .hero-home-button {
+  width: 36px;
+  height: 36px;
+  border-width: 5px;
+}
+
+          .hero-search-fields-below {
+            width: 100%;
+            max-width: none;
+            margin: 42px 0 0;
+          }
+
+          .home-search-stack {
+            width: 100%;
+            max-width: none;
+            display: flex;
+            flex-direction: row-reverse;
+            gap: 6px;
+          }
+
+          .hero-search-fields-below .home-search {
+            flex: 1 1 0;
+            width: auto;
+            min-width: 0;
+            height: 32px;
+            padding: 3px;
+            border-radius: 7px;
+          }
+
+          .hero-search-fields-below .home-search-icon {
+            width: 24px;
+            height: 24px;
+            min-width: 24px;
+            border-radius: 6px;
+            font-size: 0.66rem;
+          }
+
+          .hero-search-fields-below .home-search input {
+            min-width: 0;
+            padding: 4px 5px;
+            font-size: 0.62rem;
+          }
+
+          .hero-search-fields-below .search-suggestions-wrap,
+          .hero-search-fields-below .search-intent-hint,
+          .hero-search-fields-below .home-search-notice {
+            width: 100%;
+            max-width: none;
+          }
+
+          .home-services-slider {
+            display: block;
+            width: 100%;
+            margin: 8px 0 10px;
+            padding: 3px 0;
+            overflow: hidden;
+          }
+
+          .home-services-track {
+            display: flex;
+            align-items: flex-start;
+            width: max-content;
+            gap: 28px;
+            animation:
+              homeServicesLeftToRight 60s linear infinite;
+            will-change: transform;
+          }
+
+          .home-services-track:hover {
+            animation-play-state: paused;
+          }
+
+          .home-service-floating-link {
+            flex: 0 0 68px;
+            width: 68px;
+            margin: 0;
+            padding: 0;
+            display: grid;
+            justify-items: center;
+            gap: 7px;
+            color: #111827;
+            text-decoration: none;
+            text-align: center;
+            background: transparent;
+            border: none;
+            box-shadow: none;
+          }
+
+          .home-service-floating-icon {
+            width: 27px;
+            height: 27px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 27px;
+            line-height: 1;
+            filter: drop-shadow(
+              0 5px 7px rgba(15, 23, 42, 0.12)
+            );
+            transition:
+              transform 160ms ease,
+              filter 160ms ease;
+          }
+
+          .home-service-floating-icon img {
+            width: 27px;
+            height: 27px;
+            object-fit: contain;
+          }
+
+          .home-service-floating-link:active
+            .home-service-floating-icon {
+            transform: scale(0.92);
+          }
+
+          .home-service-floating-name {
+            width: 68px;
+            color: #334155;
+            font-size: 10.5px;
+            font-weight: 700;
+            line-height: 1.15;
+            text-align: center;
+            white-space: normal;
+          }
+
+          @keyframes homeServicesLeftToRight {
+            from {
+              transform: translateX(-50%);
+            }
+
+            to {
+              transform: translateX(0);
+            }
+          }
+
+}
+              .filter-overlay {
+          position: fixed;
+          inset: 0;
+          z-index: 999;
+          display: flex;
+          align-items: flex-start;
+          justify-content: flex-end;
+          padding: 76px 24px 24px;
+          background: rgba(15, 23, 42, 0.14);
+        }
+
+        .filter-overlay .filter-panel {
+          position: relative;
+          width: min(320px, calc(100vw - 24px));
+          max-height: calc(100vh - 100px);
+          overflow-y: auto;
+          margin: 0;
+          padding: 14px;
+          border-radius: 16px;
+          background: #ffffff;
+          box-shadow: 0 22px 50px rgba(15, 23, 42, 0.24);
+        }
+
+        .filter-overlay .filter-panel-title {
+          margin-bottom: 8px;
+          font-size: 0.9rem;
+        }
+
+        .filter-overlay .filter-stack {
+          gap: 8px;
+        }
+
+        .filter-overlay .filter-input,
+        .filter-overlay .filter-select {
+          min-height: 40px;
+          padding: 8px 12px;
+        }
+
+        .filter-overlay .filter-check-row,
+        .filter-overlay .filter-search-button {
+          min-height: 40px;
+        }
+`}</style>
 
       <div className="container">
         <div className="navbar">
@@ -4288,8 +4791,18 @@ export default function HomePage() {
           </ul>
         </div>
 
-        {filtersOpen ? (
-          <section className="filter-panel">
+             {filtersOpen ? (
+  <div
+    className="filter-overlay"
+    onClick={() => setFiltersOpen(false)}
+  >
+    <section
+      className="filter-panel"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Filter"
+      onClick={(event) => event.stopPropagation()}
+    >
             <div className="filter-panel-title">Filter</div>
 
             <div className="filter-stack">
@@ -4416,6 +4929,7 @@ export default function HomePage() {
               </button>
             </div>
           </section>
+           </div>
         ) : null}
 
         <div className="hero">
@@ -4612,6 +5126,150 @@ export default function HomePage() {
             <p className="home-search-notice">{homeSearchNotice}</p>
           ) : null}
         </div>
+
+        {homeServiceCategories.length > 0 ? (
+          <div
+            className="home-services-slider"
+            aria-label="Services"
+          >
+            <div className="home-services-track">
+              {[
+                ...homeServiceCategories,
+                ...homeServiceCategories,
+              ].map((service, index) => {
+                const city = homeLocation.trim();
+                const href = city
+                  ? `/services/${service.slug}?city=${encodeURIComponent(city)}`
+                  : `/services/${service.slug}`;
+
+                return (
+                  <Link
+                    href={href}
+                    className="home-service-floating-link"
+                    key={`${service.id}-${index}`}
+                    aria-label={service.name}
+                  >
+                    <span className="home-service-floating-icon">
+                      {service.image_url ? (
+                        <Image
+                          src={service.image_url}
+                          alt=""
+                          width={40}
+                          height={40}
+                          unoptimized
+                        />
+                      ) : service.icon ? (
+                        <span aria-hidden="true">
+                         {(
+ {
+  ant: '🐜',
+  bath: '🛁',
+  bike: '🚲',
+  blocks: '🧱',
+  box: '📦',
+  boxes: '📦📦',
+  'brick-wall': '🧱🔨',
+  briefcase: '💼',
+  brush: '🧹',
+  bug: '🐛',
+  'bug-off': '🪲',
+  building: '🏢',
+  'building-2': '🏬',
+  cabinet: '🗄️',
+  camera: '📹',
+  'chef-hat': '👨‍🍳',
+  chimney: '🏚️',
+  construction: '🏗️',
+  curtains: '🪟',
+  dishwasher: '🍽️',
+  door: '🚪',
+  droplet: '💧',
+  droplets: '💦',
+  fan: '🌀',
+  fence: '🪵',
+  flame: '🔥',
+  flower: '🌸',
+  grass: '🌱',
+  grid: '🟫',
+  'grid-2x2': '🧩',
+  gutter: '🏠🌧️',
+  hammer: '🔨',
+  'hard-hat': '👷',
+  heat: '♨️',
+  home: '🏠',
+  'home-repair': '🛠️',
+  house: '🏡',
+  key: '🔑',
+  laptop: '💻',
+  layers: '🧽',
+  layout: '📐',
+  'layout-panel-top': '🪚',
+  leaf: '🍃',
+  lightbulb: '💡',
+  lock: '🔒',
+  'map-pin': '📍',
+  mouse: '🐁',
+  oven: '🍳',
+  package: '📦',
+  'package-check': '📦✅',
+  'paint-roller': '🖌️',
+  paintbrush: '🎨',
+  panel: '⚡🔧',
+  'panel-top': '🧱🛠️',
+  pipe: '🚰',
+  plug: '🔌',
+  printer: '🖨️',
+  rain: '🌧️',
+  road: '🛣️',
+  roof: '🏠',
+  'roof-repair': '🏠🔨',
+  scissors: '✂️',
+  scroll: '📜',
+  settings: '⚙️',
+  shelves: '🗄️',
+  shovel: '🪏',
+  signpost: '🪧',
+  smartphone: '📱',
+  snowflake: '❄️',
+  sofa: '🛋️',
+  sparkles: '✨',
+  spray: '🧴',
+  store: '🏪',
+  sun: '☀️',
+  thermometer: '🌡️',
+  toilet: '🚽',
+  toolbox: '🧰',
+  trash: '🗑️',
+  'trash-2': '♻️',
+  tree: '🌳',
+  truck: '🚚',
+  tv: '📺',
+  warehouse: '🏭',
+  'washing-machine': '🧺',
+  waves: '🌊',
+  wifi: '📶',
+  wind: '💨',
+  window: '🪟',
+  wood: '🪵',
+  wrench: '🔧',
+  zap: '⚡',
+} as Record<string, string>
+)[service.icon.trim().toLowerCase()] ?? '🧰'}
+                        </span>
+                      ) : (
+                        <span aria-hidden="true">✦</span>
+                      )}
+                    </span>
+
+                    <span className="home-service-floating-name">
+                      {service.name}
+                    </span>
+                  </Link>
+                );
+              })}
+            </div>
+          </div>
+        ) : null}
 
         <div className="new-section-wrapper">
           <div className="ads-section" id="ads">
