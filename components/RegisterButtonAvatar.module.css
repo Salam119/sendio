@@ -1,0 +1,79 @@
+﻿.scene {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  overflow: hidden;
+  border-radius: 14px;
+  pointer-events: none;
+}
+
+.doorWrap {
+  position: absolute;
+  right: 7px;
+  bottom: 1px;
+  width: 34px;
+  height: 44px;
+  perspective: 160px;
+}
+
+.doorFrame {
+  position: absolute;
+  inset: 0;
+  width: 34px;
+  height: 44px;
+  display: block;
+  filter: drop-shadow(0 2px 2px rgba(15, 23, 42, 0.24));
+}
+
+.doorLeaf {
+  position: absolute;
+  left: 5px;
+  bottom: 3px;
+  width: 24px;
+  height: 37px;
+  display: block;
+  transform-origin: left center;
+  backface-visibility: hidden;
+  will-change: transform;
+  animation: registerDoorOpen 5.4s cubic-bezier(0.45, 0, 0.2, 1) infinite;
+}
+
+@keyframes registerDoorOpen {
+  0%,
+  18%,
+  78%,
+  100% {
+    transform: perspective(160px) rotateY(0deg) scaleX(1);
+  }
+
+  30%,
+  64% {
+    transform: perspective(160px) rotateY(-80deg) scaleX(0.25);
+  }
+}
+
+@media (max-width: 640px) {
+  .doorWrap {
+    right: 6px;
+    width: 30px;
+    height: 39px;
+  }
+
+  .doorFrame {
+    width: 30px;
+    height: 39px;
+  }
+
+  .doorLeaf {
+    left: 4px;
+    bottom: 3px;
+    width: 22px;
+    height: 33px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .doorLeaf {
+    animation: none;
+  }
+}

@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 
 import Image from 'next/image';
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
@@ -9,6 +9,8 @@ import CompanyAdMediaPreview from '@/components/CompanyAdMediaPreview';
 import HeroAdPhonePreview, {
   openHeroAdPhonePreview,
 } from '@/components/HeroAdPhonePreview';
+import RegisterButtonAvatar from '@/components/RegisterButtonAvatar';
+import LoginButtonAvatar from '@/components/LoginButtonAvatar';
 type UserProfile = {
   full_name: string | null;
   user_type: 'client' | 'worker' | 'company' | string | null;
@@ -3319,39 +3321,82 @@ export default function HomePage() {
           flex-direction: column;
           gap: 15px;
           align-items: center;
-          margin-bottom: 14px;
+          margin: 58px 0 18px;
         }
 
         .buttons-row-main {
           display: flex;
-          gap: 15px;
+          gap: 18px;
           justify-content: center;
+          align-items: center;
           flex-wrap: wrap;
         }
 
-        .btn-custom {
-          border: 1px solid var(--sendio-soft-border);
-          cursor: pointer;
-          padding: 10px 24px;
-          border-radius: var(--sendio-radius);
-          font-size: 0.85rem;
-          font-weight: 800;
-          transition: 0.2s;
-          text-decoration: none;
-          display: inline-block;
-          background: var(--sendio-button-bg);
-          color: #111827;
+        .auth-avatar-button-wrap {
+          position: relative;
+          display: inline-flex;
+          min-width: 168px;
         }
 
-        .btn-main-blue {
-          background-color: var(--sendio-button-bg);
-          color: #111827;
+        .btn-custom {
+          width: 100%;
+          min-height: 48px;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          border: 1px solid transparent;
+          cursor: pointer;
+          padding: 12px 28px;
+          border-radius: 14px;
+          font-size: 0.9rem;
+          font-weight: 900;
+          letter-spacing: 0.01em;
+          transition: transform 0.2s ease, box-shadow 0.2s ease, filter 0.2s ease;
+          text-decoration: none;
+          color: #ffffff;
+          box-shadow: 0 10px 22px -14px rgba(15, 23, 42, 0.65);
+        }
+
+        .btn-login-avatar {
+          background: linear-gradient(135deg, #0ea5e9, #2563eb);
+          border-color: rgba(37, 99, 235, 0.35);
+        }
+
+        .btn-register-avatar {
+          background: linear-gradient(135deg, #8b5cf6, #6d28d9);
+          border-color: rgba(109, 40, 217, 0.35);
         }
 
         .btn-custom:hover {
-          transform: translateY(-1px);
-          background: var(--sendio-button-bg-hover);
+          transform: translateY(-2px);
+          filter: brightness(1.04);
+          box-shadow: 0 14px 26px -15px rgba(15, 23, 42, 0.75);
           opacity: 1;
+        }
+
+        .btn-custom:focus-visible {
+          outline: 3px solid rgba(37, 99, 235, 0.22);
+          outline-offset: 3px;
+        }
+
+        @media (max-width: 640px) {
+          .buttons-block {
+            margin-top: 50px;
+          }
+
+          .buttons-row-main {
+            gap: 14px;
+          }
+
+          .auth-avatar-button-wrap {
+            min-width: 142px;
+          }
+
+          .btn-custom {
+            min-height: 44px;
+            padding: 10px 20px;
+            font-size: 0.82rem;
+          }
         }
 
         .user-view {
@@ -3505,103 +3550,132 @@ export default function HomePage() {
         }
 
         .role-showcase {
-          display: flex;
-          flex-wrap: wrap;
-          justify-content: center;
+          position: absolute;
+          top: -41px;
+          left: 24px;
+          right: 24px;
+          z-index: 5;
+          display: grid;
+          grid-template-columns: repeat(3, minmax(0, 1fr));
+          align-items: center;
+          gap: 24px;
+          pointer-events: none;
+        }
+
+        .role-showcase .role-card {
+          position: relative;
+          width: 220px;
+          max-width: 100%;
+          height: 82px;
+          min-height: 82px;
+          display: grid;
+          grid-template-columns: 44px 1fr;
           align-items: center;
           gap: 12px;
-          margin: 12px 0 28px;
-        }
-
-        .role-card {
-          flex: 0 0 177px;
-          width: 177px;
-          max-width: 177px;
-          height: 38px;
-          min-height: 38px;
-          background: var(--sendio-button-bg);
-          border-radius: var(--sendio-radius);
-          padding: 0 12px;
-          border: 1px solid var(--sendio-soft-border);
-          transition: 0.2s;
+          padding: 0 20px;
+          border: 6px solid #ffffff;
+          border-radius: 24px;
           text-decoration: none;
-          color: #111827;
-          display: grid;
-          grid-template-columns: 26px 1fr;
-          column-gap: 8px;
-          align-items: center;
-          text-align: left;
+          font-weight: 900;
+          pointer-events: auto;
+          box-shadow:
+            0 0 0 2px rgba(255, 255, 255, 0.96),
+            inset 0 0 0 2px currentColor,
+            inset 0 8px 14px rgba(255, 255, 255, 0.58),
+            0 16px 24px -17px rgba(15, 23, 42, 0.62);
+          transition:
+            transform 0.2s ease,
+            box-shadow 0.2s ease;
         }
 
-        .role-icon {
-          grid-row: 1 / 3;
+        .role-showcase .role-card:nth-child(1) {
+          justify-self: start;
+        }
+
+        .role-showcase .role-card:nth-child(2) {
+          justify-self: center;
+        }
+
+        .role-showcase .role-card:nth-child(3) {
+          justify-self: end;
+        }
+
+        .role-showcase .role-card-client {
+          background: #ecfdf5;
+          color: #047857;
+        }
+
+        .role-showcase .role-card-worker {
+          background: #eff6ff;
+          color: #1d4ed8;
+        }
+
+        .role-showcase .role-card-company {
+          background: #f5f3ff;
+          color: #7c3aed;
+        }
+
+        .role-showcase .role-icon {
+          width: 44px;
+          height: 44px;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          border-radius: 14px;
+          background: rgba(255, 255, 255, 0.92);
+          font-size: 21px;
+          line-height: 1;
+          box-shadow:
+            inset 0 0 0 1px rgba(15, 23, 42, 0.06),
+            0 4px 9px rgba(15, 23, 42, 0.1);
+        }
+
+        .role-showcase .role-label {
+          font-size: 1.05rem;
+          font-weight: 900;
+          line-height: 1;
+          text-align: center;
+        }
+
+        .role-showcase .role-card-clickable {
+          cursor: pointer;
+        }
+
+        .role-showcase .role-card:hover {
+          transform: translateY(-4px);
+          box-shadow:
+            0 0 0 2px rgba(255, 255, 255, 0.98),
+            inset 0 0 0 2px currentColor,
+            inset 0 8px 14px rgba(255, 255, 255, 0.64),
+            0 20px 30px -18px rgba(15, 23, 42, 0.68);
+        }
+
+        .role-showcase .role-card-active::after {
+          content: '\\2713';
+          position: absolute;
+          top: -10px;
+          right: -10px;
           width: 26px;
           height: 26px;
-          min-width: 26px;
-          min-height: 26px;
-          border-radius: var(--sendio-radius);
-          background: transparent;
-          color: #111827;
           display: flex;
           align-items: center;
           justify-content: center;
+          border: 3px solid #ffffff;
+          border-radius: 999px;
+          background: #2563eb;
+          color: #ffffff;
           font-size: 13px;
           font-weight: 900;
-          margin: 0;
-        }
-
-        .role-card h3 {
-          margin: 0;
-          color: #111827;
-          font-size: 0.82rem;
-          font-weight: 900;
-          line-height: 1.05;
-        }
-
-        .role-badge {
-          display: none;
-        }
-
-        .role-card-active {
-          background-color: var(--sendio-button-bg-hover) !important;
-          border-color: rgba(37, 99, 235, 0.2) !important;
-          transform: none;
-          cursor: pointer;
-        }
-
-        .role-card-active h3 {
-          color: #111827 !important;
-        }
-
-        .role-card-active .role-icon {
-          background: transparent;
-          color: #111827 !important;
-        }
-
-        .role-card-active .role-badge {
-          color: #111827 !important;
-        }
-
-        .role-card-clickable {
-          cursor: pointer;
-        }
-
-        .role-card-clickable:hover {
-          transform: translateY(-1px);
-          background: var(--sendio-button-bg-hover);
-          box-shadow: none;
-        }
-
-        .role-card-active:hover {
-          transform: translateY(-1px);
         }
 
         .public-directory {
-          margin: 10px 0 46px;
+          position: relative;
+          overflow: visible;
+          margin: 58px 0 46px;
           background: white;
           border: 1px solid rgba(196, 154, 108, 0.28);
           border-radius: 30px;
-          padding: 24px;
+          padding: 72px 24px 24px;
           box-shadow: 0 16px 30px -20px rgba(0, 0, 0, 0.2);
         }
 
@@ -4260,14 +4334,46 @@ export default function HomePage() {
           }
 
           .role-showcase {
-            gap: 10px;
-            margin: 10px 0 26px;
+            top: -32px;
+            left: 10px;
+            right: 10px;
+            gap: 6px;
           }
 
-          .role-card {
-            flex: 0 0 177px;
-            width: 177px;
-            max-width: 177px;
+          .role-showcase .role-card {
+            width: 100%;
+            max-width: 126px;
+            height: 64px;
+            min-height: 64px;
+            grid-template-columns: 30px 1fr;
+            gap: 5px;
+            padding: 0 8px;
+            border-width: 4px;
+            border-radius: 18px;
+          }
+
+          .role-showcase .role-icon {
+            width: 30px;
+            height: 30px;
+            border-radius: 10px;
+            font-size: 15px;
+          }
+
+          .role-showcase .role-label {
+            font-size: 0.76rem;
+          }
+
+          .role-showcase .role-card-active::after {
+            top: -8px;
+            right: -7px;
+            width: 21px;
+            height: 21px;
+            font-size: 11px;
+          }
+
+          .public-directory {
+            margin-top: 50px;
+            padding-top: 58px;
           }
 
           .public-directory-header {
@@ -4939,7 +5045,10 @@ export default function HomePage() {
         .filter-overlay .filter-search-button {
           min-height: 40px;
         }
-`}</style>
+
+
+
+      `}</style>
 
       <div className="container">
         <div className="navbar">
@@ -5701,13 +5810,22 @@ export default function HomePage() {
           <div className="buttons-block">
             {!isLoggedIn && (
               <div className="buttons-row-main">
-                <Link href="/login" className="btn-custom btn-main-blue">
-                  Login
-                </Link>
+                <div className="auth-avatar-button-wrap">
+                  <LoginButtonAvatar />
+                  <Link href="/login" className="btn-custom btn-login-avatar">
+                    Login
+                  </Link>
+                </div>
 
-                <Link href="/register" className="btn-custom btn-main-blue">
-                  Sign Up
-                </Link>
+                <div className="auth-avatar-button-wrap">
+                  <RegisterButtonAvatar />
+                  <Link
+                    href="/register"
+                    className="btn-custom btn-register-avatar"
+                  >
+                    Sign Up
+                  </Link>
+                </div>
               </div>
             )}
 
@@ -5765,49 +5883,46 @@ export default function HomePage() {
             )}
           </div>
 
+        </div>
+
+        <section className="public-directory" id="public-directory">
           <div className="role-showcase" id="roles">
             <Link
               href="/clients"
-              className={`role-card role-card-clickable ${
+              className={`role-card role-card-client role-card-clickable ${
                 userType === 'client' ? 'role-card-active' : ''
               }`}
             >
-              <span className="role-icon">C</span>
-              <div>
-                <h3>Clients</h3>
-                <div className="role-badge">Client guide</div>
-              </div>
+              <span className="role-icon" aria-hidden="true">
+                {'\u{1F464}'}
+              </span>
+              <span className="role-label">Client</span>
             </Link>
 
             <a
               href="#workers-panel"
-              className={`role-card role-card-clickable ${
+              className={`role-card role-card-worker role-card-clickable ${
                 userType === 'worker' ? 'role-card-active' : ''
               }`}
             >
-              <span className="role-icon">W</span>
-              <div>
-                <h3>Workers</h3>
-                <div className="role-badge">Open profiles</div>
-              </div>
+              <span className="role-icon" aria-hidden="true">
+                {'\u{1F4BC}'}
+              </span>
+              <span className="role-label">Worker</span>
             </a>
 
             <a
               href="#companies-panel"
-              className={`role-card role-card-clickable ${
+              className={`role-card role-card-company role-card-clickable ${
                 userType === 'company' ? 'role-card-active' : ''
               }`}
             >
-              <span className="role-icon">S</span>
-              <div>
-                <h3>Companies</h3>
-                <div className="role-badge">Trusted partners</div>
-              </div>
+              <span className="role-icon" aria-hidden="true">
+                {'\u{1F3E2}'}
+              </span>
+              <span className="role-label">Company</span>
             </a>
           </div>
-        </div>
-
-        <section className="public-directory" id="public-directory">
           <div className="public-directory-header">
             <div>
               <div className="directory-kicker">Public Directory</div>
