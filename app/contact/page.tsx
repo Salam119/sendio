@@ -64,7 +64,7 @@ export default function ContactPage() {
             </Link>
 
             <Link href="/get-quote" className="smallButton lightButton">
-              Get Quote Guide
+            Request Help Guide
             </Link>
           </div>
         </article>
@@ -169,7 +169,7 @@ export default function ContactPage() {
         </div>
 
         <Link href="/pricing" className="primaryButton">
-          Continue to Pricing
+         Explore Platform Options
         </Link>
       </section>
 

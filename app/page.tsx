@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import Image from 'next/image';
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
@@ -28,6 +28,7 @@ type HomeServiceCategory = {
 type ResultTypeFilter = 'all' | 'workers' | 'companies';
 type SortFilter = 'best_match' | 'highest_rated' | 'most_reviewed' | 'newest';
 type CategoryAdSlot = 'general' | 'household' | 'gardening' | 'logistics';
+type DirectoryPanel = 'workers' | 'companies';
 
 type HeroLayout =
   | 'single'
@@ -1236,6 +1237,8 @@ export default function HomePage() {
   const [homeSearchNotice, setHomeSearchNotice] = useState<string | null>(null);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [navMenuOpen, setNavMenuOpen] = useState(false);
+  const [activeDirectoryPanel, setActiveDirectoryPanel] =
+    useState<DirectoryPanel | null>(null);
   const [resultTypeFilter, setResultTypeFilter] =
     useState<ResultTypeFilter>('all');
   const [filterCitySearch, setFilterCitySearch] = useState('');
@@ -3639,6 +3642,17 @@ export default function HomePage() {
 
         .role-showcase .role-card-clickable {
           cursor: pointer;
+          font: inherit;
+          text-align: left;
+        }
+
+        .role-showcase .role-card-open {
+          transform: translateY(-4px);
+          box-shadow:
+            0 0 0 2px rgba(255, 255, 255, 0.98),
+            inset 0 0 0 2px currentColor,
+            inset 0 8px 14px rgba(255, 255, 255, 0.64),
+            0 20px 30px -18px rgba(15, 23, 42, 0.68);
         }
 
         .role-showcase .role-card:hover {
@@ -3721,31 +3735,57 @@ export default function HomePage() {
         }
 
         .directory-count-badge {
-          color: #0b5b2f;
-          background: #f1e6d8;
+          display: inline-flex;
+          align-items: center;
+          gap: 8px;
+          background: #ffffff;
+          border: 1px solid #e3e8ff;
           border-radius: 999px;
-          padding: 9px 13px;
+          padding: 8px 12px;
           font-size: 0.78rem;
           font-weight: 900;
           white-space: nowrap;
+          box-shadow: 0 8px 22px rgba(79, 70, 229, 0.08);
         }
 
-        .directory-split {
-          display: grid;
-          grid-template-columns: minmax(0, 1fr) 1px minmax(0, 1fr);
-          gap: 22px;
-          align-items: start;
+        .directory-count-workers {
+          color: #2563eb;
         }
 
-        .directory-divider {
-          width: 1px;
-          min-height: 100%;
-          background: linear-gradient(
-            to bottom,
-            transparent,
-            rgba(11, 91, 47, 0.35),
-            transparent
-          );
+        .directory-count-divider {
+          color: #a8afc4;
+        }
+
+        .directory-count-companies {
+          color: #7c3aed;
+        }
+
+        .directory-drawer {
+          min-width: 0;
+          border: 1px solid var(--sendio-soft-border);
+          border-radius: 18px;
+          background: #f8fbff;
+          padding: 18px;
+          animation: directoryDrawerOpen 0.28s ease both;
+        }
+
+        @keyframes directoryDrawerOpen {
+          from {
+            opacity: 0;
+            transform: translateY(-8px);
+          }
+
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+
+        .directory-scroll-hint {
+          margin: -1px 0 12px;
+          color: #6b7280;
+          font-size: 0.72rem;
+          font-weight: 800;
         }
 
         .directory-side-title {
@@ -3799,14 +3839,38 @@ export default function HomePage() {
         }
 
         .side-grid {
-          display: grid;
-          grid-template-columns: repeat(3, minmax(0, 1fr));
-          gap: 10px;
+          display: flex;
+          gap: 12px;
+          overflow-x: auto;
+          overflow-y: hidden;
+          padding: 3px 3px 12px;
+          scroll-snap-type: x proximity;
+          scrollbar-width: thin;
+          scrollbar-color: #93c5fd transparent;
+          overscroll-behavior-inline: contain;
+          -webkit-overflow-scrolling: touch;
+        }
+
+        .side-grid::-webkit-scrollbar {
+          height: 8px;
+        }
+
+        .side-grid::-webkit-scrollbar-track {
+          background: transparent;
+        }
+
+        .side-grid::-webkit-scrollbar-thumb {
+          background: #bfdbfe;
+          border-radius: 999px;
         }
 
         .directory-card,
         .directory-empty {
-          min-height: 112px;
+          flex: 0 0 158px;
+          width: 158px;
+          min-width: 158px;
+          min-height: 132px;
+          scroll-snap-align: start;
           border-radius: 18px;
           background: #fbf8f3;
           border: 1px solid #eadcc9;
@@ -4030,15 +4094,6 @@ export default function HomePage() {
           color: #2563eb;
         }
 
-        .directory-divider {
-          background: linear-gradient(
-            to bottom,
-            transparent,
-            rgba(37, 99, 235, 0.24),
-            transparent
-          );
-        }
-
         .service-card-new {
           background: #ffffff;
           border: 1px solid var(--sendio-soft-border);
@@ -4116,78 +4171,169 @@ export default function HomePage() {
 
 
         .footer-clean {
-          border-top: 1px solid #e1d5c6;
-          padding: 32px 0 18px;
-          margin-top: 24px;
+          margin-top: 34px;
+          padding: 0 0 18px;
+          border-top: 0;
+          background: transparent;
         }
 
-        .footer-links {
-          display: flex;
-          justify-content: center;
+        .footer-shell {
+          overflow: hidden;
+          border: 1px solid #e4e7ff;
+          border-radius: 28px;
+          background:
+            radial-gradient(circle at 88% 18%, rgba(139, 92, 246, 0.12), transparent 28%),
+            radial-gradient(circle at 12% 85%, rgba(37, 99, 235, 0.09), transparent 30%),
+            #ffffff;
+          box-shadow: 0 20px 45px rgba(60, 61, 110, 0.09);
+        }
+
+        .footer-main {
+          display: grid;
+          grid-template-columns: minmax(0, 1.2fr) minmax(320px, 0.8fr);
           gap: 28px;
-          flex-wrap: wrap;
-          margin: 18px 0;
+          align-items: center;
+          padding: 32px clamp(22px, 4vw, 52px) 26px;
         }
 
-        .footer-links a {
-          color: #7a6a58;
-          text-decoration: none;
-          font-size: 0.85rem;
+        .footer-brand {
+          min-width: 0;
         }
 
-        .copyright {
-          text-align: center;
-          padding: 18px 0 36px;
-          color: #7a6a58;
-          font-size: 0.8rem;
-        }
-
-
-
-        /* Sendio visual unity phase 4: final lower footer and remaining bottom elements */
-        .footer-clean {
-          border-top: 1px solid var(--sendio-soft-border);
-          background: #ffffff;
-          padding: 28px 0 18px;
-          margin-top: 24px;
-        }
-
-        .footer-links {
-          display: flex;
-          justify-content: center;
-          gap: 10px;
-          flex-wrap: wrap;
-          margin: 18px 0;
-        }
-
-        .footer-links a {
-          min-width: 92px;
-          height: 38px;
+        .footer-brand-row {
           display: inline-flex;
           align-items: center;
-          justify-content: center;
-          color: #111827;
-          background: var(--sendio-button-bg);
-          border: 1px solid var(--sendio-soft-border);
-          border-radius: var(--sendio-radius);
-          text-decoration: none;
-          font-size: 0.82rem;
+          gap: 12px;
+          margin-bottom: 15px;
+        }
+
+        .footer-logo {
+          width: 52px;
+          height: 52px;
+          object-fit: contain;
+        }
+
+        .footer-brand-name {
+          color: #172554;
+          font-size: clamp(1.75rem, 3vw, 2.5rem);
           font-weight: 900;
-          transition: 0.2s;
+          letter-spacing: -0.04em;
+        }
+
+        .footer-title {
+          max-width: 650px;
+          color: #111827;
+          font-size: clamp(1.2rem, 2.1vw, 1.7rem);
+          font-weight: 900;
+          line-height: 1.25;
+        }
+
+        .footer-text {
+          max-width: 690px;
+          margin-top: 10px;
+          color: #5f6781;
+          font-size: 0.92rem;
+          line-height: 1.7;
+        }
+          .footer-email {
+  width: fit-content;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 14px;
+  color: #4f46e5;
+  font-size: 0.88rem;
+  font-weight: 850;
+  text-decoration: none;
+}
+
+.footer-email:hover {
+  text-decoration: underline;
+}
+        .footer-beta {
+          width: fit-content;
+          margin-top: 16px;
+          padding: 9px 13px;
+          border: 1px solid #ddd6fe;
+          border-radius: 999px;
+          background: rgba(245, 243, 255, 0.92);
+          color: #6d28d9;
+          font-size: 0.78rem;
+          font-weight: 850;
+        }
+
+        .footer-links {
+          display: grid;
+          grid-template-columns: repeat(5, minmax(76px, 1fr));
+          gap: 10px;
+          margin: 0;
+        }
+
+        .footer-links a {
+          min-height: 82px;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          gap: 7px;
+          padding: 10px 8px;
+          color: #4c1d95;
+          background: rgba(248, 247, 255, 0.94);
+          border: 1px solid #e5e1ff;
+          border-radius: 17px;
+          text-decoration: none;
+          font-size: 0.75rem;
+          font-weight: 900;
+          transition: transform 0.2s, background 0.2s, border-color 0.2s;
         }
 
         .footer-links a:hover {
-          background: var(--sendio-button-bg-hover);
-          color: #111827;
-          transform: translateY(-1px);
+          background: #f3f0ff;
+          border-color: #cfc5ff;
+          color: #4c1d95;
+          transform: translateY(-2px);
+        }
+
+        .footer-link-icon {
+          font-size: 1.28rem;
+          line-height: 1;
+        }
+
+        .footer-bottom {
+          border-top: 1px solid #ececff;
+          padding: 15px 20px 17px;
+          text-align: center;
+          color: #667085;
+          font-size: 0.78rem;
+          font-weight: 700;
         }
 
         .copyright {
-          text-align: center;
-          padding: 16px 0 34px;
-          color: #374151;
-          font-size: 0.8rem;
-          font-weight: 700;
+          color: inherit;
+        }
+
+        @media (max-width: 900px) {
+          .footer-main {
+            grid-template-columns: 1fr;
+          }
+
+          .footer-links {
+            grid-template-columns: repeat(5, minmax(64px, 1fr));
+          }
+        }
+
+        @media (max-width: 620px) {
+          .footer-main {
+            padding: 25px 16px 20px;
+          }
+
+          .footer-links {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+          }
+
+          .footer-links a:last-child {
+            grid-column: 1 / -1;
+          }
         }
 
         .public-directory .directory-empty {
@@ -4201,11 +4347,6 @@ export default function HomePage() {
         .directory-empty,
         .footer-clean {
           border-color: var(--sendio-soft-border);
-        }
-
-        .directory-card,
-        .directory-empty {
-          min-height: 112px;
         }
 
         .directory-name,
@@ -4228,13 +4369,6 @@ export default function HomePage() {
             max-width: 210px;
           }
 
-          .directory-split {
-            gap: 16px;
-          }
-
-          .side-grid {
-            grid-template-columns: repeat(2, minmax(0, 1fr));
-          }
         }
 
         @media (max-width: 780px) {
@@ -4381,25 +4515,19 @@ export default function HomePage() {
             flex-direction: column;
           }
 
-          .directory-split {
-            grid-template-columns: 1fr;
+
+          .directory-drawer {
+            padding: 14px 10px;
           }
 
-          .directory-divider {
-            width: 100%;
-            height: 1px;
-            min-height: 1px;
-            background: linear-gradient(
-              to right,
-              transparent,
-              rgba(11, 91, 47, 0.35),
-              transparent
-            );
+          .directory-card,
+          .directory-empty {
+            flex-basis: 136px;
+            width: 136px;
+            min-width: 136px;
+            min-height: 126px;
           }
 
-          .side-grid {
-            grid-template-columns: repeat(2, minmax(0, 1fr));
-          }
         }
 
         .home-services-slider {
@@ -5899,36 +6027,54 @@ export default function HomePage() {
               <span className="role-label">Client</span>
             </Link>
 
-            <a
-              href="#workers-panel"
+            <button
+              type="button"
               className={`role-card role-card-worker role-card-clickable ${
                 userType === 'worker' ? 'role-card-active' : ''
+              } ${
+                activeDirectoryPanel === 'workers' ? 'role-card-open' : ''
               }`}
+              onClick={() =>
+                setActiveDirectoryPanel((currentPanel) =>
+                  currentPanel === 'workers' ? null : 'workers'
+                )
+              }
+              aria-expanded={activeDirectoryPanel === 'workers'}
+              aria-controls="workers-panel"
             >
               <span className="role-icon" aria-hidden="true">
                 {'\u{1F4BC}'}
               </span>
               <span className="role-label">Worker</span>
-            </a>
+            </button>
 
-            <a
-              href="#companies-panel"
+            <button
+              type="button"
               className={`role-card role-card-company role-card-clickable ${
                 userType === 'company' ? 'role-card-active' : ''
+              } ${
+                activeDirectoryPanel === 'companies' ? 'role-card-open' : ''
               }`}
+              onClick={() =>
+                setActiveDirectoryPanel((currentPanel) =>
+                  currentPanel === 'companies' ? null : 'companies'
+                )
+              }
+              aria-expanded={activeDirectoryPanel === 'companies'}
+              aria-controls="companies-panel"
             >
               <span className="role-icon" aria-hidden="true">
                 {'\u{1F3E2}'}
               </span>
               <span className="role-label">Company</span>
-            </a>
+            </button>
           </div>
           <div className="public-directory-header">
             <div>
               <div className="directory-kicker">Public Directory</div>
               <div className="directory-title">Workers & Companies</div>
               <p className="directory-text">
-                Visitors can browse real worker and company profiles directly
+                Visitors can browse publicly listed worker and company profiles
                 without logging in.
               </p>
 
@@ -5941,17 +6087,31 @@ export default function HomePage() {
             </div>
 
             <div className="directory-count-badge">
-              {filteredPublicWorkers.length} Workers •{' '}
-              {filteredPublicCompanies.length} Companies
+              <span className="directory-count-workers">
+                {filteredPublicWorkers.length} Workers
+              </span>
+              <span className="directory-count-divider" aria-hidden="true">
+                •
+              </span>
+              <span className="directory-count-companies">
+                {filteredPublicCompanies.length} Companies
+              </span>
             </div>
           </div>
 
-          <div className="directory-split">
-            <div className="directory-side" id="workers-panel">
+          {activeDirectoryPanel === 'workers' ? (
+            <div
+              className="directory-drawer directory-side"
+              id="workers-panel"
+            >
               <div className="directory-side-title">
                 <h3>Workers</h3>
                 <span>{filteredPublicWorkers.length} registered</span>
               </div>
+
+              <p className="directory-scroll-hint">
+                Swipe or scroll horizontally to browse all workers.
+              </p>
 
               {isLoggedIn && userType === 'worker' ? (
                 <div className="directory-dashboard-action">
@@ -5995,7 +6155,11 @@ export default function HomePage() {
                             alt={`${worker.name} avatar`}
                             width={96}
                             height={96}
-                            style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                            style={{
+                              width: '100%',
+                              height: '100%',
+                              objectFit: 'cover',
+                            }}
                             sizes="96px"
                           />
                         ) : (
@@ -6015,7 +6179,9 @@ export default function HomePage() {
                         className="directory-rating"
                         aria-label={`${worker.name} rating ${Number(
                           worker.rating ?? 0
-                        ).toFixed(1)} from ${worker.reviews_count ?? 0} reviews`}
+                        ).toFixed(1)} from ${
+                          worker.reviews_count ?? 0
+                        } reviews`}
                       >
                         <span className="directory-rating-stars">
                           {getMiniRatingStars(worker.rating)}
@@ -6038,14 +6204,21 @@ export default function HomePage() {
                 })}
               </div>
             </div>
+          ) : null}
 
-            <div className="directory-divider" aria-hidden="true" />
-
-            <div className="directory-side" id="companies-panel">
+          {activeDirectoryPanel === 'companies' ? (
+            <div
+              className="directory-drawer directory-side"
+              id="companies-panel"
+            >
               <div className="directory-side-title">
                 <h3>Companies</h3>
                 <span>{filteredPublicCompanies.length} registered</span>
               </div>
+
+              <p className="directory-scroll-hint">
+                Swipe or scroll horizontally to browse all companies.
+              </p>
 
               {isLoggedIn && userType === 'company' ? (
                 <div className="directory-dashboard-action">
@@ -6087,7 +6260,11 @@ export default function HomePage() {
                             alt={`${company.name} logo`}
                             width={96}
                             height={96}
-                            style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                            style={{
+                              width: '100%',
+                              height: '100%',
+                              objectFit: 'cover',
+                            }}
                             sizes="96px"
                           />
                         ) : (
@@ -6101,7 +6278,9 @@ export default function HomePage() {
                         className="directory-rating"
                         aria-label={`${company.name} rating ${Number(
                           company.rating ?? 0
-                        ).toFixed(1)} from ${company.reviews_count ?? 0} reviews`}
+                        ).toFixed(1)} from ${
+                          company.reviews_count ?? 0
+                        } reviews`}
                       >
                         <span className="directory-rating-stars">
                           {getMiniRatingStars(company.rating)}
@@ -6124,26 +6303,76 @@ export default function HomePage() {
                 })}
               </div>
             </div>
-          </div>
+          ) : null}
         </section>
 
-        <div className="footer-clean">
-          <div className="footer-links">
-            <Link href="/about">About</Link>
-            <Link href="/contact">FAQ</Link>
-            <Link href="/contact">Contact</Link>
-            <Link href="/pricing">Advertising</Link>
-            <Link href="/legal">Legal</Link>
-          </div>
+        <footer className="footer-clean">
+          <div className="footer-shell">
+            <div className="footer-main">
+              <div className="footer-brand">
+                <div className="footer-brand-row">
+                  <Image
+                    src="/logo.png"
+                    alt="Sendio logo"
+                    width={52}
+                    height={52}
+                    className="footer-logo"
+                  />
+                  <span className="footer-brand-name">Sendio</span>
+                </div>
 
-          <div className="copyright">
-            © 2026 Sendio — Premium Hospitality & Professional Network.
+                <div className="footer-title">
+                  Discover services, workers and companies across Belgium.
+                </div>
+
+                <p className="footer-text">
+                  Explore public profiles, compare available services and follow
+                  Sendio as the platform continues to grow.
+                </p>
+                    <a className="footer-email" href="mailto:info@sendio.be">
+                   ✉ info@sendio.be
+                   </a>
+                <div className="footer-beta">
+                  Experimental beta platform — information may change.
+                </div>
+              </div>
+
+              <nav className="footer-links" aria-label="Footer">
+                <Link href="/about">
+                  <span className="footer-link-icon" aria-hidden="true">ⓘ</span>
+                  <span>About</span>
+                </Link>
+                <Link href="/contact">
+                  <span className="footer-link-icon" aria-hidden="true">?</span>
+                  <span>FAQ</span>
+                </Link>
+                <Link href="/contact">
+                  <span className="footer-link-icon" aria-hidden="true">✉</span>
+                  <span>Contact</span>
+                </Link>
+                <Link href="/pricing">
+                  <span className="footer-link-icon" aria-hidden="true">📣</span>
+                  <span>Advertising</span>
+                </Link>
+                <Link href="/legal">
+                  <span className="footer-link-icon" aria-hidden="true">⚖</span>
+                  <span>Legal</span>
+                </Link>
+              </nav>
+            </div>
+
+            <div className="footer-bottom">
+              <span className="copyright">
+                Sendio — Experimental beta platform · 2026.
+              </span>
+            </div>
           </div>
-        </div>
+        </footer>
       </div>
 
       <HeroAdPhonePreview />
     </>
   );
 }
+
 
