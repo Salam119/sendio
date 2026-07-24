@@ -28,6 +28,8 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] =
     useState(false);
+  const [linkedinLoading, setLinkedinLoading] =
+    useState(false);
   const [errorMessage, setErrorMessage] =
     useState('');
 
@@ -89,7 +91,7 @@ export default function LoginPage() {
   ) {
     event.preventDefault();
 
-    if (loading || googleLoading) {
+    if (loading || googleLoading || linkedinLoading) {
       return;
     }
 
@@ -135,7 +137,7 @@ export default function LoginPage() {
   }
 
   async function handleGoogleLogin() {
-    if (loading || googleLoading) {
+    if (loading || googleLoading || linkedinLoading) {
       return;
     }
 
@@ -155,6 +157,35 @@ export default function LoginPage() {
         'Google sign-in could not be completed. Please try again.'
       );
       setGoogleLoading(false);
+    }
+  }
+
+  async function handleLinkedInLogin() {
+    if (loading || googleLoading || linkedinLoading) {
+      return;
+    }
+
+    setLinkedinLoading(true);
+    setErrorMessage('');
+
+    window.localStorage.setItem(
+      'sendio_pending_auth_provider',
+      'linkedin_oidc'
+    );
+
+    const { error } =
+      await supabase.auth.signInWithOAuth({
+        provider: 'linkedin_oidc',
+        options: {
+          redirectTo: `${window.location.origin}/auth/callback`,
+        },
+      });
+
+    if (error) {
+      setErrorMessage(
+        'LinkedIn sign-in could not be completed. Please try again.'
+      );
+      setLinkedinLoading(false);
     }
   }
 
@@ -330,7 +361,7 @@ export default function LoginPage() {
                 <button
                   type="submit"
                   disabled={
-                    loading || googleLoading
+                    loading || googleLoading || linkedinLoading
                   }
                   className="inline-flex min-h-10 items-center justify-center rounded-[14px] bg-[#29b9f3] px-7 text-sm font-black text-white shadow-[0_12px_24px_rgba(41,185,243,0.28)] transition hover:-translate-y-0.5 hover:bg-[#20aee8] disabled:cursor-not-allowed disabled:opacity-60"
                 >
@@ -354,7 +385,7 @@ export default function LoginPage() {
             <button
               type="button"
               onClick={handleGoogleLogin}
-              disabled={googleLoading || loading}
+              disabled={googleLoading || linkedinLoading || loading}
               className="flex min-h-10 w-full items-center justify-center gap-3 rounded-[14px] border border-white/90 bg-white/85 px-4 text-xs font-black text-[#111827] shadow-[0_9px_20px_rgba(15,62,82,0.10)] transition hover:-translate-y-0.5 hover:bg-white disabled:cursor-not-allowed disabled:opacity-60"
             >
               <span className="flex h-6 w-6 items-center justify-center rounded-full bg-white text-sm font-black shadow-sm">
@@ -364,6 +395,21 @@ export default function LoginPage() {
               {googleLoading
                 ? 'Connecting...'
                 : 'Continue with Google'}
+            </button>
+
+            <button
+              type="button"
+              onClick={handleLinkedInLogin}
+              disabled={linkedinLoading || googleLoading || loading}
+              className="mt-3 flex min-h-10 w-full items-center justify-center gap-3 rounded-[14px] border border-white/90 bg-white/85 px-4 text-xs font-black text-[#111827] shadow-[0_9px_20px_rgba(15,62,82,0.10)] transition hover:-translate-y-0.5 hover:bg-white disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              <span className="flex h-6 w-6 items-center justify-center rounded-full bg-[#0A66C2] text-[11px] font-black text-white shadow-sm">
+                in
+              </span>
+
+              {linkedinLoading
+                ? 'Connecting...'
+                : 'Continue with LinkedIn'}
             </button>
 
             <p className="mt-4 text-center text-xs font-bold text-[#31576a]">
