@@ -5,6 +5,7 @@ import {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type MouseEvent,
 } from 'react';
@@ -14,6 +15,7 @@ import {
   getFloatingNotificationsEnabled,
   getSendioNotificationTargetUrl,
   getUnreadSendioNotifications,
+  markSendioNotificationSeen,
   openSendioNotification,
   type SendioNotification,
 } from '@/lib/notifications';
@@ -25,6 +27,7 @@ export default function GlobalMessageAlert() {
   const [notification, setNotification] =
     useState<SendioNotification | null>(null);
   const [floatingEnabled, setFloatingEnabled] = useState(true);
+  const hiddenNotificationIds = useRef(new Set<string>());
 
   const isHomePage = pathname === '/';
 
@@ -72,7 +75,12 @@ export default function GlobalMessageAlert() {
       1
     );
 
-    setNotification(unreadNotifications[0] ?? null);
+    const nextNotification =
+      unreadNotifications.find(
+        (item) => !hiddenNotificationIds.current.has(item.id)
+      ) ?? null;
+
+    setNotification(nextNotification);
   }, []);
 
   useEffect(() => {
@@ -187,6 +195,44 @@ export default function GlobalMessageAlert() {
     };
   }, [loadNotificationAlert]);
 
+  useEffect(() => {
+    if (!notification || !isOnNotificationTarget) {
+      return;
+    }
+
+    const selectedNotification = notification;
+    hiddenNotificationIds.current.add(selectedNotification.id);
+
+    let cancelled = false;
+
+    async function markTargetNotificationSeen() {
+      const {
+        data: { user },
+        error: userError,
+      } = await supabase.auth.getUser();
+
+      if (cancelled || userError || !user) {
+        return;
+      }
+
+      try {
+        await markSendioNotificationSeen(
+          supabase,
+          selectedNotification.id,
+          user.id
+        );
+      } catch {
+        hiddenNotificationIds.current.delete(selectedNotification.id);
+      }
+    }
+
+    void markTargetNotificationSeen();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isOnNotificationTarget, notification]);
+
   async function handleOpenAlert(event: MouseEvent<HTMLAnchorElement>) {
     if (!notification) return;
 
@@ -196,6 +242,7 @@ export default function GlobalMessageAlert() {
     const selectedTargetUrl =
       getSendioNotificationTargetUrl(selectedNotification);
 
+    hiddenNotificationIds.current.add(selectedNotification.id);
     setNotification(null);
 
     const {
@@ -204,6 +251,7 @@ export default function GlobalMessageAlert() {
     } = await supabase.auth.getUser();
 
     if (userError || !user) {
+      hiddenNotificationIds.current.delete(selectedNotification.id);
       return;
     }
 
@@ -216,6 +264,7 @@ export default function GlobalMessageAlert() {
 
       router.push(openedTargetUrl || selectedTargetUrl);
     } catch {
+      hiddenNotificationIds.current.delete(selectedNotification.id);
       router.push(selectedTargetUrl);
     }
   }

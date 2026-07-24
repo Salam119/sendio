@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 
 import Image from 'next/image';
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
@@ -4983,16 +4983,21 @@ export default function HomePage() {
 
          .hero-services-link {
   left: 6px;
+  right: 6px;
   bottom: -34px;
-  width: calc(100% - 58px);
+  width: auto;
   min-width: 0;
   height: 40px;
   border-width: 5px;
 }
          .hero-search-area {
-  right: 6px;
-  bottom: -32px;
-  width: auto;
+  left: 50%;
+  right: auto;
+  bottom: -60px;
+  width: 36px;
+  align-items: center;
+  transform: translateX(-50%);
+  z-index: 7;
 }
 
           .hero-home-button {
@@ -5004,7 +5009,7 @@ export default function HomePage() {
           .hero-search-fields-below {
             width: 100%;
             max-width: none;
-            margin: 42px 0 0;
+            margin: 66px 0 0;
           }
 
           .home-search-stack {
@@ -5128,6 +5133,70 @@ export default function HomePage() {
             to {
               transform: translateX(0);
             }
+          }
+
+          .services-row {
+            width: 100%;
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 18px 14px;
+            margin: 20px auto 30px;
+            padding: 8px 5px 16px;
+            perspective: 950px;
+            perspective-origin: 50% 42%;
+          }
+
+          .service-card-new {
+            --sendio-card-rotate-x: 3deg;
+            --sendio-card-rotate-y: 0deg;
+            width: 100%;
+            min-width: 0;
+            max-width: none;
+            transform:
+              rotateX(var(--sendio-card-rotate-x))
+              rotateY(var(--sendio-card-rotate-y))
+              translateZ(0);
+            transform-origin: center bottom;
+            transform-style: preserve-3d;
+            backface-visibility: hidden;
+            box-shadow:
+              0 20px 24px -18px rgba(15, 23, 42, 0.5),
+              0 10px 18px -16px rgba(37, 99, 235, 0.34);
+            transition:
+              transform 180ms ease,
+              box-shadow 180ms ease;
+            will-change: transform;
+          }
+
+          .service-card-new:nth-child(odd) {
+            --sendio-card-rotate-y: 7deg;
+          }
+
+          .service-card-new:nth-child(even) {
+            --sendio-card-rotate-y: -7deg;
+          }
+
+          .service-card-new:nth-child(n + 3) {
+            --sendio-card-rotate-x: 2deg;
+          }
+
+          .service-card-new:hover {
+            transform:
+              rotateX(var(--sendio-card-rotate-x))
+              rotateY(var(--sendio-card-rotate-y))
+              translateY(-2px)
+              translateZ(8px);
+            box-shadow:
+              0 24px 30px -18px rgba(15, 23, 42, 0.54),
+              0 14px 22px -18px rgba(37, 99, 235, 0.38);
+          }
+
+          .service-card-new:active {
+            transform:
+              rotateX(var(--sendio-card-rotate-x))
+              rotateY(var(--sendio-card-rotate-y))
+              translateZ(4px)
+              scale(0.985);
           }
 
 }
