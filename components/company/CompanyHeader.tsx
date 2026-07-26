@@ -4,6 +4,10 @@ import Image from 'next/image';
 import { ChangeEvent, useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { getCompanyId } from '@/lib/getCompanyId';
+import {
+  deleteImageFromR2,
+  uploadImageToR2,
+} from '@/lib/r2-media-client';
 
 type Company = {
   name: string;
@@ -22,9 +26,12 @@ type GalleryItem = {
   id: string;
   url: string;
   type: string | null;
+  storage_provider: 'supabase' | 'r2' | null;
+  object_key: string | null;
 };
 
 const MAX_MEDIA = 4;
+const ACCEPTED_IMAGE_TYPES = 'image/jpeg,image/png,image/webp,image/avif';
 
 function cleanPhone(phone: string | null) {
   return phone?.replace(/[^\d+]/g, '') ?? '';
@@ -50,6 +57,7 @@ export default function CompanyHeader() {
   const [showGalleryPicker, setShowGalleryPicker] = useState(false);
 
   const galleryImages = galleryItems.filter((item) => item.type === 'image');
+
   useEffect(() => {
     let isMounted = true;
 
@@ -82,7 +90,7 @@ export default function CompanyHeader() {
     const { data, error } = await supabase
       .from('companies')
       .select(
-        'name, category, city, address, status, logo, phone, email, rating, reviews_count'
+        'name, category, city, address, status, logo, phone, email, rating, reviews_count',
       )
       .eq('id', currentCompanyId)
       .single();
@@ -104,7 +112,7 @@ export default function CompanyHeader() {
 
     const { data, error } = await supabase
       .from('company_gallery')
-      .select('id, url, type')
+      .select('id, url, type, storage_provider, object_key')
       .eq('company_id', currentCompanyId)
       .order('id', { ascending: true });
 
@@ -113,7 +121,7 @@ export default function CompanyHeader() {
       return;
     }
 
-    setGalleryItems(data || []);
+    setGalleryItems((data ?? []) as GalleryItem[]);
   }
 
   async function setLogoFromGallery(url: string) {
@@ -124,22 +132,23 @@ export default function CompanyHeader() {
 
     setLoading(true);
 
-    const { error } = await supabase
-      .from('companies')
-      .update({
-        logo: url,
-      })
-      .eq('id', companyId);
+    try {
+      const { error } = await supabase
+        .from('companies')
+        .update({ logo: url })
+        .eq('id', companyId);
 
-    if (error) {
-      alert(error.message);
+      if (error) {
+        throw new Error(error.message);
+      }
+
+      await reloadCompany(companyId);
+      setShowGalleryPicker(false);
+    } catch (error) {
+      alert(error instanceof Error ? error.message : 'Could not update logo.');
+    } finally {
       setLoading(false);
-      return;
     }
-
-    await reloadCompany(companyId);
-    setShowGalleryPicker(false);
-    setLoading(false);
   }
 
   async function uploadLogo(file: File) {
@@ -157,73 +166,68 @@ export default function CompanyHeader() {
 
     if (galleryItems.length >= MAX_MEDIA) {
       alert(
-        'Gallery is full. Delete or replace one media item before uploading a new logo.'
+        'Gallery is full. Delete or replace one media item before uploading a new logo.',
       );
       return;
     }
 
     setLoading(true);
 
-    const fileName = `${Date.now()}-${file.name}`;
-    const filePath = `${companyId}/logo/${fileName}`;
+    try {
+      const uploaded = await uploadImageToR2(file);
+      const { data: insertedGalleryItem, error: galleryError } = await supabase
+        .from('company_gallery')
+        .insert([
+          {
+            company_id: companyId,
+            url: uploaded.publicUrl,
+            type: 'image',
+            storage_provider: 'r2',
+            object_key: uploaded.objectKey,
+          },
+        ])
+        .select('id, url, type, storage_provider, object_key')
+        .single();
 
-    const { error: uploadError } = await supabase.storage
-      .from('company-gallery')
-      .upload(filePath, file);
+      if (galleryError) {
+        try {
+          await deleteImageFromR2(uploaded.objectKey);
+        } catch (cleanupError) {
+          console.error(cleanupError);
+        }
 
-    if (uploadError) {
-      alert(uploadError.message);
-      setLoading(false);
-      return;
-    }
-
-    const {
-      data: { publicUrl },
-    } = supabase.storage.from('company-gallery').getPublicUrl(filePath);
-
-    const { data: insertedGalleryItem, error: galleryError } = await supabase
-      .from('company_gallery')
-      .insert([
-        {
-          company_id: companyId,
-          url: publicUrl,
-          type: 'image',
-        },
-      ])
-      .select('id, url, type')
-      .single();
-
-    if (galleryError) {
-      await supabase.storage.from('company-gallery').remove([filePath]);
-      alert(galleryError.message);
-      setLoading(false);
-      return;
-    }
-
-    const { error: companyError } = await supabase
-      .from('companies')
-      .update({
-        logo: publicUrl,
-      })
-      .eq('id', companyId);
-
-    if (companyError) {
-      if (insertedGalleryItem?.id) {
-        await supabase
-          .from('company_gallery')
-          .delete()
-          .eq('id', insertedGalleryItem.id);
+        throw new Error(galleryError.message);
       }
 
-      await supabase.storage.from('company-gallery').remove([filePath]);
+      const { error: companyError } = await supabase
+        .from('companies')
+        .update({ logo: uploaded.publicUrl })
+        .eq('id', companyId);
 
-      alert(companyError.message);
+      if (companyError) {
+        if (insertedGalleryItem?.id) {
+          await supabase
+            .from('company_gallery')
+            .delete()
+            .eq('id', insertedGalleryItem.id)
+            .eq('company_id', companyId);
+        }
+
+        try {
+          await deleteImageFromR2(uploaded.objectKey);
+        } catch (cleanupError) {
+          console.error(cleanupError);
+        }
+
+        throw new Error(companyError.message);
+      }
+
+      await Promise.all([reloadCompany(companyId), loadGallery(companyId)]);
+    } catch (error) {
+      alert(error instanceof Error ? error.message : 'Could not upload logo.');
+    } finally {
       setLoading(false);
-      return;
     }
-
-    await Promise.all([reloadCompany(companyId), loadGallery(companyId)]);
-    setLoading(false);
   }
 
   function handleLogoUploadChange(event: ChangeEvent<HTMLInputElement>) {
@@ -270,7 +274,7 @@ export default function CompanyHeader() {
 
               <span
                 className={`rounded-full border px-3 py-1 text-[11px] font-black uppercase ${getStatusStyle(
-                  status
+                  status,
                 )}`}
               >
                 {status}
@@ -341,7 +345,7 @@ export default function CompanyHeader() {
               {loading ? 'Uploading...' : 'Upload Logo'}
               <input
                 type="file"
-                accept="image/*"
+                accept={ACCEPTED_IMAGE_TYPES}
                 disabled={loading || galleryIsFull}
                 onChange={handleLogoUploadChange}
                 className="hidden"
@@ -365,8 +369,6 @@ export default function CompanyHeader() {
           <span className="text-[11px] font-bold text-[var(--sendio-muted)]">
             Gallery: {galleryItems.length}/{MAX_MEDIA}
           </span>
-
-        
         </div>
       </div>
 

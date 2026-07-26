@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 
 import Image from 'next/image';
 import Link from 'next/link';
@@ -12,6 +12,10 @@ import {
   useState,
 } from 'react';
 import { supabase } from '@/lib/supabase';
+import {
+  deleteFileFromR2,
+  uploadFileToR2,
+} from '@/lib/r2-media-client';
 
 type PlacementType =
   | 'home_slider'
@@ -51,6 +55,8 @@ type CompanyAd = {
   image_url: string | null;
   video_url: string | null;
   thumbnail_url: string | null;
+  storage_provider: string | null;
+  object_key: string | null;
 
   cta_text: string | null;
   target_url: string | null;
@@ -276,12 +282,49 @@ function getCompanyProfileHref(company: Company) {
   return `/companies/${encodeURIComponent(identifier)}`;
 }
 
-function getSafeFileName(fileName: string) {
-  return fileName
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9._-]/g, '-')
-    .replace(/-+/g, '-');
+
+const AD_MEDIA_BUCKET = 'ad-media';
+
+function getLegacyAdMediaPath(url: string | null) {
+  if (!url) return null;
+
+  const marker = `/storage/v1/object/public/${AD_MEDIA_BUCKET}/`;
+  const markerIndex = url.indexOf(marker);
+
+  if (markerIndex === -1) return null;
+
+  const encodedPath = url.slice(markerIndex + marker.length).split('?')[0];
+
+  try {
+    return decodeURIComponent(encodedPath);
+  } catch {
+    return encodedPath;
+  }
+}
+
+async function cleanupAdMedia(ad: CompanyAd) {
+  if (ad.storage_provider === 'r2' && ad.object_key) {
+    await deleteFileFromR2(ad.object_key);
+    return;
+  }
+
+  const legacyPaths = Array.from(
+    new Set(
+      [ad.image_url, ad.video_url, ad.thumbnail_url]
+        .map(getLegacyAdMediaPath)
+        .filter((value): value is string => Boolean(value)),
+    ),
+  );
+
+  if (!legacyPaths.length) return;
+
+  const { error } = await supabase.storage
+    .from(AD_MEDIA_BUCKET)
+    .remove(legacyPaths);
+
+  if (error) {
+    throw new Error(error.message);
+  }
 }
 
 function getPlanDaysValue(
@@ -705,37 +748,8 @@ export default function CompanyAdsPage() {
     }
   }
 
-  async function uploadAdMedia(
-    userId: string,
-    companyId: string,
-    file: File
-  ) {
-    const safeName = getSafeFileName(file.name);
-
-    const uniqueFileId = `${Date.now()}-${crypto.randomUUID()}`;
-
-    const filePath =
-      `${userId}/${companyId}/` +
-      `${uniqueFileId}-${safeName}`;
-
-    const { error: uploadError } =
-      await supabase.storage
-        .from('ad-media')
-        .upload(filePath, file, {
-          cacheControl: '3600',
-          upsert: false,
-          contentType: file.type,
-        });
-
-    if (uploadError) {
-      throw new Error(uploadError.message);
-    }
-
-    const { data } = supabase.storage
-      .from('ad-media')
-      .getPublicUrl(filePath);
-
-    return data.publicUrl;
+  async function uploadAdMedia(file: File) {
+    return uploadFileToR2(file, 'company-ad');
   }
 
   function openDraftPreview() {
@@ -779,6 +793,7 @@ export default function CompanyAdsPage() {
     }
 
     setSaving(true);
+    let pendingObjectKey: string | null = null;
 
     try {
       const {
@@ -801,19 +816,16 @@ export default function CompanyAdsPage() {
         null;
 
       if (selectedMediaFile) {
-        const publicUrl = await uploadAdMedia(
-          user.id,
-          company.id,
-          selectedMediaFile
-        );
+        const uploaded = await uploadAdMedia(selectedMediaFile);
+        pendingObjectKey = uploaded.objectKey;
 
         if (
           selectedMediaFile.type.startsWith('video/')
         ) {
-          videoUrl = publicUrl;
+          videoUrl = uploaded.publicUrl;
           mediaType = 'video';
         } else {
-          imageUrl = publicUrl;
+          imageUrl = uploaded.publicUrl;
           mediaType = 'image';
         }
       }
@@ -852,6 +864,8 @@ export default function CompanyAdsPage() {
         media_type: mediaType,
         image_url: imageUrl,
         video_url: videoUrl,
+        storage_provider: pendingObjectKey ? 'r2' : null,
+        object_key: pendingObjectKey,
 
         cta_text: cleanCtaText,
         target_url: cleanTargetUrl || null,
@@ -881,6 +895,7 @@ export default function CompanyAdsPage() {
         throw new Error(insertError.message);
       }
 
+      pendingObjectKey = null;
       resetCreateForm();
 
       await loadCompanyAds();
@@ -895,6 +910,14 @@ export default function CompanyAdsPage() {
         'Advertisement draft created successfully. Preview it and send it for approval when ready.'
       );
     } catch (error) {
+      if (pendingObjectKey) {
+        try {
+          await deleteFileFromR2(pendingObjectKey);
+        } catch (cleanupError) {
+          console.error('Unable to remove failed advertisement upload:', cleanupError);
+        }
+      }
+
       if (error instanceof Error) {
         setPageError(error.message);
       } else {
@@ -966,6 +989,17 @@ export default function CompanyAdsPage() {
         throw new Error(error.message);
       }
 
+      let cleanupWarning: string | null = null;
+
+      try {
+        await cleanupAdMedia(ad);
+      } catch (cleanupError) {
+        cleanupWarning =
+          cleanupError instanceof Error
+            ? cleanupError.message
+            : 'The advertisement file could not be removed.';
+      }
+
       if (openPanel === ad.id) {
         setOpenPanel(null);
       }
@@ -973,7 +1007,9 @@ export default function CompanyAdsPage() {
       await loadCompanyAds();
 
       setPageMessage(
-        'Advertisement deleted successfully.'
+        cleanupWarning
+          ? `Advertisement deleted, but its stored file needs manual cleanup: ${cleanupWarning}`
+          : 'Advertisement deleted successfully.'
       );
     } catch (error) {
       if (error instanceof Error) {

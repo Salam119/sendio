@@ -23,6 +23,11 @@ import {
 } from 'react-icons/fa6';
 import { supabase } from '@/lib/supabase';
 import { getWorkerId } from '@/lib/getWorkerId';
+import {
+  deleteFileFromR2,
+  isR2MediaUrl,
+  uploadFileToR2,
+} from '@/lib/r2-media-client';
 
 type WorkerProfile = {
   id: string;
@@ -81,6 +86,8 @@ type WorkerGalleryItem = {
   worker_id: string;
   url: string;
   type: 'image' | 'video' | string | null;
+  storage_provider: string | null;
+  object_key: string | null;
   created_at: string | null;
 };
 
@@ -399,32 +406,6 @@ function getMapsUrl(value: string | null) {
   )}`;
 }
 
-function getFileExtension(file: File) {
-  const fileNameParts = file.name.split('.');
-  const extension = fileNameParts[fileNameParts.length - 1];
-
-  if (!extension || extension === file.name) {
-    if (file.type === 'image/jpeg') return 'jpg';
-    if (file.type === 'image/png') return 'png';
-    if (file.type === 'image/webp') return 'webp';
-    if (file.type === 'video/mp4') return 'mp4';
-    if (file.type === 'video/webm') return 'webm';
-
-    return 'file';
-  }
-
-  return extension.toLowerCase();
-}
-
-function getUniqueFilePath(workerId: string, folder: string, file: File) {
-  const extension = getFileExtension(file);
-  const randomValue =
-    typeof crypto !== 'undefined' && 'randomUUID' in crypto
-      ? crypto.randomUUID()
-      : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
-
-  return `${workerId}/${folder}/${randomValue}.${extension}`;
-}
 
 function getStoragePathFromPublicUrl(url: string | null) {
   if (!url) return null;
@@ -707,40 +688,27 @@ export default function WorkerDashboardPage() {
     });
   }
 
-  async function uploadFileToWorkerStorage(
-    workerId: string,
-    folder: string,
-    file: File
-  ) {
-    const filePath = getUniqueFilePath(workerId, folder, file);
-
-    const { error: uploadError } = await supabase.storage
-      .from(WORKER_MEDIA_BUCKET)
-      .upload(filePath, file, {
-        cacheControl: '3600',
-        upsert: false,
-      });
-
-    if (uploadError) {
-      throw new Error(uploadError.message);
-    }
-
-    const { data } = supabase.storage
-      .from(WORKER_MEDIA_BUCKET)
-      .getPublicUrl(filePath);
-
-    return {
-      publicUrl: data.publicUrl,
-      path: filePath,
-    };
+  async function uploadFileToWorkerStorage(file: File) {
+    return uploadFileToR2(file, 'worker-media');
   }
 
-  async function removeStorageFileByUrl(url: string | null) {
-    const path = getStoragePathFromPublicUrl(url);
+  async function removeWorkerMediaFile(item: WorkerGalleryItem) {
+    if (item.storage_provider === 'r2' && item.object_key) {
+      await deleteFileFromR2(item.object_key);
+      return;
+    }
+
+    const path = getStoragePathFromPublicUrl(item.url);
 
     if (!path) return;
 
-    await supabase.storage.from(WORKER_MEDIA_BUCKET).remove([path]);
+    const { error } = await supabase.storage
+      .from(WORKER_MEDIA_BUCKET)
+      .remove([path]);
+
+    if (error) {
+      throw new Error(error.message);
+    }
   }
 
   async function loadWorkerDashboard() {
@@ -1166,11 +1134,7 @@ export default function WorkerDashboardPage() {
     setNotice(null);
 
     try {
-      const uploaded = await uploadFileToWorkerStorage(
-        worker.id,
-        mediaType === 'image' ? 'gallery/images' : 'gallery/videos',
-        file
-      );
+      const uploaded = await uploadFileToWorkerStorage(file);
 
       const { data, error: insertError } = await supabase
         .from('worker_gallery')
@@ -1178,12 +1142,14 @@ export default function WorkerDashboardPage() {
           worker_id: worker.id,
           url: uploaded.publicUrl,
           type: mediaType,
+          storage_provider: 'r2',
+          object_key: uploaded.objectKey,
         })
         .select('*')
         .single();
 
       if (insertError) {
-        await supabase.storage.from(WORKER_MEDIA_BUCKET).remove([uploaded.path]);
+        await deleteFileFromR2(uploaded.objectKey);
         throw new Error(insertError.message);
       }
 
@@ -1239,12 +1205,25 @@ export default function WorkerDashboardPage() {
       return;
     }
 
-    await removeStorageFileByUrl(item.url);
+    let cleanupWarning: string | null = null;
+
+    try {
+      await removeWorkerMediaFile(item);
+    } catch (cleanupError) {
+      cleanupWarning =
+        cleanupError instanceof Error
+          ? cleanupError.message
+          : 'The gallery file could not be removed.';
+    }
 
     setGallery((current) =>
       current.filter((galleryItem) => galleryItem.id !== item.id)
     );
-    setNotice('Gallery item deleted successfully.');
+    setNotice(
+      cleanupWarning
+        ? `Gallery item deleted, but its stored file needs manual cleanup: ${cleanupWarning}`
+        : 'Gallery item deleted successfully.'
+    );
   }
 
   async function handleSelectServiceCategory(categoryId: string) {
@@ -1566,6 +1545,7 @@ export default function WorkerDashboardPage() {
                 {worker.avatar ? (
                   <Image
                     src={worker.avatar}
+                    unoptimized={isR2MediaUrl(worker.avatar)}
                     alt={worker.name}
                     fill
                     className="object-contain"
@@ -2022,6 +2002,7 @@ export default function WorkerDashboardPage() {
                           <span className="relative h-full w-full">
                             <Image
                               src={item.url}
+                              unoptimized={isR2MediaUrl(item.url)}
                               alt="Worker gallery item"
                               fill
                               className="object-contain"
@@ -2467,6 +2448,7 @@ export default function WorkerDashboardPage() {
               ) : (
                 <Image
                   src={previewItem.url}
+                  unoptimized={isR2MediaUrl(previewItem.url)}
                   alt="Gallery preview"
                   fill
                   className="object-contain"

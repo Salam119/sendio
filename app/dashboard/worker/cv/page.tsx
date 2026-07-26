@@ -9,6 +9,10 @@ import {
 } from 'react';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
+import {
+  deleteFileFromR2,
+  uploadFileToR2,
+} from '@/lib/r2-media-client';
 
 type WorkerRow = {
   id: string;
@@ -55,6 +59,8 @@ type WorkerCvRow = {
   cv_file_type: string | null;
   cv_file_mime_type: string | null;
   cv_file_uploaded_at: string | null;
+  storage_provider: string | null;
+  object_key: string | null;
 };
 
 type FileStage =
@@ -117,6 +123,8 @@ const emptyCv = (workerId: string): WorkerCvRow => ({
   cv_file_type: null,
   cv_file_mime_type: null,
   cv_file_uploaded_at: null,
+  storage_provider: null,
+  object_key: null,
 });
 
 const manualCvClearPayload = {
@@ -155,6 +163,8 @@ const fileCvClearPayload = {
   cv_file_type: null,
   cv_file_mime_type: null,
   cv_file_uploaded_at: null,
+  storage_provider: null,
+  object_key: null,
 };
 
 const inputClassName =
@@ -541,7 +551,7 @@ export default function WorkerCvPage() {
   };
 
   const workerCvPaths = (currentCv: WorkerCvRow | null) => {
-    if (!worker) return [];
+    if (!worker || currentCv?.storage_provider === 'r2') return [];
 
     const canonicalPaths = CV_EXTENSIONS.map(
       (extension) => `${worker.id}/cv.${extension}`,
@@ -567,6 +577,26 @@ export default function WorkerCvPage() {
     return removeError?.message || null;
   };
 
+  const removeStoredCvFile = async (currentCv: WorkerCvRow | null) => {
+    if (!currentCv?.cv_file_url) return null;
+
+    try {
+      if (
+        currentCv.storage_provider === 'r2' &&
+        currentCv.object_key
+      ) {
+        await deleteFileFromR2(currentCv.object_key);
+        return null;
+      }
+
+      return removeStorageFiles(workerCvPaths(currentCv));
+    } catch (error) {
+      return error instanceof Error
+        ? error.message
+        : 'The stored CV file could not be removed.';
+    }
+  };
+
   const saveManualCv = async () => {
     if (!cv || !worker) return;
 
@@ -585,7 +615,7 @@ export default function WorkerCvPage() {
       text: 'Saving your manual CV...',
     });
 
-    const previousFilePaths = workerCvPaths(cv);
+    const previousCv = cv;
 
     const payload = {
       worker_id: worker.id,
@@ -641,7 +671,7 @@ export default function WorkerCvPage() {
     setCv(savedCv);
     setSavedManualSignature(manualCvSignature(savedCv));
 
-    const cleanupError = await removeStorageFiles(previousFilePaths);
+    const cleanupError = await removeStoredCvFile(previousCv);
 
     setSelectedFile(null);
     setFileStage('idle');
@@ -726,22 +756,23 @@ export default function WorkerCvPage() {
       text: 'Uploading the selected file...',
     });
 
-    const filePath = `${worker.id}/cv.${fileType}`;
-    const previousPath = getStoredObjectPath(cv.cv_file_url);
+    const previousCv = cv;
+    let uploadedObjectKey: string | null = null;
+    let uploadedPublicUrl: string | null = null;
 
-    const { error: uploadError } = await supabase.storage
-      .from(CV_BUCKET)
-      .upload(filePath, file, {
-        cacheControl: '3600',
-        upsert: true,
-        contentType: file.type || undefined,
-      });
-
-    if (uploadError) {
+    try {
+      const uploaded = await uploadFileToR2(file, 'worker-cv');
+      uploadedObjectKey = uploaded.objectKey;
+      uploadedPublicUrl = uploaded.publicUrl;
+    } catch (uploadError) {
       setFileStage('error');
       setFileFeedback({
         type: 'error',
-        text: `Upload failed: ${uploadError.message}`,
+        text: `Upload failed: ${
+          uploadError instanceof Error
+            ? uploadError.message
+            : 'Unknown upload error.'
+        }`,
       });
       setUploading(false);
 
@@ -757,19 +788,17 @@ export default function WorkerCvPage() {
       text: 'File uploaded. Saving CV information...',
     });
 
-    const { data: publicFile } = supabase.storage
-      .from(CV_BUCKET)
-      .getPublicUrl(filePath);
-
     const payload = {
       worker_id: worker.id,
       cv_mode: 'file' as const,
       ...manualCvClearPayload,
-      cv_file_url: publicFile.publicUrl,
+      cv_file_url: uploadedPublicUrl,
       cv_file_name: file.name,
       cv_file_type: fileType,
       cv_file_mime_type: file.type || null,
       cv_file_uploaded_at: new Date().toISOString(),
+      storage_provider: 'r2',
+      object_key: uploadedObjectKey,
     };
 
     const { data, error: updateError } = await supabase
@@ -779,8 +808,12 @@ export default function WorkerCvPage() {
       .single();
 
     if (updateError) {
-      if (filePath !== previousPath) {
-        await removeStorageFiles([filePath]);
+      if (uploadedObjectKey) {
+        try {
+          await deleteFileFromR2(uploadedObjectKey);
+        } catch (cleanupError) {
+          console.error('Unable to remove failed CV upload:', cleanupError);
+        }
       }
 
       setFileStage('error');
@@ -800,8 +833,10 @@ export default function WorkerCvPage() {
     setCv(savedCv);
     setSavedManualSignature(manualCvSignature(savedCv));
 
-    const stalePaths = workerCvPaths(cv).filter((path) => path !== filePath);
-    const cleanupError = await removeStorageFiles(stalePaths);
+    const cleanupError =
+      previousCv.object_key !== uploadedObjectKey
+        ? await removeStoredCvFile(previousCv)
+        : null;
 
     setSelectedFile(null);
     setFileStage('ready');
@@ -848,24 +883,7 @@ export default function WorkerCvPage() {
       setManualFeedback(activeFeedback);
     }
 
-    const storagePaths = workerCvPaths(cv);
-    const storageError = await removeStorageFiles(storagePaths);
-
-    if (storageError) {
-      const feedback: Feedback = {
-        type: 'error',
-        text: `The CV was not deleted because its uploaded file could not be removed: ${storageError}`,
-      };
-
-      if (cv.cv_mode === 'file') {
-        setFileFeedback(feedback);
-      } else {
-        setManualFeedback(feedback);
-      }
-
-      setDeleting(false);
-      return;
-    }
+    const previousCv = cv;
 
     const payload = {
       worker_id: worker.id,
@@ -883,7 +901,7 @@ export default function WorkerCvPage() {
     if (deleteError) {
       const feedback: Feedback = {
         type: 'error',
-        text: `The file was removed, but the CV record could not be cleared: ${deleteError.message}`,
+        text: `The CV record could not be cleared: ${deleteError.message}`,
       };
 
       if (cv.cv_mode === 'file') {
@@ -896,6 +914,8 @@ export default function WorkerCvPage() {
       return;
     }
 
+    const cleanupError = await removeStoredCvFile(previousCv);
+
     const clearedCv = data as WorkerCvRow;
     setCv(clearedCv);
     setSavedManualSignature(manualCvSignature(clearedCv));
@@ -907,8 +927,10 @@ export default function WorkerCvPage() {
     }
 
     setManualFeedback({
-      type: 'success',
-      text: 'CV deleted successfully.',
+      type: cleanupError ? 'warning' : 'success',
+      text: cleanupError
+        ? `CV deleted, but its stored file needs manual cleanup: ${cleanupError}`
+        : 'CV deleted successfully.',
     });
     setFileFeedback(null);
     setDeleting(false);

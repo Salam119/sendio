@@ -5942,6 +5942,7 @@ export default function HomePage() {
                         {poster ? (
                           <Image
                             src={poster}
+                            unoptimized={poster.startsWith('/api/r2/media?')}
                             alt={`${adTitle} advertisement`}
                             width={320}
                             height={180}

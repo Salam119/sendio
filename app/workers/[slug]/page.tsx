@@ -6,6 +6,7 @@ import { useEffect, useState, type FormEvent } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import { createSendioNotification } from '@/lib/notifications';
+import { isR2MediaUrl } from '@/lib/r2-media-client';
 type WorkerProfile = {
   id: string;
   user_id: string | null;
@@ -1316,6 +1317,7 @@ if (loading) {
               {worker.avatar ? (
                 <Image
                   src={worker.avatar}
+                  unoptimized={isR2MediaUrl(worker.avatar)}
                   alt={`${worker.name} avatar`}
                   width={170}
                   height={170}
@@ -1599,6 +1601,7 @@ if (loading) {
                     ) : (
                       <Image
                         src={item.url}
+                        unoptimized={isR2MediaUrl(item.url)}
                         alt={`${worker.name} achievement`}
                         fill
                         className="achievement-mini-image"
@@ -1619,6 +1622,7 @@ if (loading) {
                 ) : (
                   <Image
                     src={achievementMedia.url}
+                    unoptimized={isR2MediaUrl(achievementMedia.url)}
                     alt={`${worker.name} achievement`}
                     fill
                     className="achievement-mini-image"
@@ -1886,6 +1890,7 @@ if (loading) {
               ) : (
                 <Image
                   src={previewMedia.url}
+                  unoptimized={isR2MediaUrl(previewMedia.url)}
                   alt="Achievement preview"
                   fill
                   quality={90}

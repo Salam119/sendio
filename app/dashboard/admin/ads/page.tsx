@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
+import { deleteFileFromR2 } from '@/lib/r2-media-client';
 
 type CompanyInfo = {
   id: string;
@@ -31,6 +32,8 @@ type AdminAd = {
   image_url: string | null;
   video_url: string | null;
   thumbnail_url: string | null;
+  storage_provider: string | null;
+  object_key: string | null;
 
   cta_text: string | null;
   target_url: string | null;
@@ -132,6 +135,50 @@ function isVideoAd(ad: AdminAd) {
     ad.media_type === 'video' ||
     Boolean(ad.video_url)
   );
+}
+
+const AD_MEDIA_BUCKET = 'ad-media';
+
+function getLegacyAdMediaPath(url: string | null) {
+  if (!url) return null;
+
+  const marker = `/storage/v1/object/public/${AD_MEDIA_BUCKET}/`;
+  const markerIndex = url.indexOf(marker);
+
+  if (markerIndex === -1) return null;
+
+  const encodedPath = url.slice(markerIndex + marker.length).split('?')[0];
+
+  try {
+    return decodeURIComponent(encodedPath);
+  } catch {
+    return encodedPath;
+  }
+}
+
+async function cleanupAdMedia(ad: AdminAd) {
+  if (ad.storage_provider === 'r2' && ad.object_key) {
+    await deleteFileFromR2(ad.object_key);
+    return;
+  }
+
+  const legacyPaths = Array.from(
+    new Set(
+      [ad.image_url, ad.video_url, ad.thumbnail_url]
+        .map(getLegacyAdMediaPath)
+        .filter((value): value is string => Boolean(value)),
+    ),
+  );
+
+  if (!legacyPaths.length) return;
+
+  const { error } = await supabase.storage
+    .from(AD_MEDIA_BUCKET)
+    .remove(legacyPaths);
+
+  if (error) {
+    throw new Error(error.message);
+  }
 }
 
 function getPlacementLabel(ad: AdminAd) {
@@ -542,6 +589,8 @@ export default function AdminAdsPage() {
           image_url,
           video_url,
           thumbnail_url,
+          storage_provider,
+          object_key,
           cta_text,
           target_url,
           active,
@@ -933,12 +982,25 @@ export default function AdminAdsPage() {
       return;
     }
 
+    let cleanupWarning: string | null = null;
+
+    try {
+      await cleanupAdMedia(ad);
+    } catch (cleanupError) {
+      cleanupWarning =
+        cleanupError instanceof Error
+          ? cleanupError.message
+          : 'The advertisement file could not be removed.';
+    }
+
     setOpenAdId(null);
 
     await loadAds(false);
 
     setPageMessage(
-      'Advertisement deleted permanently.'
+      cleanupWarning
+        ? `Advertisement deleted, but its stored file needs manual cleanup: ${cleanupWarning}`
+        : 'Advertisement deleted permanently.'
     );
 
     setActionLoading(null);

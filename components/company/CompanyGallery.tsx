@@ -4,14 +4,35 @@ import Image from 'next/image';
 import { ChangeEvent, useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { getCompanyId } from '@/lib/getCompanyId';
+import {
+  deleteImageFromR2,
+  uploadImageToR2,
+} from '@/lib/r2-media-client';
 
 type GalleryItem = {
   id: string;
   url: string;
   type: string | null;
+  storage_provider: 'supabase' | 'r2' | null;
+  object_key: string | null;
 };
 
 const MAX_MEDIA = 4;
+const ACCEPTED_IMAGE_TYPES = 'image/jpeg,image/png,image/webp,image/avif';
+
+function getSupabaseObjectPath(url: string) {
+  const path = url.split('/company-gallery/')[1]?.split('?')[0];
+
+  if (!path) {
+    return null;
+  }
+
+  try {
+    return decodeURIComponent(path);
+  } catch {
+    return path;
+  }
+}
 
 export default function CompanyGallery() {
   const [companyId, setCompanyId] = useState<string | null>(null);
@@ -28,7 +49,7 @@ export default function CompanyGallery() {
 
     const { data, error } = await supabase
       .from('company_gallery')
-      .select('id, url, type')
+      .select('id, url, type, storage_provider, object_key')
       .eq('company_id', currentCompanyId)
       .order('id', { ascending: true });
 
@@ -37,7 +58,7 @@ export default function CompanyGallery() {
       return;
     }
 
-    setItems(data || []);
+    setItems((data ?? []) as GalleryItem[]);
   }
 
   useEffect(() => {
@@ -70,72 +91,109 @@ export default function CompanyGallery() {
       return;
     }
 
-    const type: 'image' | 'video' = file.type.startsWith('video/')
-      ? 'video'
-      : 'image';
+    if (!file.type.startsWith('image/')) {
+      alert('Please upload an image file.');
+      return;
+    }
 
     setLoading(true);
 
-    const fileName = `${Date.now()}-${file.name}`;
-    const filePath = `${companyId}/gallery/${fileName}`;
+    try {
+      const uploaded = await uploadImageToR2(file);
+      const { error: dbError } = await supabase.from('company_gallery').insert([
+        {
+          company_id: companyId,
+          url: uploaded.publicUrl,
+          type: 'image',
+          storage_provider: 'r2',
+          object_key: uploaded.objectKey,
+        },
+      ]);
 
-    const { error: uploadError } = await supabase.storage
-      .from('company-gallery')
-      .upload(filePath, file);
+      if (dbError) {
+        try {
+          await deleteImageFromR2(uploaded.objectKey);
+        } catch (cleanupError) {
+          console.error(cleanupError);
+        }
 
-    if (uploadError) {
-      alert(uploadError.message);
+        throw new Error(dbError.message);
+      }
+
+      await loadGallery(companyId);
+    } catch (error) {
+      alert(error instanceof Error ? error.message : 'Could not upload image.');
+    } finally {
       setLoading(false);
-      return;
     }
-
-    const {
-      data: { publicUrl },
-    } = supabase.storage.from('company-gallery').getPublicUrl(filePath);
-
-    const { error: dbError } = await supabase.from('company_gallery').insert([
-      {
-        company_id: companyId,
-        url: publicUrl,
-        type,
-      },
-    ]);
-
-    if (dbError) {
-      await supabase.storage.from('company-gallery').remove([filePath]);
-      alert(dbError.message);
-      setLoading(false);
-      return;
-    }
-
-    await loadGallery(companyId);
-    setLoading(false);
   }
 
-  async function deleteItem(id: string, url: string) {
+  async function deleteItem(item: GalleryItem) {
+    if (!companyId) {
+      alert('Company ID not found.');
+      return;
+    }
+
     const confirmed = window.confirm('Delete this media item?');
 
     if (!confirmed) {
       return;
     }
 
-    const path = url.split('/company-gallery/')[1];
+    setLoading(true);
 
-    if (path) {
-      await supabase.storage.from('company-gallery').remove([path]);
+    try {
+      const { error: dbError } = await supabase
+        .from('company_gallery')
+        .delete()
+        .eq('id', item.id)
+        .eq('company_id', companyId);
+
+      if (dbError) {
+        throw new Error(dbError.message);
+      }
+
+      const { error: logoError } = await supabase
+        .from('companies')
+        .update({ logo: null })
+        .eq('id', companyId)
+        .eq('logo', item.url);
+
+      if (logoError) {
+        console.error(logoError);
+      }
+
+      try {
+        if (item.storage_provider === 'r2' && item.object_key) {
+          await deleteImageFromR2(item.object_key);
+        } else {
+          const path = getSupabaseObjectPath(item.url);
+
+          if (path) {
+            const { error: storageError } = await supabase.storage
+              .from('company-gallery')
+              .remove([path]);
+
+            if (storageError) {
+              throw storageError;
+            }
+          }
+        }
+      } catch (storageError) {
+        console.error(storageError);
+        alert('The gallery entry was deleted, but storage cleanup could not be completed.');
+      }
+
+      if (previewItem?.id === item.id) {
+        setPreviewItem(null);
+      }
+
+      await loadGallery(companyId);
+    } catch (error) {
+      alert(error instanceof Error ? error.message : 'Could not delete media.');
+    } finally {
+      setLoading(false);
     }
-
-    const { error } = await supabase
-      .from('company_gallery')
-      .delete()
-      .eq('id', id);
-
-    if (error) {
-      alert(error.message);
-      return;
-    }
-
-    await loadGallery();
   }
 
   function handleUploadChange(event: ChangeEvent<HTMLInputElement>) {
@@ -182,7 +240,7 @@ export default function CompanyGallery() {
             {loading ? 'Uploading...' : 'Upload media'}
             <input
               type="file"
-              accept="image/*,video/*"
+              accept={ACCEPTED_IMAGE_TYPES}
               disabled={loading || items.length >= MAX_MEDIA}
               onChange={handleUploadChange}
               className="hidden"
@@ -191,7 +249,6 @@ export default function CompanyGallery() {
         </div>
       </div>
 
-    
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
         {slots.map((item, index) =>
           item ? (
@@ -217,19 +274,20 @@ export default function CompanyGallery() {
                 />
               ) : (
                 <Image
-                  src={item.url}
-                  alt="Company gallery media"
-                  fill
-                  className="object-contain"
-                  sizes="(max-width: 768px) 50vw, 25vw"
-                />
+  src={item.url}
+  unoptimized={item.url.startsWith('/api/r2/media?')}
+  alt="Company gallery media"
+  fill
+  className="object-contain"
+  sizes="(max-width: 768px) 50vw, 25vw"
+/>
               )}
 
               <button
                 type="button"
                 onClick={(event) => {
                   event.stopPropagation();
-                  void deleteItem(item.id, item.url);
+                  void deleteItem(item);
                 }}
                 className="absolute right-2 top-2 z-20 flex h-7 w-7 items-center justify-center rounded-full bg-white/95 text-sm font-black text-red-500 shadow-sm transition hover:bg-red-50"
                 title="Delete"
@@ -256,46 +314,47 @@ export default function CompanyGallery() {
 
               <input
                 type="file"
-                accept="image/*,video/*"
+                accept={ACCEPTED_IMAGE_TYPES}
                 disabled={loading || items.length >= MAX_MEDIA}
                 onChange={handleUploadChange}
                 className="hidden"
               />
             </label>
-          )
+          ),
         )}
       </div>
-{previewItem ? (
-  <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
-    <div className="relative inline-flex max-h-[92vh] max-w-[92vw] items-center justify-center rounded-[24px] bg-white p-3 shadow-2xl">
-      <button
-        type="button"
-        onClick={() => setPreviewItem(null)}
-        className="absolute -right-3 -top-3 z-20 flex h-9 w-9 items-center justify-center rounded-full bg-white text-lg font-black text-[var(--sendio-text)] shadow-sm"
-        title="Close"
-      >
-        ×
-      </button>
 
-      {previewItem.type === 'video' ? (
-        <video
-          src={previewItem.url}
-          controls
-          className="max-h-[86vh] max-w-[88vw] rounded-2xl object-contain"
-        />
-      ) : (
-        <Image
-          src={previewItem.url}
-          alt="Company gallery preview"
-          width={1200}
-          height={1200}
-          className="h-auto max-h-[86vh] w-auto max-w-[88vw] rounded-2xl object-contain"
-        />
-      )}
-    </div>
-  </div>
-) : null}
-     
+      {previewItem ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
+          <div className="relative inline-flex max-h-[92vh] max-w-[92vw] items-center justify-center rounded-[24px] bg-white p-3 shadow-2xl">
+            <button
+              type="button"
+              onClick={() => setPreviewItem(null)}
+              className="absolute -right-3 -top-3 z-20 flex h-9 w-9 items-center justify-center rounded-full bg-white text-lg font-black text-[var(--sendio-text)] shadow-sm"
+              title="Close"
+            >
+              ×
+            </button>
+
+            {previewItem.type === 'video' ? (
+              <video
+                src={previewItem.url}
+                controls
+                className="max-h-[86vh] max-w-[88vw] rounded-2xl object-contain"
+              />
+            ) : (
+              <Image
+                src={previewItem.url}
+                unoptimized={previewItem.url.startsWith('/api/r2/media?')}
+                alt="Company gallery preview"
+                width={1200}
+                height={1200}
+                className="h-auto max-h-[86vh] w-auto max-w-[88vw] rounded-2xl object-contain"
+              />
+            )}
+          </div>
+        </div>
+      ) : null}
     </section>
   );
 }
