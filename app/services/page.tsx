@@ -1,11 +1,12 @@
-'use client';
+﻿'use client';
 
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { FormEvent, useEffect, useRef, useState } from 'react';
 import { supabase } from '@/lib/supabase';
- import CompanyAdMediaPreview from '@/components/CompanyAdMediaPreview';
+import CompanyAdMediaPreview from '@/components/CompanyAdMediaPreview';
 import TrackedCompanyAdLink from '@/components/TrackedCompanyAdLink';
+
 type ServiceCategoryRow = {
   id: string;
   name: string;
@@ -70,20 +71,7 @@ type FeaturedProvider = {
   searchText: string;
 };
 
-type EmptyProviderSlot = {
-  id: string;
-  placeholder: true;
-};
-
-type ProviderCardItem = FeaturedProvider | EmptyProviderSlot;
-
-type ProviderLayer = {
-  key: string;
-  title: string;
-  direction: 'left' | 'right';
-  items: ProviderCardItem[];
-};
- type ServicesAdCompany = {
+type ServicesAdCompany = {
   id: string;
   name: string | null;
   slug: string | null;
@@ -121,7 +109,8 @@ type ServicesPageAd = Omit<
 > & {
   company: ServicesAdCompany | null;
 };
-  type EmptyServicesAdSlot = {
+
+type EmptyServicesAdSlot = {
   id: string;
   placeholder: true;
 };
@@ -149,6 +138,7 @@ type ServicesAdSlotRow = {
   ad_id: string | null;
   is_enabled: boolean;
 };
+
 const SERVICE_ICON_MAP: Record<string, string> = {
   sparkles: '🧹',
   home: '🏠',
@@ -221,81 +211,13 @@ function normalizeText(value: string | null | undefined) {
   return value?.trim().toLowerCase() ?? '';
 }
 
-function cleanPhone(phone: string | null) {
-  return phone?.replace(/[^\d+]/g, '') ?? '';
-}
-
-function getWhatsappHref(phone: string | null) {
-  const cleaned = cleanPhone(phone).replace('+', '');
-
-  if (!cleaned) {
-    return '';
-  }
-
-  return `https://wa.me/${cleaned}`;
-}
-
-function getProviderHref(provider: FeaturedProvider) {
-  return provider.kind === 'company' ? `/companies/${provider.slug}` : `/workers/${provider.slug}`;
-}
-
-function isEmptyProvider(item: ProviderCardItem): item is EmptyProviderSlot {
-  return 'placeholder' in item;
-}
-
-function fillProviderSlots(items: FeaturedProvider[], key: string) {
-  const filled: ProviderCardItem[] = items.slice(0, 14);
-
-  while (filled.length < 10) {
-    filled.push({
-      id: `${key}-empty-${filled.length}`,
-      placeholder: true,
-    });
-  }
-
-  return filled;
-}
-
-function splitProviderLayers(providers: FeaturedProvider[]): ProviderLayer[] {
-  return [
-    {
-      key: 'layer-1',
-      title: 'Recommended providers',
-      direction: 'left',
-      items: fillProviderSlots(providers.slice(0, 14), 'layer-1'),
-    },
-    {
-      key: 'layer-2',
-      title: 'Companies on Sendio',
-      direction: 'right',
-      items: fillProviderSlots(
-        providers.filter((provider) => provider.kind === 'company').slice(0, 14),
-        'layer-2'
-      ),
-    },
-    {
-      key: 'layer-3',
-      title: 'Skilled workers',
-      direction: 'left',
-      items: fillProviderSlots(
-        providers.filter((provider) => provider.kind === 'worker').slice(0, 14),
-        'layer-3'
-      ),
-    },
-    {
-      key: 'layer-4',
-      title: 'More providers',
-      direction: 'right',
-      items: fillProviderSlots(providers.slice(14, 28), 'layer-4'),
-    },
-  ];
-}
 
 function shortDescription(value: string) {
   const words = value.split(/\s+/).filter(Boolean).slice(0, 9);
   return words.length > 0 ? words.join(' ') : 'Service details available on profile';
 }
- function normalizeServicesPageAd(
+
+function normalizeServicesPageAd(
   ad: RawServicesPageAd
 ): ServicesPageAd {
   const company = Array.isArray(ad.company)
@@ -462,12 +384,10 @@ export default function ServicesPage() {
 
   const [services, setServices] = useState<ServiceCategoryRow[]>([]);
   const [providers, setProviders] = useState<FeaturedProvider[]>([]);
-  const [serviceAds, setServiceAds] =
-  useState<ServicesPageAd[]>([]);
+  const [serviceAds, setServiceAds] = useState<ServicesPageAd[]>([]);
   const [serviceAdLayerSettings, setServiceAdLayerSettings] =
     useState<ServicesAdLayerSettingRow[]>([]);
-  const [serviceAdSlots, setServiceAdSlots] =
-    useState<ServicesAdSlotRow[]>([]);
+  const [serviceAdSlots, setServiceAdSlots] = useState<ServicesAdSlotRow[]>([]);
   const [loadingServices, setLoadingServices] = useState(true);
   const [warning, setWarning] = useState('');
   const [searchText, setSearchText] = useState('');
@@ -791,7 +711,6 @@ export default function ServicesPage() {
   }, [services]);
 
   const normalizedSearch = normalizeText(searchText);
-  const normalizedLocation = normalizeText(locationText);
 
   const visibleServices = services.filter((service) => {
     if (!normalizedSearch) {
@@ -806,15 +725,6 @@ export default function ServicesPage() {
 
   const trendingServices = visibleServices.slice(0, 8);
 
-  const visibleProviders = providers.filter((provider) => {
-    const cityMatches = normalizedLocation
-      ? normalizeText(provider.city).includes(normalizedLocation)
-      : true;
-
-    const serviceMatches = normalizedSearch ? provider.searchText.includes(normalizedSearch) : true;
-
-    return cityMatches && serviceMatches;
-  });
 
   const serviceAdLayers = buildServicesAdLayers(
     serviceAds,
@@ -824,57 +734,6 @@ export default function ServicesPage() {
   const cvImages = providers.filter((provider) => provider.image).slice(0, 3);
   const serviceMarqueeItems = services.length > 0 ? services : visibleServices;
 
-  function isCategoryInsideService(categoryId: string, serviceId: string) {
-    const serviceById = new Map(services.map((item) => [item.id, item]));
-    let currentId: string | null = categoryId;
-    const visited = new Set<string>();
-
-    while (currentId && !visited.has(currentId)) {
-      if (currentId === serviceId) {
-        return true;
-      }
-
-      visited.add(currentId);
-      currentId = serviceById.get(currentId)?.parent_id ?? null;
-    }
-
-    return false;
-  }
-
-  function findBestServiceSlugForProvider(provider: FeaturedProvider) {
-    const searchedService = visibleServices[0];
-
-    if (
-      normalizedSearch &&
-      searchedService &&
-      provider.serviceCategoryIds.some((categoryId) =>
-        isCategoryInsideService(categoryId, searchedService.id)
-      )
-    ) {
-      return searchedService.slug;
-    }
-
-    return provider.primaryServiceSlug;
-  }
-
-  function getProviderRequestHref(provider: FeaturedProvider) {
-    const serviceSlug = findBestServiceSlugForProvider(provider);
-
-    if (!serviceSlug) {
-      return getProviderHref(provider);
-    }
-
-    const params = new URLSearchParams({
-      providerType: provider.kind,
-      providerId: provider.id,
-    });
-
-    if (locationText.trim()) {
-      params.set('city', locationText.trim());
-    }
-
-    return `/services/${serviceSlug}?${params.toString()}`;
-  }
 
   function getServiceHref(service: ServiceCategoryRow) {
     const params = new URLSearchParams();

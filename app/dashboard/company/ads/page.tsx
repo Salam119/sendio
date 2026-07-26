@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import Image from 'next/image';
 import Link from 'next/link';
@@ -1618,15 +1618,13 @@ export default function CompanyAdsPage() {
                             </div>
 
                             <div className="mt-4 flex flex-wrap gap-2">
-                              <button
-                                type="button"
-                                    onClick={() =>
-                                   setConfirmSubmitAdId(ad.id)
-                                  }
-                                className="rounded-full border border-[#45cfe7] bg-white px-4 py-2 text-xs font-black text-[#0b5b2f] hover:bg-[#eef6ff]"
-                              >
-                                Preview
-                              </button>
+                            <button
+  type="button"
+  onClick={() => openSavedAdPreview(ad)}
+  className="rounded-full border border-[#45cfe7] bg-white px-4 py-2 text-xs font-black text-[#0b5b2f] hover:bg-[#eef6ff]"
+>
+  Preview
+</button>
 
                               {canSubmitAd(ad) ? (
                                 <button
