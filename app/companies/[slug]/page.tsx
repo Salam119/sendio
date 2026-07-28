@@ -1336,11 +1336,11 @@ export default function PublicCompanyPage() {
             {company.logo ? (
               <Image
                 src={company.logo}
+                unoptimized={company.logo.startsWith('/api/r2/media?')}
                 alt={`${company.name} logo`}
-                width={112}
-                height={112}
+                fill
                 className="logo-image"
-                sizes="112px"
+                sizes="104px"
               />
             ) : (
               <span>{company.name.charAt(0).toUpperCase()}</span>
@@ -1689,9 +1689,9 @@ export default function PublicCompanyPage() {
                       ) : (
                         <Image
                           src={item.url}
+                          unoptimized={item.url.startsWith('/api/r2/media?')}
                           alt={`${company.name} media`}
-                          width={120}
-                          height={120}
+                          fill
                           className="media-image"
                           sizes="120px"
                         />
@@ -1800,6 +1800,7 @@ export default function PublicCompanyPage() {
                     ) : (
                       <Image
                         src={activeShowcaseMedia.media_url}
+                        unoptimized={activeShowcaseMedia.media_url.startsWith('/api/r2/media?')}
                         alt={activeShowcaseMedia.alt_text || companyShowcase.title}
                         width={96}
                         height={96}
@@ -1990,6 +1991,7 @@ export default function PublicCompanyPage() {
               ) : (
                 <Image
                   src={selectedMedia.url}
+                  unoptimized={selectedMedia.url.startsWith('/api/r2/media?')}
                   alt={`${company.name} media preview`}
                   fill
                   quality={90}
@@ -2114,6 +2116,7 @@ const pageStyles = `
   }
 
   .logo-box {
+    position: relative;
     width: 104px;
     height: 104px;
     border-radius: 25px;
@@ -2131,6 +2134,7 @@ const pageStyles = `
   .logo-box :global(.logo-image) {
     width: 100%;
     height: 100%;
+    display: block;
     object-fit: cover;
   }
 
@@ -2512,6 +2516,7 @@ const pageStyles = `
   }
 
   .media-square {
+    position: relative;
     aspect-ratio: 1 / 1;
     border: 1px solid var(--sendio-border);
     border-radius: 16px;
@@ -2525,7 +2530,8 @@ const pageStyles = `
   .media-square :global(.media-image) {
     width: 100%;
     height: 100%;
-    object-fit: contain;
+    display: block;
+    object-fit: cover;
     background: #ffffff;
     pointer-events: none;
   }

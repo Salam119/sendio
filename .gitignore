@@ -52,3 +52,10 @@ dist/
 *.backup.tsx
 
 *.tsbuildinfo
+/data/bce/
+*.sqlite
+KboOpenData_*_Full.zip
+KboOpenData_*_Update.zip
+/*.zip
+__pycache__/
+*.pyc

@@ -17,11 +17,25 @@ type CallbackUser = {
     user_type?: unknown;
     full_name?: unknown;
     name?: unknown;
+    enterprise_number?: unknown;
   };
 };
 
 const PENDING_CONFIRMATION_STORAGE_KEY =
   'sendio_pending_email_confirmation';
+const PENDING_COMPANY_NUMBER_STORAGE_KEY = 'sendio_pending_company_number';
+
+type BceCompany = {
+  number: string;
+  name: string;
+  status_code: string;
+};
+
+type BceLookupResponse = {
+  ok: boolean;
+  message?: string;
+  company?: BceCompany;
+};
 
 function getHashValue(key: string) {
   if (typeof window === 'undefined') return null;
@@ -57,11 +71,22 @@ function getPendingUserType() {
   return null;
 }
 
+function getPendingCompanyNumber() {
+  if (typeof window === 'undefined') return '';
+
+  return (
+    window.localStorage.getItem(PENDING_COMPANY_NUMBER_STORAGE_KEY) ?? ''
+  )
+    .replace(/\D/g, '')
+    .slice(0, 10);
+}
+
 function clearPendingAuthData() {
   if (typeof window === 'undefined') return;
 
   window.localStorage.removeItem('sendio_pending_user_type');
   window.localStorage.removeItem('sendio_pending_auth_provider');
+  window.localStorage.removeItem(PENDING_COMPANY_NUMBER_STORAGE_KEY);
   window.sessionStorage.removeItem(PENDING_CONFIRMATION_STORAGE_KEY);
 }
 
@@ -95,7 +120,33 @@ function getCompanyName(user: CallbackUser) {
   return 'Company';
 }
 
-async function ensureCompanyProfile(user: CallbackUser) {
+async function lookupBceCompany(enterpriseNumber: string) {
+  const response = await fetch(
+    `/api/bce/company?number=${encodeURIComponent(enterpriseNumber)}`,
+    {
+      cache: 'no-store',
+    },
+  );
+
+  const payload = (await response.json()) as BceLookupResponse;
+
+  if (!response.ok || !payload.ok || !payload.company) {
+    throw new Error(
+      payload.message || 'The company could not be verified in the BCE register.',
+    );
+  }
+
+  if (payload.company.status_code !== 'AC') {
+    throw new Error('The company is not active in the BCE register.');
+  }
+
+  return payload.company;
+}
+
+async function ensureCompanyProfile(
+  user: CallbackUser,
+  pendingCompanyNumber: string,
+) {
   const { data: existingCompany, error: lookupError } = await supabase
     .from('companies')
     .select('id')
@@ -111,16 +162,60 @@ async function ensureCompanyProfile(user: CallbackUser) {
     return null;
   }
 
+  const metadataCompanyNumber = getMetadataText(
+    user.user_metadata?.enterprise_number,
+  ).replace(/\D/g, '');
+
+  const enterpriseNumber = (
+    metadataCompanyNumber || pendingCompanyNumber
+  ).slice(0, 10);
+
+  if (enterpriseNumber.length !== 10) {
+    return 'A verified Belgian enterprise number is required.';
+  }
+
+  let bceCompany: BceCompany;
+
+  try {
+    bceCompany = await lookupBceCompany(enterpriseNumber);
+  } catch (error) {
+    return error instanceof Error
+      ? error.message
+      : 'The BCE verification could not be completed.';
+  }
+
+  const { data: registrationOwner, error: registrationLookupError } =
+    await supabase
+      .from('companies')
+      .select('id')
+      .eq('registration_number', bceCompany.number)
+      .limit(1)
+      .maybeSingle();
+
+  if (registrationLookupError) {
+    return registrationLookupError.message;
+  }
+
+  if (registrationOwner) {
+    return 'This Belgian enterprise number is already registered on Sendio.';
+  }
+
   const { error: insertError } = await supabase.from('companies').insert({
     user_id: user.id,
-    name: getCompanyName(user),
+    name: bceCompany.name || getCompanyName(user),
     email: user.email ?? null,
+    registration_number: bceCompany.number,
+    verification_status: 'verified',
     status: 'available',
     views: 0,
     connections: 0,
     rating: 0,
     reviews_count: 0,
   });
+
+  if (insertError?.code === '23505') {
+    return 'This Belgian enterprise number is already registered on Sendio.';
+  }
 
   return insertError?.message ?? null;
 }
@@ -134,7 +229,10 @@ export default function AuthCallbackPage() {
       userType: UserType,
     ) {
       if (userType === 'company') {
-        const companyProfileError = await ensureCompanyProfile(user);
+        const companyProfileError = await ensureCompanyProfile(
+          user,
+          getPendingCompanyNumber(),
+        );
 
         if (companyProfileError) {
           console.error(
@@ -146,6 +244,11 @@ export default function AuthCallbackPage() {
             'sendio_company_profile_setup_error',
             companyProfileError,
           );
+
+          await supabase.auth.signOut();
+          clearPendingAuthData();
+          router.replace('/register?type=company');
+          return;
         }
       }
 
@@ -252,6 +355,10 @@ export default function AuthCallbackPage() {
                   user.user_metadata?.name ??
                   user.email ??
                   '',
+                enterprise_number:
+                  pendingUserType === 'company'
+                    ? getPendingCompanyNumber()
+                    : undefined,
               },
             });
 

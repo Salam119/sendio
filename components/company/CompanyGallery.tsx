@@ -270,17 +270,17 @@ export default function CompanyGallery() {
                   src={item.url}
                   muted
                   playsInline
-                  className="h-full w-full object-contain"
+                  className="h-full w-full object-cover"
                 />
               ) : (
                 <Image
-  src={item.url}
-  unoptimized={item.url.startsWith('/api/r2/media?')}
-  alt="Company gallery media"
-  fill
-  className="object-contain"
-  sizes="(max-width: 768px) 50vw, 25vw"
-/>
+                  src={item.url}
+                  alt="Company gallery media"
+                  fill
+                  unoptimized
+                  className="object-cover"
+                  sizes="(max-width: 768px) 50vw, 25vw"
+                />
               )}
 
               <button
@@ -289,8 +289,10 @@ export default function CompanyGallery() {
                   event.stopPropagation();
                   void deleteItem(item);
                 }}
-                className="absolute right-2 top-2 z-20 flex h-7 w-7 items-center justify-center rounded-full bg-white/95 text-sm font-black text-red-500 shadow-sm transition hover:bg-red-50"
-                title="Delete"
+                className="absolute right-2 top-2 z-20 flex h-8 w-8 items-center justify-center rounded-full bg-red-600 text-base font-black text-white shadow-md transition hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-60"
+                title="Delete image"
+                aria-label="Delete image"
+                disabled={loading}
               >
                 ×
               </button>
@@ -345,10 +347,10 @@ export default function CompanyGallery() {
             ) : (
               <Image
                 src={previewItem.url}
-                unoptimized={previewItem.url.startsWith('/api/r2/media?')}
                 alt="Company gallery preview"
                 width={1200}
                 height={1200}
+                unoptimized
                 className="h-auto max-h-[86vh] w-auto max-w-[88vw] rounded-2xl object-contain"
               />
             )}

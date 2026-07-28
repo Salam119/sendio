@@ -49,6 +49,20 @@ function getStatusStyle(status: string | null) {
   return 'border-red-200 bg-red-50 text-red-700';
 }
 
+function getSupabaseObjectPath(url: string) {
+  const path = url.split('/company-gallery/')[1]?.split('?')[0];
+
+  if (!path) {
+    return null;
+  }
+
+  try {
+    return decodeURIComponent(path);
+  } catch {
+    return path;
+  }
+}
+
 export default function CompanyHeader() {
   const [company, setCompany] = useState<Company | null>(null);
   const [companyId, setCompanyId] = useState<string | null>(null);
@@ -230,6 +244,78 @@ export default function CompanyHeader() {
     }
   }
 
+  async function deleteLogo() {
+    if (!companyId) {
+      alert('Company ID not found.');
+      return;
+    }
+
+    if (!company?.logo) {
+      return;
+    }
+
+    const confirmed = window.confirm('Delete the current logo?');
+
+    if (!confirmed) {
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      const logoUrl = company.logo;
+      const matchedGalleryItem = galleryItems.find((item) => item.url === logoUrl) ?? null;
+
+      const { error: clearLogoError } = await supabase
+        .from('companies')
+        .update({ logo: null })
+        .eq('id', companyId);
+
+      if (clearLogoError) {
+        throw new Error(clearLogoError.message);
+      }
+
+      if (matchedGalleryItem) {
+        const { error: deleteGalleryError } = await supabase
+          .from('company_gallery')
+          .delete()
+          .eq('id', matchedGalleryItem.id)
+          .eq('company_id', companyId);
+
+        if (deleteGalleryError) {
+          throw new Error(deleteGalleryError.message);
+        }
+
+        try {
+          if (matchedGalleryItem.storage_provider === 'r2' && matchedGalleryItem.object_key) {
+            await deleteImageFromR2(matchedGalleryItem.object_key);
+          } else {
+            const path = getSupabaseObjectPath(matchedGalleryItem.url);
+
+            if (path) {
+              const { error: storageError } = await supabase.storage
+                .from('company-gallery')
+                .remove([path]);
+
+              if (storageError) {
+                throw storageError;
+              }
+            }
+          }
+        } catch (storageError) {
+          console.error(storageError);
+          alert('The logo was removed, but storage cleanup could not be completed.');
+        }
+      }
+
+      await Promise.all([reloadCompany(companyId), loadGallery(companyId)]);
+    } catch (error) {
+      alert(error instanceof Error ? error.message : 'Could not delete logo.');
+    } finally {
+      setLoading(false);
+    }
+  }
+
   function handleLogoUploadChange(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
 
@@ -252,13 +338,30 @@ export default function CompanyHeader() {
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
           <div className="relative h-24 w-24 shrink-0 overflow-hidden rounded-[24px] border border-[var(--sendio-border)] bg-[var(--sendio-soft)] shadow-sm">
             {company?.logo ? (
-              <Image
-                src={company.logo}
-                alt="Company logo"
-                fill
-                className="object-contain p-2"
-                sizes="96px"
-              />
+              <>
+                <Image
+                  src={company.logo}
+                  alt="Company logo"
+                  fill
+                  unoptimized={company.logo.startsWith('/api/r2/media?')}
+                  className="object-cover"
+                  sizes="96px"
+                />
+
+                <button
+                  type="button"
+                  onClick={() => void deleteLogo()}
+                  disabled={loading}
+                  className={`absolute right-2 top-2 z-20 flex h-7 w-7 items-center justify-center rounded-full bg-white/95 text-sm font-black text-red-500 shadow-sm transition ${
+                    loading
+                      ? 'cursor-not-allowed opacity-60'
+                      : 'hover:bg-red-50'
+                  }`}
+                  title="Delete logo"
+                >
+                  ×
+                </button>
+              </>
             ) : (
               <div className="flex h-full w-full items-center justify-center text-xl font-black text-[var(--sendio-muted)]">
                 Logo
@@ -396,24 +499,33 @@ export default function CompanyHeader() {
 
           {galleryImages.length > 0 ? (
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-              {galleryImages.map((item) => (
-                <button
-                  key={item.id}
-                  type="button"
-                  onClick={() => void setLogoFromGallery(item.url)}
-                  disabled={loading}
-                  className="relative aspect-square overflow-hidden rounded-2xl border border-[var(--sendio-border)] bg-white transition hover:scale-[1.02]"
-                  title="Use as logo"
-                >
-                  <Image
-                    src={item.url}
-                    alt="Gallery image"
-                    fill
-                    className="object-contain p-2"
-                    sizes="(max-width: 640px) 50vw, 25vw"
-                  />
-                </button>
-              ))}
+              {galleryImages.map((item) => {
+                const isCurrentLogo = item.url === company?.logo;
+
+                return (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => void setLogoFromGallery(item.url)}
+                    disabled={loading}
+                    className={`relative aspect-square overflow-hidden rounded-2xl border transition hover:scale-[1.02] ${
+                      isCurrentLogo
+                        ? 'border-[var(--sendio-accent)] ring-2 ring-[var(--sendio-accent)]/20'
+                        : 'border-[var(--sendio-border)] bg-white'
+                    }`}
+                    title={isCurrentLogo ? 'Current logo' : 'Use as logo'}
+                  >
+                    <Image
+                      src={item.url}
+                      alt="Gallery image"
+                      fill
+                      unoptimized={item.url.startsWith('/api/r2/media?')}
+                      className="object-cover"
+                      sizes="(max-width: 640px) 50vw, 25vw"
+                    />
+                  </button>
+                );
+              })}
             </div>
           ) : (
             <p className="rounded-2xl bg-white px-4 py-3 text-xs font-bold text-[var(--sendio-muted)]">

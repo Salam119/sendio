@@ -10,7 +10,6 @@ type UserType = 'client' | 'worker' | 'company';
 type AccountOption = {
   value: UserType;
   label: string;
-  icon: string;
   activeClass: string;
   inactiveClass: string;
   chipClass: string;
@@ -34,9 +33,31 @@ type StoredPendingConfirmation = {
   deadline: number;
 };
 
+type BceCompany = {
+  number: string;
+  name: string;
+  status_code: string;
+  status_fr: string;
+  legal_form_fr: string;
+  postal_code: string;
+  city_fr: string;
+  street_fr: string;
+  house_number: string;
+  box: string;
+};
+
+type BceLookupResponse = {
+  ok: boolean;
+  message?: string;
+  company?: BceCompany;
+};
+
+type CompanyLookupState = 'idle' | 'checking' | 'verified' | 'error';
+
 const CONFIRMATION_WAIT_SECONDS = 3 * 60;
 const CONFIRMATION_WAIT_MS = CONFIRMATION_WAIT_SECONDS * 1000;
 const PENDING_CONFIRMATION_STORAGE_KEY = 'sendio_pending_email_confirmation';
+const PENDING_COMPANY_NUMBER_STORAGE_KEY = 'sendio_pending_company_number';
 
 const pendingConfirmationNotice: RegisterNotice = {
   type: 'pending',
@@ -48,7 +69,6 @@ const accountOptions: AccountOption[] = [
   {
     value: 'client',
     label: 'Client',
-    icon: '👤',
     activeClass: 'border-emerald-300 bg-emerald-50 text-emerald-700',
     inactiveClass:
       'border-emerald-100 bg-white/90 text-slate-600 hover:bg-emerald-50',
@@ -57,7 +77,6 @@ const accountOptions: AccountOption[] = [
   {
     value: 'worker',
     label: 'Worker',
-    icon: '💼',
     activeClass: 'border-blue-300 bg-blue-50 text-blue-700',
     inactiveClass: 'border-blue-100 bg-white/90 text-slate-600 hover:bg-blue-50',
     chipClass: 'border-blue-100 bg-blue-50 text-blue-700',
@@ -65,14 +84,68 @@ const accountOptions: AccountOption[] = [
   {
     value: 'company',
     label: 'Company',
-    icon: '🏢',
     activeClass: 'border-violet-300 bg-violet-50 text-violet-700',
     inactiveClass:
       'border-violet-100 bg-white/90 text-slate-600 hover:bg-violet-50',
     chipClass: 'border-violet-100 bg-violet-50 text-violet-700',
   },
 ];
+      function AccountTypeIcon({ type }: { type: UserType }) {
+  if (type === 'client') {
+    return (
+      <svg
+        viewBox="0 0 24 24"
+        className="h-4 w-4"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        aria-hidden="true"
+      >
+        <circle cx="12" cy="8" r="3" />
+        <path d="M5.5 20c.8-4 3-6 6.5-6s5.7 2 6.5 6" />
+      </svg>
+    );
+  }
 
+  if (type === 'worker') {
+    return (
+      <svg
+        viewBox="0 0 24 24"
+        className="h-4 w-4"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        aria-hidden="true"
+      >
+        <path d="M4 14h16" />
+        <path d="M6 14v-1a6 6 0 0 1 12 0v1" />
+        <path d="M9 8V6.5h6V8" />
+        <path d="M7 18h10" />
+      </svg>
+    );
+  }
+
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      className="h-4 w-4"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <rect x="5" y="4" width="14" height="16" rx="1.5" />
+      <path d="M9 8h2M13 8h2M9 12h2M13 12h2" />
+      <path d="M10 20v-4h4v4" />
+    </svg>
+  );
+}
 function GoogleIcon() {
   return (
     <svg viewBox="0 0 24 24" className="h-4 w-4" aria-hidden="true">
@@ -199,6 +272,30 @@ function clearPendingConfirmation() {
   window.sessionStorage.removeItem(PENDING_CONFIRMATION_STORAGE_KEY);
 }
 
+function normalizeCompanyNumberInput(value: string) {
+  return value.replace(/\D/g, '').slice(0, 10);
+}
+
+function formatCompanyNumber(value: string) {
+  const digits = normalizeCompanyNumberInput(value);
+
+  if (digits.length <= 4) return digits;
+  if (digits.length <= 7) return `${digits.slice(0, 4)}.${digits.slice(4)}`;
+
+  return `${digits.slice(0, 4)}.${digits.slice(4, 7)}.${digits.slice(7)}`;
+}
+
+function savePendingCompanyNumber(value: string | null) {
+  if (typeof window === 'undefined') return;
+
+  if (value) {
+    window.localStorage.setItem(PENDING_COMPANY_NUMBER_STORAGE_KEY, value);
+    return;
+  }
+
+  window.localStorage.removeItem(PENDING_COMPANY_NUMBER_STORAGE_KEY);
+}
+
 function getResendErrorMessage(message: string) {
   const normalizedMessage = message.toLowerCase();
 
@@ -245,7 +342,7 @@ function isObfuscatedExistingUser(
 export default function RegisterPage() {
   const router = useRouter();
 
-  const [userType, setUserType] = useState<UserType | null>(getInitialUserType);
+  const [userType, setUserType] = useState<UserType | null>(null);
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
   const [facebookLoading, setFacebookLoading] = useState(false);
@@ -261,10 +358,112 @@ export default function RegisterPage() {
   const [resendFeedback, setResendFeedback] = useState<ResendFeedback | null>(
     null,
   );
+  const [companyNumber, setCompanyNumber] = useState('');
+  const [companyLookupState, setCompanyLookupState] =
+    useState<CompanyLookupState>('idle');
+  const [verifiedCompany, setVerifiedCompany] = useState<BceCompany | null>(null);
+  const [companyLookupMessage, setCompanyLookupMessage] = useState('');
 
   const selectedAccount = useMemo(() => {
     return accountOptions.find((option) => option.value === userType) ?? null;
   }, [userType]);
+
+  const registrationUnlocked =
+    userType !== 'company' || companyLookupState === 'verified';
+
+  useEffect(() => {
+    const initialType = getInitialUserType();
+
+    if (!initialType) return;
+
+    const initialTypeTimer = window.setTimeout(() => {
+      if (initialType === 'company') {
+        router.replace('/register/company');
+        return;
+      }
+
+      setUserType(initialType);
+    }, 0);
+
+    return () => window.clearTimeout(initialTypeTimer);
+  }, [router]);
+
+  useEffect(() => {
+    if (userType !== 'company' || companyNumber.length !== 10) return;
+
+    const controller = new AbortController();
+
+    const lookupTimer = window.setTimeout(async () => {
+      setCompanyLookupState('checking');
+      setVerifiedCompany(null);
+      setCompanyLookupMessage('Checking the official BCE register...');
+
+      try {
+        const response = await fetch(
+          `/api/bce/company?number=${encodeURIComponent(companyNumber)}`,
+          {
+            cache: 'no-store',
+            signal: controller.signal,
+          },
+        );
+
+        const payload = (await response.json()) as BceLookupResponse;
+
+        if (!response.ok || !payload.ok || !payload.company) {
+          throw new Error(
+            payload.message || 'The company was not found in the BCE register.',
+          );
+        }
+
+        if (payload.company.status_code !== 'AC') {
+          throw new Error('This company is not active in the BCE register.');
+        }
+
+        setVerifiedCompany(payload.company);
+        setCompanyLookupState('verified');
+        setCompanyLookupMessage('');
+        savePendingCompanyNumber(payload.company.number);
+      } catch (error) {
+        if (error instanceof DOMException && error.name === 'AbortError') {
+          return;
+        }
+
+        setVerifiedCompany(null);
+        setCompanyLookupState('error');
+        setCompanyLookupMessage(
+          error instanceof Error
+            ? error.message
+            : 'The BCE verification could not be completed.',
+        );
+        savePendingCompanyNumber(null);
+      }
+    }, 350);
+
+    return () => {
+      window.clearTimeout(lookupTimer);
+      controller.abort();
+    };
+  }, [companyNumber, userType]);
+
+  useEffect(() => {
+    const callbackError = window.sessionStorage.getItem(
+      'sendio_company_profile_setup_error',
+    );
+
+    if (!callbackError) return;
+
+    window.sessionStorage.removeItem('sendio_company_profile_setup_error');
+
+    const errorTimer = window.setTimeout(() => {
+      setNotice({
+        type: 'error',
+        title: 'Company verification could not be completed.',
+        body: callbackError,
+      });
+    }, 0);
+
+    return () => window.clearTimeout(errorTimer);
+  }, []);
 
   function startConfirmationWait(
     email: string,
@@ -387,6 +586,54 @@ export default function RegisterPage() {
     return false;
   }
 
+  function resetCompanyVerification() {
+    setCompanyNumber('');
+    setCompanyLookupState('idle');
+    setVerifiedCompany(null);
+    setCompanyLookupMessage('');
+    savePendingCompanyNumber(null);
+  }
+
+  function handleAccountTypeSelection(value: UserType) {
+    setNotice(null);
+
+    if (value === 'company') {
+      resetCompanyVerification();
+      router.push('/register/company');
+      return;
+    }
+
+    setUserType(value);
+    resetCompanyVerification();
+  }
+
+  function handleCompanyNumberChange(
+    event: React.ChangeEvent<HTMLInputElement>,
+  ) {
+    setCompanyNumber(normalizeCompanyNumberInput(event.target.value));
+    setCompanyLookupState('idle');
+    setVerifiedCompany(null);
+    setCompanyLookupMessage('');
+    savePendingCompanyNumber(null);
+  }
+
+  function prepareCompanyRegistration(selectedType: UserType) {
+    if (selectedType !== 'company') return true;
+
+    if (companyLookupState !== 'verified' || !verifiedCompany) {
+      setNotice({
+        type: 'error',
+        title: 'Verify the company first.',
+        body: 'Enter a valid active Belgian enterprise number before continuing.',
+      });
+
+      return false;
+    }
+
+    savePendingCompanyNumber(verifiedCompany.number);
+    return true;
+  }
+
   async function handleGoogleRegister() {
     setNotice(null);
 
@@ -395,6 +642,8 @@ export default function RegisterPage() {
     const selectedType = userType;
 
     if (!selectedType) return;
+
+  if (!prepareCompanyRegistration(selectedType)) return;
 
     setGoogleLoading(true);
 
@@ -431,6 +680,8 @@ export default function RegisterPage() {
 
   if (!selectedType) return;
 
+  if (!prepareCompanyRegistration(selectedType)) return;
+
   setFacebookLoading(true);
 
   const redirectTo = `${window.location.origin}/auth/callback`;
@@ -464,6 +715,8 @@ export default function RegisterPage() {
   const selectedType = userType;
 
   if (!selectedType) return;
+
+  if (!prepareCompanyRegistration(selectedType)) return;
 
   setLinkedinLoading(true);
 
@@ -544,6 +797,11 @@ async function handleResendConfirmation() {
       return;
     }
 
+    if (!prepareCompanyRegistration(selectedType)) {
+      setLoading(false);
+      return;
+    }
+
     const formData = new FormData(e.currentTarget);
 
     const email = String(formData.get('email') || '').trim().toLowerCase();
@@ -597,6 +855,8 @@ async function handleResendConfirmation() {
         data: {
           full_name: fullName,
           user_type: selectedType,
+          enterprise_number:
+            selectedType === 'company' ? verifiedCompany?.number : undefined,
         },
       },
     });
@@ -631,7 +891,11 @@ async function handleResendConfirmation() {
 
     if (data.session) {
       clearPendingConfirmation();
-      router.replace(getRedirectPath(selectedType));
+      router.replace(
+        selectedType === 'company'
+          ? '/auth/callback'
+          : getRedirectPath(selectedType),
+      );
       return;
     }
 
@@ -647,7 +911,7 @@ async function handleResendConfirmation() {
         onClick={() => router.push('/')}
         className="fixed left-3 top-3 z-10 rounded-full border border-blue-100 bg-white/85 px-3 py-1.5 text-xs font-black text-slate-700 shadow-sm backdrop-blur transition hover:bg-white"
       >
-        ← Back
+        &larr; Back
       </button>
 
       {notice ? (
@@ -761,7 +1025,7 @@ async function handleResendConfirmation() {
               <span className="text-[1.38rem] font-black leading-none tracking-tight text-slate-950">
                 Send
                 <span className="relative inline-block">
-                  <span>ı</span>
+                <span>&#305;</span>
                   <span className="absolute left-1/2 top-0 h-1.5 w-1.5 -translate-x-1/2 -translate-y-1 rounded-full bg-blue-600" />
                 </span>
                 o
@@ -776,22 +1040,19 @@ async function handleResendConfirmation() {
                   <button
                     key={option.value}
                     type="button"
-                    onClick={() => {
-                      setUserType(option.value);
-                      setNotice(null);
-                    }}
+                    onClick={() => handleAccountTypeSelection(option.value)}
                     className={`relative rounded-xl border px-1 py-1 text-center text-[10px] font-black transition hover:-translate-y-0.5 ${
                       isSelected ? option.activeClass : option.inactiveClass
                     }`}
                   >
                     {isSelected && (
                       <span className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-blue-600 text-[9px] text-white">
-                        ✓
+                        {'\u2713'}
                       </span>
                     )}
 
                     <span className="mx-auto mb-0.5 flex h-5 w-5 items-center justify-center rounded-md bg-white text-[10px] shadow-sm">
-                      {option.icon}
+                    <AccountTypeIcon type={option.value} />
                     </span>
 
                     {option.label}
@@ -810,7 +1071,70 @@ async function handleResendConfirmation() {
               {selectedAccount ? selectedAccount.label : 'What?'}
             </div>
 
-            <form onSubmit={handleRegister} className="space-y-2">
+            {userType === 'company' ? (
+              <div className="mb-2 space-y-2 rounded-2xl border border-violet-100 bg-violet-50/70 p-3">
+                <label className="block text-xs font-black text-violet-800">
+                  Belgian enterprise number
+                </label>
+
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  autoComplete="off"
+                  value={formatCompanyNumber(companyNumber)}
+                  onChange={handleCompanyNumberChange}
+                  placeholder="0123.456.789"
+                  maxLength={12}
+                  className="h-9 w-full rounded-xl border border-violet-200 bg-white px-3 text-sm font-black text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-violet-400 focus:ring-4 focus:ring-violet-100"
+                />
+
+                {companyLookupState === 'checking' ? (
+                  <p className="text-xs font-bold text-blue-700">
+                    Checking the official BCE register...
+                  </p>
+                ) : null}
+
+                {companyLookupState === 'error' && companyLookupMessage ? (
+                  <p className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs font-bold text-red-700">
+                    {companyLookupMessage}
+                  </p>
+                ) : null}
+
+                {companyLookupState === 'verified' && verifiedCompany ? (
+                  <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2">
+                    <p className="text-xs font-black text-emerald-800">
+                      Company verified
+                    </p>
+                    <p className="mt-1 text-sm font-black text-slate-900">
+                      {verifiedCompany.name}
+                    </p>
+                    <p className="mt-1 text-[11px] font-bold text-slate-600">
+                      {verifiedCompany.status_fr}
+                      {verifiedCompany.legal_form_fr
+                        ? ` آ· ${verifiedCompany.legal_form_fr}`
+                        : ''}
+                    </p>
+                    <p className="mt-1 text-[11px] font-semibold text-slate-500">
+                      {[
+                        verifiedCompany.street_fr,
+                        verifiedCompany.house_number,
+                        verifiedCompany.box
+                          ? `box ${verifiedCompany.box}`
+                          : '',
+                        verifiedCompany.postal_code,
+                        verifiedCompany.city_fr,
+                      ]
+                        .filter(Boolean)
+                        .join(' ')}
+                    </p>
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
+
+            {registrationUnlocked ? (
+              <>
+                <form onSubmit={handleRegister} className="space-y-2">
               <input
                 name="fullName"
                 placeholder="Full name"
@@ -846,7 +1170,7 @@ async function handleResendConfirmation() {
                 disabled={loading || googleLoading}
                 className="h-8 w-full rounded-xl bg-blue-600 text-sm font-black text-white shadow-[0_14px_28px_-20px_rgba(37,99,235,0.9)] transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
               >
-                {loading ? 'Sending email...' : 'Create account →'}
+                {loading ? 'Sending email...' : 'Create account \u2192'}
               </button>
             </form>
 
@@ -889,8 +1213,15 @@ async function handleResendConfirmation() {
   {linkedinLoading
     ? 'Opening LinkedIn...'
     : 'Sign up with LinkedIn'}
-</button>   
+</button>
             </div>
+
+              </>
+            ) : (
+              <p className="mb-2 rounded-xl border border-violet-100 bg-violet-50 px-3 py-2 text-center text-xs font-bold text-violet-700">
+                Enter a valid active Belgian enterprise number to unlock registration.
+              </p>
+            )}
 
             <p className="mt-2 text-center text-xs font-semibold text-slate-500">
               Already have an account?{' '}

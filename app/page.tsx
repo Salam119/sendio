@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import Image from 'next/image';
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
@@ -6222,6 +6222,7 @@ export default function HomePage() {
                         {worker.avatar ? (
                           <Image
                             src={worker.avatar}
+                            unoptimized={worker.avatar.startsWith('/api/r2/media?')}
                             alt={`${worker.name} avatar`}
                             width={96}
                             height={96}
@@ -6327,6 +6328,7 @@ export default function HomePage() {
                         {company.logo ? (
                           <Image
                             src={company.logo}
+                            unoptimized={company.logo.startsWith('/api/r2/media?')}
                             alt={`${company.name} logo`}
                             width={96}
                             height={96}
