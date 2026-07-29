@@ -38,14 +38,34 @@ export default function ContactPage() {
       <section className="section split">
         <article className="panel">
           <p className="sectionLabel">CONTACT SENDIO</p>
-          <h2>Official contact details will be managed by the platform admin.</h2>
+
+          <h2>Vos suggestions font évoluer Sendio.</h2>
 
           <p>
-            Sendio contact information such as support email, phone, WhatsApp,
-            social links, and office address should be controlled from the future
-            Admin Platform Settings page. This avoids hardcoded contact data and
-            keeps public information easy to update.
+            <strong>Le lancement officiel de Sendio approche.</strong>
           </p>
+
+          <p>
+            Sendio évolue continuellement grâce aux suggestions de sa communauté.
+            Nous accueillons avec plaisir toutes vos idées afin de rendre la
+            plateforme plus simple, plus rapide et plus utile pour tous.
+          </p>
+
+          <p>
+            Chaque suggestion est étudiée avec attention et peut contribuer aux
+            prochaines évolutions de la plateforme.
+          </p>
+
+          <p>
+            <strong>Le lancement officiel aura lieu très prochainement.</strong>
+          </p>
+
+          <a
+            href="mailto:info@sendio.be?subject=Suggestion%20pour%20Sendio"
+            className="contactEmail"
+          >
+            info@sendio.be
+          </a>
         </article>
 
         <article className="panel">
@@ -356,6 +376,32 @@ export default function ContactPage() {
 
         .panel p {
           margin: 16px 0 0;
+        }
+
+        .contactEmail {
+          display: inline-flex;
+          align-items: center;
+          min-height: 44px;
+          margin-top: 22px;
+          padding: 0 18px;
+          border: 1px solid rgba(35, 167, 241, 0.32);
+          border-radius: 22px;
+          background: rgba(238, 246, 255, 0.78);
+          color: var(--sendio-accent);
+          font-size: 15px;
+          font-weight: 900;
+          text-decoration: none;
+          box-shadow: 0 10px 24px rgba(35, 167, 241, 0.12);
+          transition:
+            transform 0.2s ease,
+            background-color 0.2s ease,
+            border-color 0.2s ease;
+        }
+
+        .contactEmail:hover {
+          transform: translateY(-2px);
+          background: rgba(227, 239, 255, 0.96);
+          border-color: rgba(35, 167, 241, 0.52);
         }
 
         .sectionHeader {

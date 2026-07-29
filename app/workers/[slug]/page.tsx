@@ -308,7 +308,7 @@ function createMediaPreviewLayout(
     height: Math.round(frameHeight * scale),
   };
 }
-
+const CONTACT_ACTIONS_ENABLED = false;
 export default function PublicWorkerProfilePage() {
   const params = useParams();
   const router = useRouter();
@@ -811,6 +811,10 @@ export default function PublicWorkerProfilePage() {
     url: string,
     channel: ContactChannel
   ) {
+    if (!CONTACT_ACTIONS_ENABLED) {
+    showLockedMessage('✦ Bientôt ✦');
+    return;
+  }
     if (!worker) return;
 
     if (!currentUserId) {

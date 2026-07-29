@@ -206,7 +206,7 @@ type ThemeVars = CSSProperties & {
   '--sendio-muted': string;
   '--sendio-accent': string;
 };
-
+const CONTACT_ACTIONS_ENABLED = false;
 const THEMES: ThemeVars[] = [
   {
     '--sendio-page-bg': '#ffffff',
@@ -750,17 +750,6 @@ export default function PublicCompanyPage() {
     setUnlockNotice(message);
   }
 
-  function getClientContactName() {
-    return (
-      clientProfile?.full_name?.trim() ||
-      currentUser?.email?.trim() ||
-      'Sendio Client'
-    );
-  }
-
-  function getClientContactEmail() {
-    return currentUser?.email?.trim() || 'client@sendio.local';
-  }
      function getCompanyContactNotificationDetails(sourceChannel: string) {
     const cleanChannel = sourceChannel.trim().toLowerCase() || 'sendio';
 
@@ -838,88 +827,19 @@ export default function PublicCompanyPage() {
       },
     });
   }
-  function openContactUrl(url: string) {
-    if (url.startsWith('http://') || url.startsWith('https://')) {
-      window.open(url, '_blank', 'noopener,noreferrer');
-      return;
-    }
-
-    window.location.assign(url);
-  }
-
-    async function saveCompanyContactActivity(
-    sourceChannel: string,
-    sourceUrl: string
-  ) {
-    if (!company || !currentUser) return false;
-
-    const cleanChannel = sourceChannel.trim().toLowerCase() || 'sendio';
-    const readableChannel =
-      cleanChannel.charAt(0).toUpperCase() + cleanChannel.slice(1);
-    const clientName = getClientContactName();
-    const clientEmail = getClientContactEmail();
-    const messageBody = `Client attempted to contact this company by ${readableChannel}.`;
-
-    const { data, error } = await supabase
-      .from('company_messages')
-      .insert({
-        company_id: company.id,
-        client_id: currentUser.id,
-        name: clientName,
-        email: clientEmail,
-        message: messageBody,
-        status: 'new',
-        company_seen: false,
-        admin_seen: false,
-        is_archived: false,
-        moderation_status: 'normal',
-        source_channel: cleanChannel,
-        source_url: sourceUrl,
-        event_type: 'contact_click',
-      })
-      .select('id')
-      .maybeSingle();
-
-    if (error || !data) {
-      return false;
-    }
-    
-    const insertedMessage = data as CompanyMessageInsertResult;
-
-    await createCompanyContactNotification({
-      messageId: insertedMessage.id,
-      sourceChannel: cleanChannel,
-      sourceUrl,
-      messageBody,
-      clientName,
-      clientEmail,
-    });
-
-    return true;
-  }
+  
   async function handleProtectedContactClick(
-    url: string | null,
-    lockedMessage: string,
-    sourceChannel: string
-  ) {
-    if (!url) return;
+  url: string | null,
+  lockedMessage: string,
+  sourceChannel: string
+) {
+  void url;
+  void lockedMessage;
+  void sourceChannel;
 
-    if (!isLoggedIn || !currentUser) {
-      showLockedMessage(lockedMessage);
-      return;
-    }
-
-    const saved = await saveCompanyContactActivity(sourceChannel, url);
-
-    if (!saved) {
-      setUnlockNotice(
-        'Contact will open, but Sendio could not save the notification.'
-      );
-    }
-
-    openContactUrl(url);
-  }
-
+  showLockedMessage('🔒 Bientôt');
+}
+  
   function renderProtectedIconButton(
     label: string,
     url: string | null,
@@ -972,10 +892,15 @@ export default function PublicCompanyPage() {
     router.push(`/services/${selectedCategory.slug}?${query.toString()}`);
   }
 
-  async function handleSendMessage(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
+ async function handleSendMessage(event: FormEvent<HTMLFormElement>) {
+  event.preventDefault();
 
-    if (!company || messageSending) return;
+  if (!CONTACT_ACTIONS_ENABLED) {
+    showLockedMessage('🔒 Bientôt');
+    return;
+  }
+
+  if (!company || messageSending) return;
 
     if (!isLoggedIn) {
       showLockedMessage('Sign in to contact this company.');
@@ -2010,20 +1935,25 @@ export default function PublicCompanyPage() {
           </div>
         </div>
       ) : null}
+{unlockNotice ? (
+  <div className="unlock-toast">
+    <p>{unlockNotice}</p>
 
-      {unlockNotice ? (
-        <div className="unlock-toast">
-          <p>{unlockNotice}</p>
-
-          <div>
-            <Link href="/register?type=client">Register</Link>
-            <Link href="/login">Sign in</Link>
-            <button type="button" onClick={() => setUnlockNotice(null)}>
-              Close
-            </button>
-          </div>
-        </div>
+    <div>
+      {unlockNotice !== '🔒 Bientôt' ? (
+        <>
+          <Link href="/register?type=client">Register</Link>
+          <Link href="/login">Sign in</Link>
+        </>
       ) : null}
+
+      <button type="button" onClick={() => setUnlockNotice(null)}>
+        Close
+      </button>
+    </div>
+  </div>
+) : null}
+      
 
       <style jsx>{pageStyles}</style>
     </main>

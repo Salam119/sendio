@@ -1258,6 +1258,7 @@ export default function HomePage() {
     workers: null,
     companies: null,
   });
+  const [publicNoticeVisible, setPublicNoticeVisible] = useState(false);
 
   const isLoggedIn = Boolean(userEmail);
 
@@ -1589,6 +1590,32 @@ export default function HomePage() {
     };
   }, []);
 
+useEffect(() => {
+  const noticeKey = 'sendio-public-update-notice-seen';
+
+  if (window.sessionStorage.getItem(noticeKey) === '1') {
+    return;
+  }
+
+  let hideTimer: number | undefined;
+
+  const showTimer = window.setTimeout(() => {
+    window.sessionStorage.setItem(noticeKey, '1');
+    setPublicNoticeVisible(true);
+
+    hideTimer = window.setTimeout(() => {
+      setPublicNoticeVisible(false);
+    }, 15000);
+  }, 0);
+
+  return () => {
+    window.clearTimeout(showTimer);
+
+    if (hideTimer !== undefined) {
+      window.clearTimeout(hideTimer);
+    }
+  };
+}, []);
   useEffect(() => {
     async function loadHomeData() {
       const { data: authData } = await supabase.auth.getUser();
@@ -5243,9 +5270,163 @@ export default function HomePage() {
           min-height: 40px;
         }
 
+        .public-update-notice {
+          position: fixed;
+          top: 18px;
+          left: 18px;
+          z-index: 140;
+          width: min(390px, calc(100vw - 36px));
+          padding: 18px 46px 18px 18px;
+          border: 1px solid rgba(219, 234, 254, 0.86);
+          border-radius: 18px;
+          background: rgba(255, 255, 255, 0.82);
+          color: #111827;
+          box-shadow: 0 20px 45px -28px rgba(15, 23, 42, 0.48);
+          backdrop-filter: blur(14px);
+          -webkit-backdrop-filter: blur(14px);
+        }
 
+        .public-update-notice-title {
+          margin: 0 0 9px;
+          font-size: 1rem;
+          font-weight: 900;
+          line-height: 1.35;
+        }
 
+        .public-update-notice-text {
+          margin: 0 0 9px;
+          font-size: 0.82rem;
+          font-weight: 500;
+          line-height: 1.55;
+        }
+
+        .public-update-notice-cta {
+          margin: 2px 0 5px;
+          font-size: 0.82rem;
+          font-weight: 900;
+          line-height: 1.45;
+        }
+
+        .public-update-notice-email {
+          color: #2563eb;
+          font-size: 0.84rem;
+          font-weight: 900;
+          text-decoration: none;
+        }
+
+        .public-update-notice-email:hover {
+          text-decoration: underline;
+        }
+
+        .public-update-notice-close {
+          position: absolute;
+          top: 10px;
+          right: 11px;
+          width: 28px;
+          height: 28px;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          border: 0;
+          border-radius: 50%;
+          background: rgba(238, 246, 255, 0.92);
+          color: #111827;
+          font-size: 1rem;
+          font-weight: 900;
+          cursor: pointer;
+        }
+
+        .public-update-notice-close:hover {
+          background: var(--sendio-button-bg-hover);
+        }
+
+       @media (max-width: 700px) {
+  .public-update-notice {
+    top: 10px;
+    left: 12px;
+    width: min(260px, calc(100vw - 24px));
+    padding: 10px 34px 10px 12px;
+    border-radius: 14px;
+  }
+
+  .public-update-notice-title {
+    font-size: 0.72rem;
+    line-height: 1.25;
+    margin-bottom: 6px;
+  }
+
+  .public-update-notice-text {
+    font-size: 0.61rem;
+    line-height: 1.38;
+    margin-bottom: 6px;
+  }
+
+  .public-update-notice-cta {
+    font-size: 0.61rem;
+    line-height: 1.35;
+    margin-bottom: 3px;
+  }
+
+  .public-update-notice-email {
+    font-size: 0.62rem;
+    line-height: 1.3;
+  }
+
+  .public-update-notice-close {
+    top: 6px;
+    right: 6px;
+    width: 24px;
+    height: 24px;
+  }
+}
       `}</style>
+
+      {publicNoticeVisible ? (
+        <aside
+          className="public-update-notice"
+          role="status"
+          aria-live="polite"
+        >
+          <button
+            type="button"
+            className="public-update-notice-close"
+            aria-label="Fermer l’annonce"
+            onClick={() => setPublicNoticeVisible(false)}
+          >
+            ×
+          </button>
+
+          <p className="public-update-notice-title">
+            💬Vos idées deviennent des fonctionnalités.
+          </p>
+
+          <p className="public-update-notice-text">
+            Suite à vos nombreuses suggestions,{' '}
+            <strong>le chat direct est désormais disponible </strong> afin de
+            fafaciliter les échanges sur Sendio.
+          </p>
+
+          <p className="public-update-notice-text">
+            Nous continuons à renforcer la sécurité de la plateforme 
+           et à développer de nouvelles {' '}
+            <strong>
+             fonctionnalités grâce à vos précieux retours.
+            
+            </strong>
+          </p>
+
+          <p className="public-update-notice-cta">
+            Une idée ? Une suggestion ? Écrivez-nous :
+          </p>
+
+          <a
+            className="public-update-notice-email"
+            href="mailto:info@sendio.be?subject=Suggestion%20pour%20Sendio"
+          >
+            info@sendio.be
+          </a>
+        </aside>
+      ) : null}
 
       <div className="container">
         <div className="navbar">

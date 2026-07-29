@@ -182,7 +182,7 @@ function buildCategoryMap<T extends { service_category_id: string | null }>(
 
   return result;
 }
-
+const CONTACT_ACTIONS_ENABLED = false;
 export default function ServiceRequestPage() {
   const params = useParams();
   const router = useRouter();
@@ -482,12 +482,14 @@ export default function ServiceRequestPage() {
   }
 
   function handleLockedContact() {
-    setWarning('Please sign in to use contact actions.');
-  }
-
+  setWarning('✦ Bientôt ✦');
+}
   async function submitProviderRequest(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-
+ if (!CONTACT_ACTIONS_ENABLED) {
+    setWarning('✦ Bientôt ✦');
+    return;
+  }
     if (!service || !selectedProvider || !selectedRequestCategory) {
       setWarning('Please choose a provider and service first.');
       return;
@@ -847,28 +849,59 @@ if (!notificationCreated) {
                       </button>
                     </div>
                     <div className="tinyActions">
-                      {provider.phone ? (
-                        currentUserId ? (
-                          <a href={`tel:${cleanPhone(provider.phone)}`} aria-label="Call provider">☎</a>
-                        ) : (
-                          <button type="button" onClick={handleLockedContact} aria-label="Call provider">☎</button>
-                        )
-                      ) : null}
-                      {provider.email ? (
-                        currentUserId ? (
-                          <a href={`mailto:${provider.email}`} aria-label="Email provider">✉</a>
-                        ) : (
-                          <button type="button" onClick={handleLockedContact} aria-label="Email provider">✉</button>
-                        )
-                      ) : null}
-                      {whatsappHref ? (
-                        currentUserId ? (
-                          <a href={whatsappHref} target="_blank" rel="noreferrer" aria-label="Open WhatsApp">●</a>
-                        ) : (
-                          <button type="button" onClick={handleLockedContact} aria-label="Open WhatsApp">●</button>
-                        )
-                      ) : null}
-                    </div>
+  {provider.phone ? (
+    CONTACT_ACTIONS_ENABLED && currentUserId ? (
+      <a href={`tel:${cleanPhone(provider.phone)}`} aria-label="Call provider">
+        ☎
+      </a>
+    ) : (
+      <button
+        type="button"
+        onClick={handleLockedContact}
+        aria-label="Call provider"
+      >
+        ☎
+      </button>
+    )
+  ) : null}
+
+  {provider.email ? (
+    CONTACT_ACTIONS_ENABLED && currentUserId ? (
+      <a href={`mailto:${provider.email}`} aria-label="Email provider">
+        ✉
+      </a>
+    ) : (
+      <button
+        type="button"
+        onClick={handleLockedContact}
+        aria-label="Email provider"
+      >
+        ✉
+      </button>
+    )
+  ) : null}
+
+  {whatsappHref ? (
+    CONTACT_ACTIONS_ENABLED && currentUserId ? (
+      <a
+        href={whatsappHref}
+        target="_blank"
+        rel="noreferrer"
+        aria-label="Open WhatsApp"
+      >
+        ●
+      </a>
+    ) : (
+      <button
+        type="button"
+        onClick={handleLockedContact}
+        aria-label="Open WhatsApp"
+      >
+        ●
+      </button>
+    )
+  ) : null}
+</div>
                   </div>
                 </article>
               );
