@@ -16,14 +16,18 @@ type UserProfile = {
   user_type: 'client' | 'worker' | 'company' | string | null;
   role: string | null;
 };
-
+ type HomeLanguage = 'fr' | 'nl' | 'en';
 type HomeServiceCategory = {
   id: string;
   name: string;
+  name_fr: string | null;
+  name_nl: string | null;
   slug: string;
   icon: string | null;
   image_url: string | null;
 };
+
+
 
 type ResultTypeFilter = 'all' | 'workers' | 'companies';
 type SortFilter = 'best_match' | 'highest_rated' | 'most_reviewed' | 'newest';
@@ -259,60 +263,87 @@ const categoryAdSlots: {
 }[] = [
   {
     id: 'general',
-    title: 'General Maintenance Services',
-    label: 'General',
+    title: 'Entretien et réparations',
+    label: 'Services généraux',
     icon: '🔧',
   },
   {
     id: 'household',
-    title: 'Household Services',
-    label: 'Household',
+    title: 'Services à domicile',
+    label: 'Domicile',
     icon: '🏠',
   },
   {
     id: 'gardening',
-    title: 'Landscaping & Gardening',
-    label: 'Gardening',
+    title: 'Jardinage et aménagement extérieur',
+    label: 'Jardinage',
     icon: '🌿',
   },
   {
     id: 'logistics',
-    title: 'Logistics & Delivery Services',
-    label: 'Logistics',
+    title: 'Livraison et logistique',
+    label: 'Logistique',
     icon: '🚚',
   },
 ];
 
 const majorBelgianCities = [
-  'All Belgium',
-  'Brussels',
-  'Antwerp',
-  'Ghent',
+  'Toute la Belgique',
+  'Bruxelles',
+  'Anvers',
+  'Gand',
   'Charleroi',
   'Liège',
   'Bruges',
   'Namur',
-  'Leuven',
+  'Louvain',
   'Mons',
-  'Mechelen',
-  'Aalst',
+  'Malines',
+  'Alost',
   'La Louvière',
-  'Kortrijk',
+  'Courtrai',
   'Hasselt',
-  'Ostend',
-  'Sint-Niklaas',
+  'Ostende',
+  'Saint-Nicolas',
   'Tournai',
   'Genk',
   'Seraing',
-  'Roeselare',
+  'Roulers',
   'Verviers',
   'Mouscron',
 ];
 
+const belgianLocationVariants: Record<string, string[]> = {
+  'toute la belgique': ['Belgique', 'Belgium', 'België'],
+  belgique: ['Belgique', 'Belgium', 'België'],
+  bruxelles: ['Bruxelles', 'Brussels', 'Brussel'],
+  anvers: ['Anvers', 'Antwerp', 'Antwerpen'],
+  gand: ['Gand', 'Ghent', 'Gent'],
+  charleroi: ['Charleroi'],
+  liege: ['Liège', 'Liege'],
+  bruges: ['Bruges', 'Brugge'],
+  namur: ['Namur', 'Namen'],
+  louvain: ['Louvain', 'Leuven'],
+  mons: ['Mons', 'Bergen'],
+  malines: ['Malines', 'Mechelen'],
+  alost: ['Alost', 'Aalst'],
+  'la louviere': ['La Louvière', 'La Louviere'],
+  courtrai: ['Courtrai', 'Kortrijk'],
+  hasselt: ['Hasselt'],
+  ostende: ['Ostende', 'Ostend', 'Oostende'],
+  'saint nicolas': ['Saint-Nicolas', 'Sint-Niklaas'],
+  tournai: ['Tournai', 'Doornik'],
+  genk: ['Genk'],
+  seraing: ['Seraing'],
+  roulers: ['Roulers', 'Roeselare'],
+  verviers: ['Verviers'],
+  mouscron: ['Mouscron', 'Moeskroen'],
+};
+
 const searchIntentRules: SearchIntentRule[] = [
   {
     id: 'bathroom_sanitary',
-    label: 'Bathroom / Sanitary',
+    label: 'Salle de bain et sanitaires',
     aliases: [
       'صحيات',
       'حمامات',
@@ -354,7 +385,7 @@ const searchIntentRules: SearchIntentRule[] = [
   },
   {
     id: 'cupping_wellness',
-    label: 'Cupping / Wellness',
+    label: 'Bien-être et soins',
     aliases: [
       'حجامة',
       'حجامه',
@@ -381,7 +412,7 @@ const searchIntentRules: SearchIntentRule[] = [
   },
   {
     id: 'car_maintenance',
-    label: 'Car Maintenance',
+    label: 'Entretien et réparation automobile',
     aliases: [
       'صيانة سيارة',
       'تصليح سيارة',
@@ -414,7 +445,7 @@ const searchIntentRules: SearchIntentRule[] = [
   },
   {
     id: 'electricity',
-    label: 'Electricity',
+    label: 'Électricité',
     aliases: [
       'كهربائي',
       'كهرباء',
@@ -442,7 +473,7 @@ const searchIntentRules: SearchIntentRule[] = [
   },
   {
     id: 'carpentry',
-    label: 'Carpentry',
+    label: 'Menuiserie',
     aliases: [
       'نجار',
       'نجارة',
@@ -469,7 +500,7 @@ const searchIntentRules: SearchIntentRule[] = [
   },
   {
     id: 'cleaning',
-    label: 'Cleaning',
+    label: 'Nettoyage',
     aliases: [
       'تنظيف',
       'cleaning',
@@ -493,7 +524,7 @@ const searchIntentRules: SearchIntentRule[] = [
   },
   {
     id: 'painting_decoration',
-    label: 'Painting / Decoration',
+    label: 'Peinture et décoration',
     aliases: [
       'صباغ',
       'دهان',
@@ -521,7 +552,7 @@ const searchIntentRules: SearchIntentRule[] = [
   },
   {
     id: 'construction_renovation',
-    label: 'Construction / Renovation',
+    label: 'Construction et rénovation',
     aliases: [
       'بناء',
       'ترميم',
@@ -550,7 +581,7 @@ const searchIntentRules: SearchIntentRule[] = [
   },
   {
     id: 'gardening_landscaping',
-    label: 'Gardening / Landscaping',
+    label: 'Jardinage et aménagement extérieur',
     aliases: [
       'حدائق',
       'بستاني',
@@ -579,7 +610,7 @@ const searchIntentRules: SearchIntentRule[] = [
   },
   {
     id: 'delivery_logistics',
-    label: 'Delivery / Logistics',
+    label: 'Livraison et logistique',
     aliases: [
       'توصيل',
       'نقل',
@@ -605,11 +636,114 @@ const searchIntentRules: SearchIntentRule[] = [
   },
 ];
 
-function getRoleLabel(userType: string | null | undefined) {
-  if (userType === 'company') return 'Corporate Account';
-  if (userType === 'worker') return 'Verified Worker';
-  if (userType === 'client') return 'Premium Client';
-  return 'Online';
+const frenchSearchSuggestionsByIntent: Record<string, string[]> = {
+  bathroom_sanitary: [
+    'Salle de bain',
+    'Sanitaires',
+    'Plombier',
+    'Rénovation de salle de bain',
+    'Carrelage',
+    'Étanchéité',
+  ],
+  cupping_wellness: [
+    'Bien-être',
+    'Massage',
+    'Kinésithérapie',
+    'Soins par ventouses',
+    'Récupération sportive',
+  ],
+  car_maintenance: [
+    'Entretien automobile',
+    'Réparation automobile',
+    'Mécanicien',
+    'Carrosserie',
+    'Pneus',
+    'Freins',
+  ],
+  electricity: [
+    'Électricien',
+    'Électricité',
+    'Éclairage',
+    'Câblage',
+    'Installation électrique',
+  ],
+  carpentry: [
+    'Menuisier',
+    'Menuiserie',
+    'Portes',
+    'Meubles',
+    'Escaliers',
+  ],
+  cleaning: [
+    'Nettoyage',
+    'Nettoyage à domicile',
+    'Nettoyage de bureaux',
+    'Nettoyage de vitres',
+    'Nettoyage industriel',
+  ],
+  painting_decoration: [
+    'Peintre',
+    'Peinture',
+    'Décoration',
+    'Papier peint',
+    'Plafonnage',
+  ],
+  construction_renovation: [
+    'Construction',
+    'Rénovation',
+    'Maçonnerie',
+    'Toiture',
+    'Revêtement de sol',
+  ],
+  gardening_landscaping: [
+    'Jardinage',
+    'Jardinier',
+    'Entretien de jardin',
+    'Taille de haies',
+    'Aménagement extérieur',
+  ],
+  delivery_logistics: [
+    'Livraison',
+    'Logistique',
+    'Transport',
+    'Déménagement',
+    'Coursier',
+  ],
+};
+
+ function getRoleLabel(
+  userType: string | null | undefined,
+  language: HomeLanguage = 'fr'
+) {
+  if (userType === 'company') {
+    return language === 'nl'
+      ? 'Bedrijfsaccount'
+      : language === 'en'
+        ? 'Company account'
+        : 'Compte entreprise';
+  }
+
+  if (userType === 'worker') {
+    return language === 'nl'
+      ? 'Professioneel account'
+      : language === 'en'
+        ? 'Professional account'
+        : 'Compte professionnel';
+  }
+
+  if (userType === 'client') {
+    return language === 'nl'
+      ? 'Klantaccount'
+      : language === 'en'
+        ? 'Client account'
+        : 'Compte client';
+  }
+
+  return language === 'nl'
+    ? 'Online'
+    : language === 'en'
+      ? 'Online'
+      : 'En ligne';
 }
 
 function getDashboardLink(userType: string | null | undefined) {
@@ -620,7 +754,7 @@ function getDashboardLink(userType: string | null | undefined) {
 
 function formatCount(value: number | null) {
   if (value === null) return '—';
-  return value.toLocaleString();
+  return value.toLocaleString('fr-BE');
 }
 
 function getCompanyProfileHref(company: { id: string; slug: string | null }) {
@@ -684,8 +818,8 @@ function getShortWorkerName(name: string) {
 }
 
 function getWorkerStatusLabel(status: string | null) {
-  if (status === 'available') return 'Available';
-  return 'Unavailable';
+  if (status === 'available') return 'Disponible';
+  return 'Indisponible';
 }
 
 function getWorkerStatusClass(status: string | null) {
@@ -703,7 +837,7 @@ function getMiniRatingStars(rating: number | null) {
 }
 
 function getMiniRatingText(rating: number | null, reviewsCount: number | null) {
-  if (!reviewsCount || reviewsCount <= 0) return 'New';
+  if (!reviewsCount || reviewsCount <= 0) return 'Nouveau';
 
   return Number(rating ?? 0).toFixed(1);
 }
@@ -959,13 +1093,35 @@ function getLocationSearchScore(
 
   if (!cleanLocationQuery) return 0;
 
-  const score = getWeightedTextScore(fields, cleanLocationQuery, {
-    exact: 500,
-    starts: 420,
-    includes: 340,
-    wordStart: 260,
-    token: 160,
+  const locationTerms = new Set<string>([locationQuery]);
+
+  Object.entries(belgianLocationVariants).forEach(([frenchName, variants]) => {
+    const normalizedVariants = variants.map(normalizeSearchText);
+    const matchesFrenchName =
+      frenchName.startsWith(cleanLocationQuery) ||
+      cleanLocationQuery.startsWith(frenchName);
+    const matchesVariant = normalizedVariants.some(
+      (variant) =>
+        variant.startsWith(cleanLocationQuery) ||
+        cleanLocationQuery.startsWith(variant)
+    );
+
+    if (matchesFrenchName || matchesVariant) {
+      variants.forEach((variant) => locationTerms.add(variant));
+    }
   });
+
+  const score = Math.max(
+    ...Array.from(locationTerms).map((term) =>
+      getWeightedTextScore(fields, term, {
+        exact: 500,
+        starts: 420,
+        includes: 340,
+        wordStart: 260,
+        token: 160,
+      })
+    )
+  );
 
   return score > 0 ? score : -1;
 }
@@ -1212,6 +1368,9 @@ function getCreatedTime(value: string | null) {
 }
 
 export default function HomePage() {
+  const [homeLanguage, setHomeLanguage] =
+  useState<HomeLanguage>('fr');
+  const [isLanguageMenuOpen, setIsLanguageMenuOpen] = useState(false);
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [userEmail, setUserEmail] = useState<string | null>(null);
   const [companyUnreadMessages, setCompanyUnreadMessages] = useState(0);
@@ -1352,7 +1511,7 @@ export default function HomePage() {
     const workerServiceValues = Object.values(workerSearchTerms).flat();
     const intentValues = searchIntentRules.flatMap((rule) => [
       rule.label,
-      ...rule.aliases.slice(0, 4),
+      ...(frenchSearchSuggestionsByIntent[rule.id] ?? []),
     ]);
 
     return getUniqueSuggestedValues(
@@ -1387,7 +1546,7 @@ export default function HomePage() {
       ],
       homeLocation,
       8
-    ).filter((city) => city !== 'All Belgium');
+    ).filter((city) => city !== 'Toute la Belgique');
   }, [homeLocation, publicCompanies, publicWorkers]);
 
   const filterCitySuggestions = useMemo(() => {
@@ -1401,7 +1560,7 @@ export default function HomePage() {
       ],
       filterCitySearch,
       6
-    ).filter((city) => city !== 'All Belgium');
+    ).filter((city) => city !== 'Toute la Belgique');
   }, [filterCitySearch, publicCompanies, publicWorkers]);
 
   const filterServiceSuggestions = useMemo(() => {
@@ -1411,8 +1570,7 @@ export default function HomePage() {
     const workerServiceValues = Object.values(workerSearchTerms).flat();
     const intentValues = searchIntentRules.flatMap((rule) => [
       rule.label,
-      ...rule.aliases,
-      ...rule.related,
+      ...(frenchSearchSuggestionsByIntent[rule.id] ?? []),
     ]);
 
     return getUniqueSuggestedValues(
@@ -1574,6 +1732,38 @@ export default function HomePage() {
     resultTypeFilter,
     sortFilter,
   ]);
+    useEffect(() => {
+  const languageTimer = window.setTimeout(() => {
+    const savedLanguage = window.localStorage.getItem(
+      'sendio-home-language'
+    );
+
+    if (
+      savedLanguage === 'fr' ||
+      savedLanguage === 'nl' ||
+      savedLanguage === 'en'
+    ) {
+      setHomeLanguage(savedLanguage);
+      return;
+    }
+
+    const browserLanguage = window.navigator.language.toLowerCase();
+
+    setHomeLanguage(
+      browserLanguage.startsWith('nl') ? 'nl' : 'fr'
+    );
+  }, 0);
+
+  return () => window.clearTimeout(languageTimer);
+}, []);
+useEffect(() => {
+  document.documentElement.lang =
+    homeLanguage === 'nl'
+      ? 'nl-BE'
+      : homeLanguage === 'fr'
+        ? 'fr-BE'
+        : 'en';
+}, [homeLanguage]);
 
   useEffect(() => {
     const interval = window.setInterval(() => {
@@ -1685,7 +1875,7 @@ useEffect(() => {
 
       const { data: homeServicesData } = await supabase
         .from('service_categories')
-        .select('id, name, slug, icon, image_url')
+       .select('id, name, name_fr, name_nl, slug, icon, image_url')
         .eq('is_active', true)
         .order('sort_order', { ascending: true })
         .order('name', { ascending: true });
@@ -1890,7 +2080,7 @@ useEffect(() => {
     const locationQuery = activeLocationQuery.trim();
 
     if (!searchQuery && !locationQuery && !activeIntentQuery) {
-      setHomeSearchNotice('Please type a service, company, worker, or city.');
+      setHomeSearchNotice('Indiquez un service, une entreprise, un professionnel ou une ville.');
       return;
     }
 
@@ -1945,7 +2135,7 @@ useEffect(() => {
       })[0];
 
     if (!bestCompanyResult && !bestWorkerResult) {
-      setHomeSearchNotice('No matching company or worker found.');
+      setHomeSearchNotice('Aucune entreprise ni aucun professionnel ne correspond à votre recherche.');
 
       const directoryElement = document.getElementById('public-directory');
 
@@ -1982,7 +2172,11 @@ useEffect(() => {
       directoryElement.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
   }
-
+  function handleHomeLanguageChange(language: HomeLanguage) {
+  setHomeLanguage(language);
+  window.localStorage.setItem('sendio-home-language', language);
+  setIsLanguageMenuOpen(false);
+}
   async function handleLogout() {
     await supabase.auth.signOut();
     setProfile(null);
@@ -4557,6 +4751,29 @@ useEffect(() => {
 
         }
 
+        .home-services-intro {
+          width: min(980px, calc(100% - 32px));
+          margin: 18px auto 6px;
+          text-align: center;
+        }
+
+        .home-services-intro h1 {
+          margin: 0;
+          color: #111827;
+          font-size: clamp(1.08rem, 2vw, 1.45rem);
+          font-weight: 900;
+          line-height: 1.25;
+        }
+
+        .home-services-intro p {
+          max-width: 900px;
+          margin: 8px auto 0;
+          color: #374151;
+          font-size: 0.9rem;
+          font-weight: 600;
+          line-height: 1.6;
+        }
+
         .home-services-slider {
           display: none;
         }
@@ -5397,22 +5614,19 @@ useEffect(() => {
           </button>
 
           <p className="public-update-notice-title">
-            💬Vos idées deviennent des fonctionnalités.
+            💬 Vos idées deviennent des fonctionnalités.
           </p>
 
           <p className="public-update-notice-text">
             Suite à vos nombreuses suggestions,{' '}
-            <strong>le chat direct est désormais disponible </strong> afin de
-            fafaciliter les échanges sur Sendio.
+            <strong>le chat direct est désormais disponible</strong> afin de
+            faciliter les échanges sur Sendio.
           </p>
 
           <p className="public-update-notice-text">
-            Nous continuons à renforcer la sécurité de la plateforme 
-           et à développer de nouvelles {' '}
-            <strong>
-             fonctionnalités grâce à vos précieux retours.
-            
-            </strong>
+            Nous continuons à renforcer la sécurité de la plateforme et à
+            développer de nouvelles fonctionnalités grâce à vos précieux
+            retours.
           </p>
 
           <p className="public-update-notice-cta">
@@ -5431,8 +5645,119 @@ useEffect(() => {
       <div className="container">
         <div className="navbar">
           <ul className="nav-links">
+             <li
+  style={{
+    position: 'relative',
+    listStyle: 'none',
+    display: 'flex',
+    alignItems: 'center',
+    marginRight: '2px',
+  }}
+>
+  <button
+    type="button"
+    onClick={() =>
+      setIsLanguageMenuOpen((current) => !current)
+    }
+    aria-label={
+      homeLanguage === 'nl'
+        ? 'Taal wijzigen'
+        : homeLanguage === 'en'
+          ? 'Change language'
+          : 'Changer de langue'
+    }
+    aria-expanded={isLanguageMenuOpen}
+    aria-haspopup="menu"
+    style={{
+      width: '24px',
+      height: '30px',
+      padding: 0,
+      border: 0,
+      background: 'transparent',
+      color: isLanguageMenuOpen ? '#29b9f3' : '#111827',
+      cursor: 'pointer',
+      display: 'flex',
+      flexDirection: 'column',
+      alignItems: 'center',
+      justifyContent: 'center',
+      lineHeight: 1,
+      transition: 'color 160ms ease',
+    }}
+  >
+    <span
+      style={{
+        fontSize: '9px',
+        fontWeight: 900,
+        letterSpacing: '0.2px',
+      }}
+    >
+      {homeLanguage.toUpperCase()}
+    </span>
+
+    <span
+      aria-hidden="true"
+      style={{
+        marginTop: '1px',
+        fontSize: '8px',
+        fontWeight: 900,
+      }}
+    >
+      ▼
+    </span>
+  </button>
+
+  {isLanguageMenuOpen ? (
+    <div
+      role="menu"
+      style={{
+        position: 'absolute',
+        top: '32px',
+        left: '-10px',
+        zIndex: 200,
+        minWidth: '46px',
+        padding: '4px',
+        border: '1px solid #dbeafe',
+        borderRadius: '8px',
+        background: '#ffffff',
+        boxShadow: '0 8px 20px rgba(15, 23, 42, 0.14)',
+      }}
+    >
+      {(['fr', 'nl', 'en'] as HomeLanguage[]).map(
+        (language) => (
+          <button
+            key={language}
+            type="button"
+            role="menuitem"
+            onClick={() =>
+              handleHomeLanguageChange(language)
+            }
+            style={{
+              width: '100%',
+              padding: '6px',
+              border: 0,
+              borderRadius: '6px',
+              background:
+                homeLanguage === language
+                  ? '#e3efff'
+                  : 'transparent',
+              color:
+                homeLanguage === language
+                  ? '#29b9f3'
+                  : '#111827',
+              cursor: 'pointer',
+              fontSize: '9px',
+              fontWeight: 900,
+            }}
+          >
+            {language.toUpperCase()}
+          </button>
+        )
+      )}
+    </div>
+  ) : null}
+</li>
             <li>
-              <Link href="/get-quote" className="nav-home-link" aria-label="Get Quote">
+              <Link href="/get-quote" className="nav-home-link" aria-label="Demander un devis">
                 <span className="nav-home-square" aria-hidden="true" />
               </Link>
             </li>
@@ -5443,7 +5768,7 @@ useEffect(() => {
                 className={`nav-menu-toggle ${
                   navMenuOpen ? 'nav-menu-toggle-active' : ''
                 }`}
-                aria-label="Open navigation menu"
+                aria-label="Ouvrir le menu de navigation"
                 aria-expanded={navMenuOpen}
                 onClick={() => setNavMenuOpen((current) => !current)}
               >
@@ -5462,31 +5787,47 @@ useEffect(() => {
                       setNavMenuOpen(false);
                       setFiltersOpen((current) => !current);
                     }}
-                  >
-                    Filter
-                    {activeFilterCount > 0 ? ` (${activeFilterCount})` : ''}
-                  </button>
+                 >
+  {homeLanguage === 'nl'
+    ? 'Filters'
+    : homeLanguage === 'en'
+      ? 'Filters'
+      : 'Filtres'}
+  {activeFilterCount > 0 ? ` (${activeFilterCount})` : ''}
+</button>
 
-                  <a
-                    href="#companies-panel"
-                    onClick={() => setNavMenuOpen(false)}
-                  >
-                    Companies
-                  </a>
+<a
+  href="#companies-panel"
+  onClick={() => setNavMenuOpen(false)}
+>
+  {homeLanguage === 'nl'
+    ? 'Bedrijven'
+    : homeLanguage === 'en'
+      ? 'Companies'
+      : 'Entreprises'}
+</a>
 
-                  <a
-                    href="#workers-panel"
-                    onClick={() => setNavMenuOpen(false)}
-                  >
-                    Workers
-                  </a>
+<a
+  href="#workers-panel"
+  onClick={() => setNavMenuOpen(false)}
+>
+  {homeLanguage === 'nl'
+    ? 'Vakmensen'
+    : homeLanguage === 'en'
+      ? 'Professionals'
+      : 'Professionnels'}
+</a>
 
-                  <Link
-                    href="/clients"
-                    onClick={() => setNavMenuOpen(false)}
-                  >
-                    Clients
-                  </Link>
+<Link
+  href="/clients"
+  onClick={() => setNavMenuOpen(false)}
+>
+  {homeLanguage === 'nl'
+    ? 'Klanten'
+    : homeLanguage === 'en'
+      ? 'Clients'
+      : 'Clients'}
+</Link>
                 </div>
               ) : null}
             </li>
@@ -5502,19 +5843,59 @@ useEffect(() => {
       className="filter-panel"
       role="dialog"
       aria-modal="true"
-      aria-label="Filter"
+     aria-label={
+  homeLanguage === 'nl'
+    ? 'Filters'
+    : homeLanguage === 'en'
+      ? 'Filters'
+      : 'Filtres'
+}
       onClick={(event) => event.stopPropagation()}
     >
-            <div className="filter-panel-title">Filter</div>
+           <div className="filter-panel-title">
+  {homeLanguage === 'nl'
+    ? 'Filters'
+    : homeLanguage === 'en'
+      ? 'Filters'
+      : 'Filtres'}
+</div>
 
             <div className="filter-stack">
               <div className="filter-field">
-                <span className="filter-label">Show</span>
+                <span className="filter-label">{homeLanguage === 'nl'
+  ? 'Tonen'
+  : homeLanguage === 'en'
+    ? 'Show'
+    : 'Afficher'}</span>
                 <div className="filter-segment">
                   {[
-                    { value: 'all', label: 'All' },
-                    { value: 'workers', label: 'Workers' },
-                    { value: 'companies', label: 'Companies' },
+                     {
+  value: 'all',
+  label:
+    homeLanguage === 'nl'
+      ? 'Alles'
+      : homeLanguage === 'en'
+        ? 'All'
+        : 'Tous',
+},
+                     {
+  value: 'workers',
+  label:
+    homeLanguage === 'nl'
+      ? 'Vakmensen'
+      : homeLanguage === 'en'
+        ? 'Professionals'
+        : 'Professionnels',
+},
+                   {
+  value: 'companies',
+  label:
+    homeLanguage === 'nl'
+      ? 'Bedrijven'
+      : homeLanguage === 'en'
+        ? 'Companies'
+        : 'Entreprises',
+},
                   ].map((option) => (
                     <button
                       key={option.value}
@@ -5536,7 +5917,11 @@ useEffect(() => {
 
               <div className="filter-field">
                 <label className="filter-label" htmlFor="filter-city-search">
-                  City or location
+                 {homeLanguage === 'nl'
+  ? 'Stad of gemeente'
+  : homeLanguage === 'en'
+    ? 'City or location'
+    : 'Ville ou localité'}
                 </label>
                 <input
                   id="filter-city-search"
@@ -5544,7 +5929,13 @@ useEffect(() => {
                   type="search"
                   value={filterCitySearch}
                   onChange={(event) => setFilterCitySearch(event.target.value)}
-                  placeholder="Type city name"
+                 placeholder={
+  homeLanguage === 'nl'
+    ? 'Vul een stad of gemeente in'
+    : homeLanguage === 'en'
+      ? 'Enter a city or location'
+      : 'Indiquez une ville ou une localité'
+}
                 />
 
                 {filterCitySuggestions.length > 0 ? (
@@ -5565,7 +5956,11 @@ useEffect(() => {
 
               <div className="filter-field">
                 <label className="filter-label" htmlFor="filter-service-search">
-                  Service, skill, or meaning
+                   {homeLanguage === 'nl'
+  ? 'Dienst, beroep of behoefte'
+  : homeLanguage === 'en'
+    ? 'Service, trade or need'
+    : 'Service, métier ou besoin'}
                 </label>
                 <input
                   id="filter-service-search"
@@ -5575,7 +5970,13 @@ useEffect(() => {
                   onChange={(event) =>
                     setFilterServiceSearch(event.target.value)
                   }
-                  placeholder="Type service or skill"
+                 placeholder={
+  homeLanguage === 'nl'
+    ? 'Vul een dienst of beroep in'
+    : homeLanguage === 'en'
+      ? 'Enter a service or trade'
+      : 'Indiquez un service ou un métier'
+}
                 />
 
                 {filterServiceSuggestions.length > 0 ? (
@@ -5600,12 +6001,20 @@ useEffect(() => {
                   checked={availableOnly}
                   onChange={(event) => setAvailableOnly(event.target.checked)}
                 />
-                Available workers only
+               {homeLanguage === 'nl'
+  ? 'Alleen beschikbare vakmensen'
+  : homeLanguage === 'en'
+    ? 'Available professionals only'
+    : 'Professionnels disponibles uniquement'}
               </label>
 
               <div className="filter-field">
                 <label className="filter-label" htmlFor="filter-sort">
-                  Sort by
+                 {homeLanguage === 'nl'
+  ? 'Sorteren op'
+  : homeLanguage === 'en'
+    ? 'Sort by'
+    : 'Trier par'}
                 </label>
                 <select
                   id="filter-sort"
@@ -5615,19 +6024,41 @@ useEffect(() => {
                     setSortFilter(event.target.value as SortFilter)
                   }
                 >
-                  <option value="best_match">Best match</option>
-                  <option value="highest_rated">Highest rated</option>
-                  <option value="most_reviewed">Most reviewed</option>
-                  <option value="newest">Newest</option>
+                  <option value="best_match">{homeLanguage === 'nl'
+  ? 'Beste overeenkomst'
+  : homeLanguage === 'en'
+    ? 'Best match'
+    : 'Meilleure correspondance'}</option>
+                  <option value="highest_rated">{homeLanguage === 'nl'
+  ? 'Best beoordeeld'
+  : homeLanguage === 'en'
+    ? 'Top rated'
+    : 'Mieux notés'}</option>
+                  <option value="most_reviewed">{homeLanguage === 'nl'
+  ? 'Meeste beoordelingen'
+  : homeLanguage === 'en'
+    ? 'Most reviews'
+    : 'Plus d’avis'}
+    </option> 
+                <option value="newest">
+  {homeLanguage === 'nl'
+    ? 'Meest recent'
+    : homeLanguage === 'en'
+      ? 'Most recent'
+      : 'Plus récents'}
+</option>
                 </select>
               </div>
-
               <button
                 type="button"
                 className="filter-search-button"
                 onClick={runFilterSearch}
               >
-                Search
+                {homeLanguage === 'nl'
+  ? 'Zoeken'
+  : homeLanguage === 'en'
+    ? 'Search'
+    : 'Rechercher'}
               </button>
             </div>
           </section>
@@ -5638,7 +6069,7 @@ useEffect(() => {
           {hasHeroAds ? (
             <div
               className={`hero-ad-grid hero-layout-${heroSettings.layout}`}
-              aria-label="Homepage Hero advertisements"
+              aria-label="Publicités principales de la page d’accueil"
             >
               {heroAds.map((ad, index) =>
                 ad ? (
@@ -5663,13 +6094,13 @@ useEffect(() => {
                             : 'image',
                       });
                     }}
-                    aria-label={`Open ${ad.title} advertisement preview`}
+                    aria-label={`Ouvrir l’aperçu de l’annonce ${ad.title}`}
                   >
                     {isVideoAd(ad) && ad.video_url ? (
                       getAdPosterMedia(ad) ? (
                         <Image
                           src={getAdPosterMedia(ad) as string}
-                          alt={`${ad.title} advertisement`}
+                          alt={`Annonce ${ad.title}`}
                           fill
                           unoptimized
                           sizes="100vw"
@@ -5689,7 +6120,7 @@ useEffect(() => {
                     ) : getAdMedia(ad) ? (
                       <Image
                         src={getAdMedia(ad) as string}
-                        alt={`${ad.title} advertisement`}
+                        alt={`Annonce ${ad.title}`}
                         fill
                         unoptimized
                         sizes="100vw"
@@ -5716,10 +6147,10 @@ useEffect(() => {
               )}
             </div>
           ) : null}
-          <Link href="/legal" className="hero-brand-inset" aria-label="Legal">
+          <Link href="/legal" className="hero-brand-inset" aria-label="Mentions légales">
             <Image
               src="/logo.png"
-              alt="Sendio logo"
+              alt="Logo Sendio"
               width={74}
               height={74}
               className="logo-img"
@@ -5737,7 +6168,7 @@ useEffect(() => {
               type="submit"
               form="home-search-form"
               className="hero-home-button"
-              aria-label="Search"
+              aria-label="Rechercher"
             >
               <span className="hero-home-button-square" aria-hidden="true" />
             </button>
@@ -5747,13 +6178,13 @@ useEffect(() => {
             <div className="stat-item">
               <span className="stat-number">{formatCount(stats.clients)}</span>
               <br />
-              Active Clients
+              Clients actifs
             </div>
 
             <div className="stat-item">
               <span className="stat-number">{formatCount(stats.workers)}</span>
               <br />
-              Verified Workers
+              Professionnels vérifiés
             </div>
 
             <div className="stat-item">
@@ -5761,13 +6192,17 @@ useEffect(() => {
                 {formatCount(stats.companies)}
               </span>
               <br />
-              Partner Companies
+             {homeLanguage === 'nl'
+  ? 'Partnerbedrijven'
+  : homeLanguage === 'en'
+    ? 'Partner companies'
+    : 'Entreprises partenaires'}
             </div>
           </div>
 
           <Link href="/services" className="hero-services-link">
-            services
-          </Link>
+  {homeLanguage === 'nl' ? 'Diensten' : 'Services'}
+</Link>
         </div>
 
         <div className="hero-search-fields-below">
@@ -5785,7 +6220,13 @@ useEffect(() => {
                 type="search"
                 value={homeSearch}
                 onChange={(event) => setHomeSearch(event.target.value)}
-                placeholder="Search service, worker, company, profession, skill, or meaning"
+                placeholder={
+  homeLanguage === 'nl'
+    ? 'Zoek een dienst, vakman of bedrijf'
+    : homeLanguage === 'en'
+      ? 'Search for a service, professional or company'
+      : 'Rechercher un service, un professionnel ou une entreprise'
+}
               />
             </div>
 
@@ -5798,7 +6239,13 @@ useEffect(() => {
                 type="search"
                 value={homeLocation}
                 onChange={(event) => setHomeLocation(event.target.value)}
-                placeholder="City or registered location"
+                 placeholder={
+  homeLanguage === 'nl'
+    ? 'Stad of gemeente'
+    : homeLanguage === 'en'
+      ? 'City or location'
+      : 'Ville ou localité'
+}
               />
             </div>
           </form>
@@ -5837,9 +6284,9 @@ useEffect(() => {
 
           {matchedSearchIntentLabels.length > 0 ? (
             <p className="search-intent-hint">
-              Related meaning detected:{' '}
-              {matchedSearchIntentLabels.join(' / ')}. Exact matches appear
-              first, then related results.
+              Besoin associé détecté :{' '}
+              {matchedSearchIntentLabels.join(' / ')}. Les correspondances
+              exactes s’affichent d’abord, puis les résultats associés.
             </p>
           ) : null}
 
@@ -5848,10 +6295,30 @@ useEffect(() => {
           ) : null}
         </div>
 
+        <section
+          className="home-services-intro"
+          aria-labelledby="home-services-intro-title"
+        >
+          <h1 id="home-services-intro-title">
+           {homeLanguage === 'nl'
+     ? 'Een loodgieter, elektricien of dakwerker in de buurt nodig?'
+  : homeLanguage === 'en'
+    ? 'Looking for a professional near you?'
+    : 'Vous cherchez un professionnel près de chez vous ?'}
+          </h1>
+          <p>
+            {homeLanguage === 'nl'
+  ? 'Vind ook een schoonmaakbedrijf, huishoudhulp, tuinman of verhuisfirma, plus vakmensen voor renovatie. Bekijk profielen en chat rechtstreeks via Sendio.'
+  : homeLanguage === 'en'
+    ? 'Need a plumber, electrician, roofer, cleaning company or house cleaner? Browse profiles and chat directly on Sendio.'
+    : 'Plombier, électricien, couvreur, société de nettoyage ou femme de ménage : consultez les profils et discutez directement sur Sendio.'}
+          </p>
+        </section>
+
         {homeServiceCategories.length > 0 ? (
           <div
             className="home-services-slider"
-            aria-label="Services"
+            aria-label={homeLanguage === 'nl' ? 'Diensten' : 'Services'}
           >
             <div className="home-services-track">
               {[
@@ -5862,13 +6329,18 @@ useEffect(() => {
                 const href = city
                   ? `/services/${service.slug}?city=${encodeURIComponent(city)}`
                   : `/services/${service.slug}`;
-
+                 const serviceLabel =
+  homeLanguage === 'nl'
+    ? service.name_nl?.trim() || service.name
+    : homeLanguage === 'en'
+      ? service.name
+      : service.name_fr?.trim() || service.name;
                 return (
                   <Link
                     href={href}
                     className="home-service-floating-link"
                     key={`${service.id}-${index}`}
-                    aria-label={service.name}
+                    aria-label={serviceLabel}
                   >
                     <span className="home-service-floating-icon">
                       {service.image_url ? (
@@ -5983,7 +6455,7 @@ useEffect(() => {
                     </span>
 
                     <span className="home-service-floating-name">
-                      {service.name}
+                      {serviceLabel}
                     </span>
                   </Link>
                 );
@@ -5998,7 +6470,7 @@ useEffect(() => {
               {marqueeAds.length > 0 ? (
                 <div className="marquee-track">
                   {marqueeAds.map((ad, index) => {
-                    const name = ad.title || ad.company?.name || 'Ad';
+                    const name = ad.title || ad.company?.name || 'Annonce';
                     const firstLetter = name.charAt(0).toUpperCase();
                     const media = getAdMedia(ad);
                     const poster = getAdPosterMedia(ad);
@@ -6016,7 +6488,7 @@ useEffect(() => {
     posterUrl={poster}
     videoUrl={ad.video_url ?? null}
     isVideo={videoAd}
-    alt={`${name} advertisement`}
+    alt={`Annonce ${name}`}
     fallbackLetter={firstLetter}
   />
 
@@ -6061,7 +6533,7 @@ useEffect(() => {
                   })}
                 </div>
               ) : (
-                <div className="marquee-track" aria-label="Empty ads slider">
+                <div className="marquee-track" aria-label="Carrousel publicitaire vide">
                   <div className="ad-empty-card" aria-hidden="true" />
                   <div className="ad-empty-card" aria-hidden="true" />
                   <div className="ad-empty-card" aria-hidden="true" />
@@ -6124,7 +6596,7 @@ useEffect(() => {
                           <Image
                             src={poster}
                             unoptimized={poster.startsWith('/api/r2/media?')}
-                            alt={`${adTitle} advertisement`}
+                            alt={`Annonce ${adTitle}`}
                             width={320}
                             height={180}
                             style={{
@@ -6153,13 +6625,46 @@ useEffect(() => {
                       <div className="service-card-overlay" />
 
                       <div className="service-card-content">
-                        <div className="service-ad-label">{slot.label} Ad</div>
+                         <div className="service-ad-label">
+  {homeLanguage === 'nl'
+    ? 'Gesponsorde advertentie'
+    : homeLanguage === 'en'
+      ? 'Sponsored ad'
+      : 'Annonce sponsorisée'}{' '}
+  · {homeLanguage === 'nl'
+  ? slot.id === 'general'
+    ? 'Algemene diensten'
+    : slot.id === 'household'
+      ? 'Thuisdiensten'
+      : slot.id === 'gardening'
+        ? 'Tuinieren'
+        : slot.id === 'logistics'
+          ? 'Logistiek'
+          : slot.label
+  : homeLanguage === 'en'
+    ? slot.id === 'general'
+      ? 'General services'
+      : slot.id === 'household'
+        ? 'Home services'
+        : slot.id === 'gardening'
+          ? 'Gardening'
+          : slot.id === 'logistics'
+            ? 'Logistics'
+            : slot.label
+    : slot.label}
+</div>
                         <div className="service-ad-title">{adTitle}</div>
 
                         {(activeAd.company?.category ||
                           activeAd.company?.city) && (
                           <div className="service-ad-meta">
-                            {activeAd.company?.category}
+                            {activeAd.company?.category === 'Profil pédagogique'
+  ? homeLanguage === 'nl'
+    ? 'Educatief profiel'
+    : homeLanguage === 'en'
+      ? 'Educational profile'
+      : 'Profil pédagogique'
+  : activeAd.company?.category}
                             {activeAd.company?.category &&
                             activeAd.company?.city
                               ? ' • '
@@ -6168,11 +6673,20 @@ useEffect(() => {
                           </div>
                         )}
 
-                        {slotAds.length > 1 ? (
-                          <div className="service-ad-count">
-                            {slotAds.length} sponsored ads
-                          </div>
-                        ) : null}
+                       <div className="service-ad-count">
+  {slotAds.length}{' '}
+  {homeLanguage === 'nl'
+    ? slotAds.length === 1
+      ? 'gesponsorde advertentie'
+      : 'gesponsorde advertenties'
+    : homeLanguage === 'en'
+      ? slotAds.length === 1
+        ? 'sponsored ad'
+        : 'sponsored ads'
+      : slotAds.length === 1
+        ? 'annonce sponsorisée'
+        : 'annonces sponsorisées'}
+</div>
                       </div>
                     </>
                   ) : (
@@ -6187,27 +6701,6 @@ useEffect(() => {
           </div>
 
           <div className="buttons-block">
-            {!isLoggedIn && (
-              <div className="buttons-row-main">
-                <div className="auth-avatar-button-wrap">
-                  <LoginButtonAvatar />
-                  <Link href="/login" className="btn-custom btn-login-avatar">
-                    Login
-                  </Link>
-                </div>
-
-                <div className="auth-avatar-button-wrap">
-                  <RegisterButtonAvatar />
-                  <Link
-                    href="/register"
-                    className="btn-custom btn-register-avatar"
-                  >
-                    Sign Up
-                  </Link>
-                </div>
-              </div>
-            )}
-
             {isLoggedIn && (
               <div className="user-view">
                 <Link
@@ -6222,7 +6715,7 @@ useEffect(() => {
                   <div className="user-info-text">
                     <span className="user-name-label">{displayName}</span>
                     <span className="user-type-badge">
-                      {getRoleLabel(userType)}
+                     {getRoleLabel(userType, homeLanguage)}
                     </span>
                   </div>
                 </Link>
@@ -6232,7 +6725,7 @@ useEffect(() => {
                     href="/dashboard/admin"
                     className="admin-dashboard-button"
                   >
-                    Admin Dashboard
+                    Administration
                   </Link>
                 ) : null}
 
@@ -6240,8 +6733,8 @@ useEffect(() => {
                   <Link
                     href="/dashboard/company/messages"
                     className="company-message-alert"
-                    aria-label={`${companyUnreadMessages} unread company messages`}
-                    title={`${companyUnreadMessages} unread messages`}
+                    aria-label={`${companyUnreadMessages} messages non lus pour l’entreprise`}
+                    title={`${companyUnreadMessages} messages non lus`}
                   >
                     <span className="company-message-alert-icon">💬</span>
                     <span className="company-message-alert-dot" />
@@ -6256,7 +6749,11 @@ useEffect(() => {
                   onClick={handleLogout}
                   className="logout-button"
                 >
-                  Logout
+                  {homeLanguage === 'nl'
+  ? 'Uitloggen'
+  : homeLanguage === 'en'
+    ? 'Sign out'
+    : 'Se déconnecter'}
                 </button>
               </div>
             )}
@@ -6275,7 +6772,13 @@ useEffect(() => {
               <span className="role-icon" aria-hidden="true">
                 {'\u{1F464}'}
               </span>
-              <span className="role-label">Client</span>
+               <span className="role-label">
+  {homeLanguage === 'nl'
+    ? 'Klant'
+    : homeLanguage === 'en'
+      ? 'Client'
+      : 'Client'}
+</span>
             </Link>
 
             <button
@@ -6296,7 +6799,13 @@ useEffect(() => {
               <span className="role-icon" aria-hidden="true">
                 {'\u{1F4BC}'}
               </span>
-              <span className="role-label">Worker</span>
+              <span className="role-label">
+  {homeLanguage === 'nl'
+    ? 'Vakmens'
+    : homeLanguage === 'en'
+      ? 'Professional'
+      : 'Professionnel'}
+</span>
             </button>
 
             <button
@@ -6317,38 +6826,74 @@ useEffect(() => {
               <span className="role-icon" aria-hidden="true">
                 {'\u{1F3E2}'}
               </span>
-              <span className="role-label">Company</span>
+              <span className="role-label">
+  {homeLanguage === 'nl'
+    ? 'Bedrijf'
+    : homeLanguage === 'en'
+      ? 'Company'
+      : 'Entreprise'}
+</span>
             </button>
           </div>
           <div className="public-directory-header">
             <div>
-              <div className="directory-kicker">Public Directory</div>
-              <div className="directory-title">Workers & Companies</div>
-              <p className="directory-text">
-                Visitors can browse publicly listed worker and company profiles
-                without logging in.
-              </p>
+              <div className="directory-kicker">{homeLanguage === 'nl'
+  ? 'OPENBARE GIDS'
+  : homeLanguage === 'en'
+    ? 'PUBLIC DIRECTORY'
+    : 'ANNUAIRE PUBLIC'}</div>
+             <div className="directory-title">
+  {homeLanguage === 'nl'
+    ? 'Vakmensen en bedrijven'
+    : homeLanguage === 'en'
+      ? 'Professionals and companies'
+      : 'Professionnels et entreprises'}
+</div>
 
-              {matchedSearchIntentLabels.length > 0 ? (
-                <div className="directory-intent-note">
-                  Exact matches first. Related results are included for:{' '}
-                  {matchedSearchIntentLabels.join(' / ')}.
-                </div>
-              ) : null}
-            </div>
+<p className="directory-text">
+  {homeLanguage === 'nl'
+    ? 'Bekijk de openbare profielen van vakmensen en bedrijven zonder in te loggen.'
+    : homeLanguage === 'en'
+      ? 'Browse the public profiles of professionals and companies without signing in.'
+      : 'Consultez les profils publics des professionnels et des entreprises sans vous connecter.'}
+</p>
 
-            <div className="directory-count-badge">
-              <span className="directory-count-workers">
-                {filteredPublicWorkers.length} Workers
-              </span>
-              <span className="directory-count-divider" aria-hidden="true">
-                •
-              </span>
-              <span className="directory-count-companies">
-                {filteredPublicCompanies.length} Companies
-              </span>
-            </div>
-          </div>
+{matchedSearchIntentLabels.length > 0 ? (
+  <div className="directory-intent-note">
+    {homeLanguage === 'nl'
+      ? 'Exacte overeenkomsten verschijnen eerst. Gerelateerde resultaten voor:'
+      : homeLanguage === 'en'
+        ? 'Exact matches appear first. Related results for:'
+        : 'Les correspondances exactes apparaissent d’abord. Résultats associés pour :'}{' '}
+    {matchedSearchIntentLabels.join(' / ')}.
+  </div>
+) : null}
+</div>
+
+<div className="directory-count-badge">
+  <span className="directory-count-workers">
+    {filteredPublicWorkers.length}{' '}
+    {homeLanguage === 'nl'
+      ? 'vakmensen'
+      : homeLanguage === 'en'
+        ? 'professionals'
+        : 'professionnels'}
+  </span>
+
+  <span className="directory-count-divider" aria-hidden="true">
+    •
+  </span>
+
+  <span className="directory-count-companies">
+    {filteredPublicCompanies.length}{' '}
+    {homeLanguage === 'nl'
+      ? 'bedrijven'
+      : homeLanguage === 'en'
+        ? 'companies'
+        : 'entreprises'}
+  </span>
+</div>
+</div>
 
           {activeDirectoryPanel === 'workers' ? (
             <div
@@ -6356,12 +6901,12 @@ useEffect(() => {
               id="workers-panel"
             >
               <div className="directory-side-title">
-                <h3>Workers</h3>
-                <span>{filteredPublicWorkers.length} registered</span>
+                <h3>Professionnels</h3>
+                <span>{filteredPublicWorkers.length} inscrits</span>
               </div>
 
               <p className="directory-scroll-hint">
-                Swipe or scroll horizontally to browse all workers.
+                Faites glisser ou défiler horizontalement pour parcourir tous les professionnels.
               </p>
 
               {isLoggedIn && userType === 'worker' ? (
@@ -6370,7 +6915,7 @@ useEffect(() => {
                     href="/dashboard/worker"
                     className="directory-dashboard-button"
                   >
-                    My Worker Dashboard
+                    Mon tableau de bord
                   </Link>
                 </div>
               ) : null}
@@ -6404,7 +6949,7 @@ useEffect(() => {
                           <Image
                             src={worker.avatar}
                             unoptimized={worker.avatar.startsWith('/api/r2/media?')}
-                            alt={`${worker.name} avatar`}
+                            alt={`Photo de ${worker.name}`}
                             width={96}
                             height={96}
                             style={{
@@ -6429,11 +6974,11 @@ useEffect(() => {
 
                       <div
                         className="directory-rating"
-                        aria-label={`${worker.name} rating ${Number(
+                        aria-label={`Note de ${worker.name} : ${Number(
                           worker.rating ?? 0
-                        ).toFixed(1)} from ${
+                        ).toFixed(1)} sur 5, basée sur ${
                           worker.reviews_count ?? 0
-                        } reviews`}
+                        } avis`}
                       >
                         <span className="directory-rating-stars">
                           {getMiniRatingStars(worker.rating)}
@@ -6464,12 +7009,12 @@ useEffect(() => {
               id="companies-panel"
             >
               <div className="directory-side-title">
-                <h3>Companies</h3>
-                <span>{filteredPublicCompanies.length} registered</span>
+                <h3>Entreprises</h3>
+                <span>{filteredPublicCompanies.length} inscrites</span>
               </div>
 
               <p className="directory-scroll-hint">
-                Swipe or scroll horizontally to browse all companies.
+                Faites glisser ou défiler horizontalement pour parcourir toutes les entreprises.
               </p>
 
               {isLoggedIn && userType === 'company' ? (
@@ -6478,7 +7023,7 @@ useEffect(() => {
                     href="/dashboard/company"
                     className="directory-dashboard-button"
                   >
-                    My Company Dashboard
+                    Mon tableau de bord
                   </Link>
                 </div>
               ) : null}
@@ -6510,7 +7055,7 @@ useEffect(() => {
                           <Image
                             src={company.logo}
                             unoptimized={company.logo.startsWith('/api/r2/media?')}
-                            alt={`${company.name} logo`}
+                            alt={`Logo de ${company.name}`}
                             width={96}
                             height={96}
                             style={{
@@ -6529,11 +7074,11 @@ useEffect(() => {
 
                       <div
                         className="directory-rating"
-                        aria-label={`${company.name} rating ${Number(
+                        aria-label={`Note de ${company.name} : ${Number(
                           company.rating ?? 0
-                        ).toFixed(1)} from ${
+                        ).toFixed(1)} sur 5, basée sur ${
                           company.reviews_count ?? 0
-                        } reviews`}
+                        } avis`}
                       >
                         <span className="directory-rating-stars">
                           {getMiniRatingStars(company.rating)}
@@ -6566,7 +7111,7 @@ useEffect(() => {
                 <div className="footer-brand-row">
                   <Image
                     src="/logo.png"
-                    alt="Sendio logo"
+                    alt="Logo Sendio"
                     width={52}
                     height={52}
                     className="footer-logo"
@@ -6575,54 +7120,113 @@ useEffect(() => {
                 </div>
 
                 <div className="footer-title">
-                  Discover services, workers and companies across Belgium.
-                </div>
+                
 
-                <p className="footer-text">
-                  Explore public profiles, compare available services and follow
-                  Sendio as the platform continues to grow.
-                </p>
-                    <a className="footer-email" href="mailto:info@sendio.be">
-                   ✉ info@sendio.be
-                   </a>
-                <div className="footer-beta">
-                  Experimental beta platform — information may change.
-                </div>
-              </div>
+             {homeLanguage === 'nl'
+  ? 'Ontdek diensten, vakmensen en bedrijven in heel België.'
+  : homeLanguage === 'en'
+    ? 'Discover services, professionals and companies across Belgium.'
+    : 'Découvrez des services, des professionnels et des entreprises partout en Belgique.'}
+</div>
 
-              <nav className="footer-links" aria-label="Footer">
-                <Link href="/about">
-                  <span className="footer-link-icon" aria-hidden="true">ⓘ</span>
-                  <span>About</span>
-                </Link>
-                <Link href="/contact">
-                  <span className="footer-link-icon" aria-hidden="true">?</span>
-                  <span>FAQ</span>
-                </Link>
-                <Link href="/contact">
-                  <span className="footer-link-icon" aria-hidden="true">✉</span>
-                  <span>Contact</span>
-                </Link>
-                <Link href="/pricing">
-                  <span className="footer-link-icon" aria-hidden="true">📣</span>
-                  <span>Advertising</span>
-                </Link>
-                <Link href="/legal">
-                  <span className="footer-link-icon" aria-hidden="true">⚖</span>
-                  <span>Legal</span>
-                </Link>
-              </nav>
-            </div>
+<p className="footer-text">
+  {homeLanguage === 'nl'
+    ? 'Bekijk openbare profielen, vergelijk aangeboden diensten en volg de ontwikkeling van Sendio.'
+    : homeLanguage === 'en'
+      ? 'Browse public profiles, compare available services and follow Sendio’s development.'
+      : 'Consultez les profils publics, comparez les services proposés et suivez l’évolution de Sendio.'}
+</p>
 
-            <div className="footer-bottom">
-              <span className="copyright">
-                Sendio — Experimental beta platform · 2026.
-              </span>
-            </div>
+<a className="footer-email" href="mailto:info@sendio.be">
+  ✉ info@sendio.be
+</a>
+
+<div className="footer-beta">
+  {homeLanguage === 'nl'
+    ? 'Experimenteel bètaplatform — informatie kan veranderen.'
+    : homeLanguage === 'en'
+      ? 'Experimental beta platform — information may change.'
+      : 'Plateforme bêta expérimentale — les informations peuvent évoluer.'}
+</div>
+</div>
+
+<nav
+  className="footer-links"
+  aria-label={
+    homeLanguage === 'nl'
+      ? 'Voettekst'
+      : homeLanguage === 'en'
+        ? 'Footer'
+        : 'Pied de page'
+  }
+>
+  <Link href="/about">
+    <span className="footer-link-icon" aria-hidden="true">
+      ⓘ
+    </span>
+    <span>
+      {homeLanguage === 'nl'
+        ? 'Over ons'
+        : homeLanguage === 'en'
+          ? 'About'
+          : 'À propos'}
+    </span>
+  </Link>
+
+  <Link href="/contact">
+    <span className="footer-link-icon" aria-hidden="true">
+      ?
+    </span>
+    <span>FAQ</span>
+  </Link>
+
+  <Link href="/contact">
+    <span className="footer-link-icon" aria-hidden="true">
+      ✉
+    </span>
+    <span>Contact</span>
+  </Link>
+
+  <Link href="/pricing">
+    <span className="footer-link-icon" aria-hidden="true">
+      📣
+    </span>
+    <span>
+      {homeLanguage === 'nl'
+        ? 'Adverteren'
+        : homeLanguage === 'en'
+          ? 'Advertising'
+          : 'Publicité'}
+    </span>
+  </Link>
+
+  <Link href="/legal">
+    <span className="footer-link-icon" aria-hidden="true">
+      ⚖
+    </span>
+    <span>
+      {homeLanguage === 'nl'
+        ? 'Wettelijke vermeldingen'
+        : homeLanguage === 'en'
+          ? 'Legal notices'
+          : 'Mentions légales'}
+    </span>
+  </Link>
+</nav>
+</div>
+
+<div className="footer-bottom">
+  <span className="copyright">
+    {homeLanguage === 'nl'
+      ? 'Sendio — Experimenteel bètaplatform · 2026.'
+      : homeLanguage === 'en'
+        ? 'Sendio — Experimental beta platform · 2026.'
+        : 'Sendio — Plateforme bêta expérimentale · 2026.'}
+  </span>
+</div>
           </div>
         </footer>
       </div>
-
       <HeroAdPhonePreview />
     </>
   );
