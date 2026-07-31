@@ -339,7 +339,65 @@ const belgianLocationVariants: Record<string, string[]> = {
   verviers: ['Verviers'],
   mouscron: ['Mouscron', 'Moeskroen'],
 };
+function normalizeBelgianLocationName(value: string) {
+  return value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/-/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
 
+function getBelgianLocationDisplayName(
+  value: string,
+  language: HomeLanguage
+) {
+  const normalizedValue = normalizeBelgianLocationName(value);
+
+  const locationEntry = Object.entries(
+    belgianLocationVariants
+  ).find(
+    ([key, variants]) =>
+      key === normalizedValue ||
+      variants.some(
+        (variant) =>
+          normalizeBelgianLocationName(variant) === normalizedValue
+      )
+  );
+
+  if (!locationEntry) return value;
+
+  const [locationKey, variants] = locationEntry;
+
+  if (language === 'fr') {
+    return locationKey === 'toute la belgique'
+      ? 'Toute la Belgique'
+      : variants[0];
+  }
+
+  if (language === 'nl') {
+    if (
+      locationKey === 'toute la belgique' ||
+      locationKey === 'belgique'
+    ) {
+      return 'Heel België';
+    }
+
+    if (locationKey === 'liege') return 'Liège';
+
+    return variants[variants.length - 1];
+  }
+
+  if (
+    locationKey === 'toute la belgique' ||
+    locationKey === 'belgique'
+  ) {
+    return 'All Belgium';
+  }
+
+  return variants.length >= 3 ? variants[1] : variants[0];
+}
 const searchIntentRules: SearchIntentRule[] = [
   {
     id: 'bathroom_sanitary',
@@ -1540,41 +1598,72 @@ export default function HomePage() {
 
     return getUniqueSuggestedValues(
       [
-        ...majorBelgianCities,
+       ...majorBelgianCities.map((city) =>
+  getBelgianLocationDisplayName(city, homeLanguage)
+),
         ...publicWorkers.map((worker) => worker.city),
         ...publicCompanies.map((company) => company.city),
       ],
       homeLocation,
       8
-    ).filter((city) => city !== 'Toute la Belgique');
-  }, [homeLocation, publicCompanies, publicWorkers]);
+    ).filter(
+  (city) =>
+    city !== 'Toute la Belgique' &&
+    city !== 'Heel België' &&
+    city !== 'All Belgium'
+);
+  }, [
+  homeLanguage,
+  homeLocation,
+  publicCompanies,
+  publicWorkers,
+]);
 
   const filterCitySuggestions = useMemo(() => {
     if (!filterCitySearch.trim()) return [];
 
     return getUniqueSuggestedValues(
       [
-        ...majorBelgianCities,
+        ...majorBelgianCities.map((city) =>
+  getBelgianLocationDisplayName(city, homeLanguage)
+),
         ...publicWorkers.map((worker) => worker.city),
         ...publicCompanies.map((company) => company.city),
       ],
       filterCitySearch,
       6
     ).filter((city) => city !== 'Toute la Belgique');
-  }, [filterCitySearch, publicCompanies, publicWorkers]);
+    }, [
+  filterCitySearch,
+  homeLanguage,
+  publicCompanies,
+  publicWorkers,
+]);
 
   const filterServiceSuggestions = useMemo(() => {
-    if (!filterServiceSearch.trim()) return [];
+  if (!filterServiceSearch.trim()) return [];
 
-    const companyServiceValues = Object.values(companySearchTerms).flat();
-    const workerServiceValues = Object.values(workerSearchTerms).flat();
-    const intentValues = searchIntentRules.flatMap((rule) => [
-      rule.label,
-      ...(frenchSearchSuggestionsByIntent[rule.id] ?? []),
-    ]);
+  const companyServiceValues = Object.values(companySearchTerms).flat();
+  const workerServiceValues = Object.values(workerSearchTerms).flat();
+  const localizedServiceValues = homeServiceCategories.map((service) =>
+  homeLanguage === 'nl'
+    ? service.name_nl?.trim() || service.name
+    : homeLanguage === 'en'
+      ? service.name
+      : service.name_fr?.trim() || service.name
+);
+
+  const intentValues =
+  homeLanguage === 'fr'
+    ? searchIntentRules.flatMap((rule) => [
+        rule.label,
+        ...(frenchSearchSuggestionsByIntent[rule.id] ?? []),
+      ])
+    : [];
 
     return getUniqueSuggestedValues(
       [
+        ...localizedServiceValues,
         ...publicWorkers.map((worker) => worker.profession),
         ...publicWorkers.map((worker) => worker.name),
         ...publicCompanies.map((company) => company.category),
@@ -1589,6 +1678,8 @@ export default function HomePage() {
   }, [
     companySearchTerms,
     filterServiceSearch,
+    homeLanguage,
+    homeServiceCategories,
     publicCompanies,
     publicWorkers,
     workerSearchTerms,
@@ -6268,15 +6359,20 @@ useEffect(() => {
 
               {locationSuggestions.length > 0 ? (
                 <div className="search-suggestions">
-                  {locationSuggestions.map((suggestion) => (
-                    <button
-                      type="button"
-                      key={`location-${suggestion}`}
-                      onClick={() => setHomeLocation(suggestion)}
-                    >
-                      {suggestion}
-                    </button>
-                  ))}
+                  {locationSuggestions.map((suggestion) => {
+  const displayedLocation =
+    getBelgianLocationDisplayName(suggestion, homeLanguage);
+
+  return (
+    <button
+      type="button"
+      key={`location-${suggestion}`}
+      onClick={() => setHomeLocation(displayedLocation)}
+    >
+      {displayedLocation}
+    </button>
+  );
+})}
                 </div>
               ) : null}
             </div>
@@ -6625,33 +6721,42 @@ useEffect(() => {
                       <div className="service-card-overlay" />
 
                       <div className="service-card-content">
-                         <div className="service-ad-label">
+                       <div className="service-ad-label">
   {homeLanguage === 'nl'
-    ? 'Gesponsorde advertentie'
+    ? 'Gesponsord'
     : homeLanguage === 'en'
-      ? 'Sponsored ad'
-      : 'Annonce sponsorisée'}{' '}
-  · {homeLanguage === 'nl'
-  ? slot.id === 'general'
-    ? 'Algemene diensten'
-    : slot.id === 'household'
-      ? 'Thuisdiensten'
-      : slot.id === 'gardening'
-        ? 'Tuinieren'
-        : slot.id === 'logistics'
-          ? 'Logistiek'
-          : slot.label
-  : homeLanguage === 'en'
+      ? 'Sponsored'
+      : 'Sponsorisé'}{' '}
+  ·{' '}
+  {homeLanguage === 'nl'
     ? slot.id === 'general'
-      ? 'General services'
+      ? 'Algemeen'
       : slot.id === 'household'
-        ? 'Home services'
+        ? 'Thuis'
         : slot.id === 'gardening'
-          ? 'Gardening'
+          ? 'Tuin'
           : slot.id === 'logistics'
-            ? 'Logistics'
+            ? 'Logistiek'
             : slot.label
-    : slot.label}
+    : homeLanguage === 'en'
+      ? slot.id === 'general'
+        ? 'General'
+        : slot.id === 'household'
+          ? 'Home'
+          : slot.id === 'gardening'
+            ? 'Garden'
+            : slot.id === 'logistics'
+              ? 'Logistics'
+              : slot.label
+      : slot.id === 'general'
+        ? 'Général'
+        : slot.id === 'household'
+          ? 'Maison'
+          : slot.id === 'gardening'
+            ? 'Jardin'
+            : slot.id === 'logistics'
+              ? 'Logistique'
+              : slot.label}
 </div>
                         <div className="service-ad-title">{adTitle}</div>
 
@@ -6673,19 +6778,19 @@ useEffect(() => {
                           </div>
                         )}
 
-                       <div className="service-ad-count">
+                      <div className="service-ad-count">
   {slotAds.length}{' '}
   {homeLanguage === 'nl'
     ? slotAds.length === 1
-      ? 'gesponsorde advertentie'
-      : 'gesponsorde advertenties'
+      ? 'advertentie'
+      : 'advertenties'
     : homeLanguage === 'en'
       ? slotAds.length === 1
-        ? 'sponsored ad'
-        : 'sponsored ads'
+        ? 'ad'
+        : 'ads'
       : slotAds.length === 1
-        ? 'annonce sponsorisée'
-        : 'annonces sponsorisées'}
+        ? 'annonce'
+        : 'annonces'}
 </div>
                       </div>
                     </>
@@ -6772,12 +6877,8 @@ useEffect(() => {
               <span className="role-icon" aria-hidden="true">
                 {'\u{1F464}'}
               </span>
-               <span className="role-label">
-  {homeLanguage === 'nl'
-    ? 'Klant'
-    : homeLanguage === 'en'
-      ? 'Client'
-      : 'Client'}
+              <span className="role-label">
+  {homeLanguage === 'nl' ? 'Klant' : 'Client'}
 </span>
             </Link>
 
@@ -6799,13 +6900,21 @@ useEffect(() => {
               <span className="role-icon" aria-hidden="true">
                 {'\u{1F4BC}'}
               </span>
-              <span className="role-label">
+              <span
+  className="role-label"
+  style={
+    homeLanguage === 'fr'
+      ? { fontSize: '12px', whiteSpace: 'nowrap' }
+      : undefined
+  }
+>
   {homeLanguage === 'nl'
-    ? 'Vakmens'
+    ? 'Werker'
     : homeLanguage === 'en'
-      ? 'Professional'
-      : 'Professionnel'}
+      ? 'Worker'
+      : 'Travailleur'}
 </span>
+ 
             </button>
 
             <button
