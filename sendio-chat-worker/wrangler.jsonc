@@ -1,0 +1,30 @@
+{
+	"$schema": "./node_modules/wrangler/config-schema.json",
+	"name": "sendio-chat-worker",
+	"main": "src/index.ts",
+	"compatibility_date": "2026-07-29",
+	"vars": {
+		"SUPABASE_URL": "https://atlbsghwdprrfzkdpldy.supabase.co"
+	},
+	"durable_objects": {
+		"bindings": [
+			{
+				"name": "CHAT_ROOM",
+				"class_name": "ChatRoom"
+			}
+		]
+	},
+	"exports": {
+		"ChatRoom": {
+			"type": "durable-object",
+			"storage": "sqlite"
+		}
+	},
+	"d1_databases": [
+		{
+			"binding": "sendio_chat_index",
+			"database_name": "sendio-chat-index",
+			"database_id": "fc4e8cf7-092f-4bc4-bfca-4e094057112b"
+		}
+	]
+}

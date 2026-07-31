@@ -7,6 +7,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import { createSendioNotification } from '@/lib/notifications';
 import { isR2MediaUrl } from '@/lib/r2-media-client';
+import SendioChatWindow from '@/components/chat/SendioChatWindow';
 type WorkerProfile = {
   id: string;
   user_id: string | null;
@@ -1914,6 +1915,20 @@ if (loading) {
         </div>
       ) : null}
 
+      {worker && currentUserId !== worker.user_id ? (
+        <SendioChatWindow
+          recipientType="worker"
+          recipientIdentifier={worker.slug ?? worker.id}
+          recipientName={worker.name}
+          recipientAvatarUrl={worker.avatar}
+          isLoggedIn={isLoggedIn}
+          onGuestAttempt={() =>
+            showLockedMessage(
+              'Sign in or register to use Sendio Chat.'
+            )
+          }
+        />
+      ) : null}
       {unlockNotice ? (
         <div className="unlock-toast">
           <p>{unlockNotice}</p>

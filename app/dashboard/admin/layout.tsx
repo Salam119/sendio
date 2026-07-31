@@ -94,6 +94,14 @@ export default function AdminDashboardLayout({
             >
               Home
             </button>
+
+            <button
+              type="button"
+              onClick={() => router.push('/dashboard/admin/chat-reports')}
+              className="rounded-full border border-[#45cfe7] bg-[#eef6ff] px-4 py-2 text-sm font-bold text-[#0b5b2f] hover:bg-[#e3efff]"
+            >
+              Chat Reports
+            </button>
           </div>
 
           <div className="text-center">

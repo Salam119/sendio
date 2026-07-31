@@ -23,6 +23,7 @@ import {
 } from 'react-icons/fa6';
 import { supabase } from '@/lib/supabase';
 import { createSendioNotification } from '@/lib/notifications';
+import SendioChatWindow from '@/components/chat/SendioChatWindow';
 type Company = {
   id: string;
   user_id: string | null;
@@ -1935,6 +1936,21 @@ export default function PublicCompanyPage() {
           </div>
         </div>
       ) : null}
+      {company && currentUser?.id !== company.user_id ? (
+        <SendioChatWindow
+          recipientType="company"
+          recipientIdentifier={company.slug ?? company.id}
+          recipientName={company.name}
+          recipientAvatarUrl={company.logo}
+          isLoggedIn={isLoggedIn}
+          onGuestAttempt={() =>
+            showLockedMessage(
+              'Sign in or register to use Sendio Chat.'
+            )
+          }
+        />
+      ) : null}
+
 {unlockNotice ? (
   <div className="unlock-toast">
     <p>{unlockNotice}</p>
