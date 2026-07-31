@@ -215,9 +215,10 @@ export default function SendioGlobalChat() {
 
   async function refreshSession(
     announceUnread = false,
+    accessToken?: string,
   ): Promise<SendioChatSession | null> {
     try {
-      const nextSession = await getSendioChatSession();
+      const nextSession = await getSendioChatSession(accessToken);
       const nextUnread = nextSession.conversations.reduce(
         (total, conversation) =>
           total + conversation.unreadCount,
@@ -315,14 +316,17 @@ export default function SendioGlobalChat() {
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, nextSession) => {
-      if (nextSession) {
-        void refreshSession(false);
-      } else {
-        previousUnreadRef.current = null;
-        setAuthState("guest");
-        setSession(null);
-        closeConversationSocket();
+      if (nextSession?.access_token) {
+        window.setTimeout(() => {
+          void refreshSession(false, nextSession.access_token);
+        }, 0);
+        return;
       }
+
+      previousUnreadRef.current = null;
+      setAuthState("guest");
+      setSession(null);
+      closeConversationSocket();
     });
 
     const pollingTimer = window.setInterval(() => {

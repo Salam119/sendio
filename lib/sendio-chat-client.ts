@@ -215,8 +215,9 @@ async function getAccessToken(): Promise<string> {
 async function chatRequest<T extends object>(
   path: string,
   init: RequestInit = {},
+  explicitAccessToken?: string,
 ): Promise<T> {
-  const accessToken = await getAccessToken();
+  const accessToken = explicitAccessToken ?? (await getAccessToken());
   const response = await fetch(`${getChatUrl()}${path}`, {
     ...init,
     headers: {
@@ -247,10 +248,16 @@ async function chatRequest<T extends object>(
 }
 
 
-export function getSendioChatSession(): Promise<SendioChatSession> {
-  return chatRequest<SendioChatSession>("/v1/chat/session", {
-    method: "GET",
-  });
+export function getSendioChatSession(
+  accessToken?: string,
+): Promise<SendioChatSession> {
+  return chatRequest<SendioChatSession>(
+    "/v1/chat/session",
+    {
+      method: "GET",
+    },
+    accessToken,
+  );
 }
 
 export function createSendioConversation(
