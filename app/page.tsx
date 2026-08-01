@@ -6806,6 +6806,26 @@ useEffect(() => {
           </div>
 
           <div className="buttons-block">
+           {!isLoggedIn && (
+  <div className="buttons-row-main">
+    <div className="auth-avatar-button-wrap">
+      <LoginButtonAvatar />
+      <Link href="/login" className="btn-custom btn-login-avatar">
+        Login
+      </Link>
+    </div>
+
+    <div className="auth-avatar-button-wrap">
+      <RegisterButtonAvatar />
+      <Link
+        href="/register"
+        className="btn-custom btn-register-avatar"
+      >
+        Sign Up
+      </Link>
+    </div>
+  </div>
+)} 
             {isLoggedIn && (
               <div className="user-view">
                 <Link
