@@ -90,6 +90,170 @@ const accountOptions: AccountOption[] = [
     chipClass: 'border-violet-100 bg-violet-50 text-violet-700',
   },
 ];
+
+type TestLanguage = 'fr' | 'nl' | 'en' | 'ar' | 'es';
+
+
+const UI_TEXT: Record<string, Record<TestLanguage, string>> = {
+  'Back': { fr: 'Retour', nl: 'Terug', en: 'Back', ar: 'رجوع', es: 'Volver' },
+  'Client': { fr: 'Client', nl: 'Klant', en: 'Client', ar: 'عميل', es: 'Cliente' },
+  'Worker': { fr: 'Professionnel', nl: 'Vakmens', en: 'Worker', ar: 'عامل', es: 'Profesional' },
+  'Company': { fr: 'Entreprise', nl: 'Bedrijf', en: 'Company', ar: 'شركة', es: 'Empresa' },
+  'What?': { fr: 'Quel type ?', nl: 'Welk type?', en: 'What?', ar: 'ما نوع الحساب؟', es: '¿Qué tipo?' },
+
+  'Waiting for email confirmation': {
+    fr: "En attente de la confirmation de l’e-mail",
+    nl: 'Wachten op e-mailbevestiging',
+    en: 'Waiting for email confirmation',
+    ar: 'بانتظار تأكيد البريد الإلكتروني',
+    es: 'Esperando la confirmación del correo',
+  },
+  'We sent a verification link if this email address is valid. Please check your inbox and Spam/Junk folder. After confirming your email, Sendio will continue from the confirmation link.': {
+    fr: "Nous avons envoyé un lien de vérification si cette adresse e-mail est valide. Vérifiez votre boîte de réception et le dossier Spam/Indésirables. Après confirmation, Sendio poursuivra depuis le lien reçu.",
+    nl: 'Als dit e-mailadres geldig is, hebben we een verificatielink gestuurd. Controleer je inbox en de map Spam/Ongewenst. Na bevestiging gaat Sendio verder via de bevestigingslink.',
+    en: 'We sent a verification link if this email address is valid. Please check your inbox and Spam/Junk folder. After confirming your email, Sendio will continue from the confirmation link.',
+    ar: 'أرسلنا رابط تحقق إذا كان عنوان البريد الإلكتروني صالحًا. تحقق من صندوق الوارد ومجلد الرسائل غير المرغوب فيها. بعد تأكيد بريدك، سيواصل Sendio من رابط التأكيد.',
+    es: 'Hemos enviado un enlace de verificación si esta dirección de correo es válida. Revisa tu bandeja de entrada y la carpeta de spam. Después de confirmar el correo, Sendio continuará desde el enlace de confirmación.',
+  },
+  'Keep this page open, then confirm your email from the link.': {
+    fr: 'Gardez cette page ouverte, puis confirmez votre e-mail via le lien reçu.',
+    nl: 'Laat deze pagina open en bevestig daarna je e-mail via de ontvangen link.',
+    en: 'Keep this page open, then confirm your email from the link.',
+    ar: 'اترك هذه الصفحة مفتوحة، ثم أكد بريدك من خلال الرابط.',
+    es: 'Mantén esta página abierta y confirma tu correo desde el enlace recibido.',
+  },
+  "Didn't receive the confirmation email?": {
+    fr: "Vous n’avez pas reçu l’e-mail de confirmation ?",
+    nl: 'Geen bevestigingsmail ontvangen?',
+    en: "Didn't receive the confirmation email?",
+    ar: 'لم يصلك بريد التأكيد؟',
+    es: '¿No recibiste el correo de confirmación?',
+  },
+  'Sending again...': { fr: 'Nouvel envoi...', nl: 'Opnieuw verzenden...', en: 'Sending again...', ar: 'جارٍ الإرسال مجددًا...', es: 'Enviando de nuevo...' },
+  'Resend confirmation email': { fr: "Renvoyer l’e-mail de confirmation", nl: 'Bevestigingsmail opnieuw verzenden', en: 'Resend confirmation email', ar: 'إعادة إرسال بريد التأكيد', es: 'Reenviar correo de confirmación' },
+  'Try again': { fr: 'Réessayer', nl: 'Opnieuw proberen', en: 'Try again', ar: 'حاول مجددًا', es: 'Intentar de nuevo' },
+
+  'Belgian enterprise number': { fr: "Numéro d’entreprise belge", nl: 'Belgisch ondernemingsnummer', en: 'Belgian enterprise number', ar: 'رقم المؤسسة البلجيكي', es: 'Número de empresa belga' },
+  'Checking the official BCE register...': { fr: 'Vérification dans le registre officiel BCE...', nl: 'Controle in het officiële KBO-register...', en: 'Checking the official BCE register...', ar: 'جارٍ التحقق في سجل BCE الرسمي...', es: 'Comprobando el registro oficial BCE...' },
+  'Company verified': { fr: 'Entreprise vérifiée', nl: 'Bedrijf geverifieerd', en: 'Company verified', ar: 'تم التحقق من الشركة', es: 'Empresa verificada' },
+  'box': { fr: 'boîte', nl: 'bus', en: 'box', ar: 'صندوق', es: 'buzón' },
+
+  'Full name': { fr: 'Nom complet', nl: 'Volledige naam', en: 'Full name', ar: 'الاسم الكامل', es: 'Nombre completo' },
+  'Email address': { fr: 'Adresse e-mail', nl: 'E-mailadres', en: 'Email address', ar: 'البريد الإلكتروني', es: 'Correo electrónico' },
+  'Password': { fr: 'Mot de passe', nl: 'Wachtwoord', en: 'Password', ar: 'كلمة المرور', es: 'Contraseña' },
+  'Confirm password': { fr: 'Confirmer le mot de passe', nl: 'Wachtwoord bevestigen', en: 'Confirm password', ar: 'تأكيد كلمة المرور', es: 'Confirmar contraseña' },
+  'Sending email...': { fr: "Envoi de l’e-mail...", nl: 'E-mail verzenden...', en: 'Sending email...', ar: 'جارٍ إرسال البريد...', es: 'Enviando correo...' },
+  'Create account →': { fr: 'Créer un compte →', nl: 'Account aanmaken →', en: 'Create account →', ar: 'إنشاء حساب ←', es: 'Crear cuenta →' },
+  'or': { fr: 'ou', nl: 'of', en: 'or', ar: 'أو', es: 'o' },
+
+  'Opening Google...': { fr: 'Ouverture de Google...', nl: 'Google openen...', en: 'Opening Google...', ar: 'جارٍ فتح Google...', es: 'Abriendo Google...' },
+  'Sign up with Google': { fr: "S’inscrire avec Google", nl: 'Registreren met Google', en: 'Sign up with Google', ar: 'التسجيل باستخدام Google', es: 'Registrarse con Google' },
+  'Opening Facebook...': { fr: 'Ouverture de Facebook...', nl: 'Facebook openen...', en: 'Opening Facebook...', ar: 'جارٍ فتح Facebook...', es: 'Abriendo Facebook...' },
+  'Sign up with Facebook': { fr: "S’inscrire avec Facebook", nl: 'Registreren met Facebook', en: 'Sign up with Facebook', ar: 'التسجيل باستخدام Facebook', es: 'Registrarse con Facebook' },
+  'Opening LinkedIn...': { fr: 'Ouverture de LinkedIn...', nl: 'LinkedIn openen...', en: 'Opening LinkedIn...', ar: 'جارٍ فتح LinkedIn...', es: 'Abriendo LinkedIn...' },
+  'Sign up with LinkedIn': { fr: "S’inscrire avec LinkedIn", nl: 'Registreren met LinkedIn', en: 'Sign up with LinkedIn', ar: 'التسجيل باستخدام LinkedIn', es: 'Registrarse con LinkedIn' },
+
+  'Enter a valid active Belgian enterprise number to unlock registration.': {
+    fr: "Saisissez un numéro d’entreprise belge actif et valide pour débloquer l’inscription.",
+    nl: 'Voer een geldig en actief Belgisch ondernemingsnummer in om de registratie vrij te geven.',
+    en: 'Enter a valid active Belgian enterprise number to unlock registration.',
+    ar: 'أدخل رقم مؤسسة بلجيكيًا صالحًا ونشطًا لفتح التسجيل.',
+    es: 'Introduce un número de empresa belga válido y activo para habilitar el registro.',
+  },
+  'Already have an account?': { fr: 'Vous avez déjà un compte ?', nl: 'Heb je al een account?', en: 'Already have an account?', ar: 'لديك حساب بالفعل؟', es: '¿Ya tienes una cuenta?' },
+  'Sign in': { fr: 'Se connecter', nl: 'Inloggen', en: 'Sign in', ar: 'تسجيل الدخول', es: 'Iniciar sesión' },
+
+  'Please choose an account type first.': { fr: "Choisissez d’abord un type de compte.", nl: 'Kies eerst een accounttype.', en: 'Please choose an account type first.', ar: 'اختر نوع الحساب أولًا.', es: 'Elige primero un tipo de cuenta.' },
+  'Select Client, Worker, or Company before creating your account.': { fr: 'Sélectionnez Client, Professionnel ou Entreprise avant de créer votre compte.', nl: 'Kies Klant, Vakmens of Bedrijf voordat je je account aanmaakt.', en: 'Select Client, Worker, or Company before creating your account.', ar: 'اختر عميلًا أو عاملًا أو شركة قبل إنشاء حسابك.', es: 'Selecciona Cliente, Profesional o Empresa antes de crear tu cuenta.' },
+  'Verify the company first.': { fr: "Vérifiez d’abord l’entreprise.", nl: 'Verifieer eerst het bedrijf.', en: 'Verify the company first.', ar: 'تحقق من الشركة أولًا.', es: 'Verifica primero la empresa.' },
+  'Enter a valid active Belgian enterprise number before continuing.': { fr: "Saisissez un numéro d’entreprise belge actif et valide avant de continuer.", nl: 'Voer een geldig en actief Belgisch ondernemingsnummer in voordat je verdergaat.', en: 'Enter a valid active Belgian enterprise number before continuing.', ar: 'أدخل رقم مؤسسة بلجيكيًا صالحًا ونشطًا قبل المتابعة.', es: 'Introduce un número de empresa belga válido y activo antes de continuar.' },
+  'Passwords do not match.': { fr: 'Les mots de passe ne correspondent pas.', nl: 'De wachtwoorden komen niet overeen.', en: 'Passwords do not match.', ar: 'كلمتا المرور غير متطابقتين.', es: 'Las contraseñas no coinciden.' },
+  'Please type the same password in both password fields.': { fr: 'Saisissez le même mot de passe dans les deux champs.', nl: 'Vul in beide wachtwoordvelden hetzelfde wachtwoord in.', en: 'Please type the same password in both password fields.', ar: 'أدخل كلمة المرور نفسها في الحقلين.', es: 'Escribe la misma contraseña en ambos campos.' },
+  'This email is already registered.': { fr: 'Cette adresse e-mail est déjà enregistrée.', nl: 'Dit e-mailadres is al geregistreerd.', en: 'This email is already registered.', ar: 'هذا البريد الإلكتروني مسجل بالفعل.', es: 'Este correo electrónico ya está registrado.' },
+  'Please sign in to your existing account or use a different email address.': { fr: 'Connectez-vous à votre compte existant ou utilisez une autre adresse e-mail.', nl: 'Log in op je bestaande account of gebruik een ander e-mailadres.', en: 'Please sign in to your existing account or use a different email address.', ar: 'سجّل الدخول إلى حسابك الحالي أو استخدم بريدًا إلكترونيًا آخر.', es: 'Inicia sesión en tu cuenta existente o usa otra dirección de correo.' },
+  'Please check your email address and try again.': { fr: 'Vérifiez votre adresse e-mail et réessayez.', nl: 'Controleer je e-mailadres en probeer opnieuw.', en: 'Please check your email address and try again.', ar: 'تحقق من بريدك الإلكتروني وحاول مجددًا.', es: 'Comprueba tu dirección de correo e inténtalo de nuevo.' },
+
+  'Company verification could not be completed.': { fr: "La vérification de l’entreprise n’a pas pu être terminée.", nl: 'De bedrijfsverificatie kon niet worden voltooid.', en: 'Company verification could not be completed.', ar: 'تعذر إكمال التحقق من الشركة.', es: 'No se pudo completar la verificación de la empresa.' },
+  'The company was not found in the BCE register.': { fr: "L’entreprise n’a pas été trouvée dans le registre BCE.", nl: 'Het bedrijf werd niet gevonden in het KBO-register.', en: 'The company was not found in the BCE register.', ar: 'لم يتم العثور على الشركة في سجل BCE.', es: 'La empresa no se encontró en el registro BCE.' },
+  'This company is not active in the BCE register.': { fr: "Cette entreprise n’est pas active dans le registre BCE.", nl: 'Dit bedrijf is niet actief in het KBO-register.', en: 'This company is not active in the BCE register.', ar: 'هذه الشركة غير نشطة في سجل BCE.', es: 'Esta empresa no está activa en el registro BCE.' },
+  'The BCE verification could not be completed.': { fr: 'La vérification BCE n’a pas pu être terminée.', nl: 'De KBO-verificatie kon niet worden voltooid.', en: 'The BCE verification could not be completed.', ar: 'تعذر إكمال التحقق من BCE.', es: 'No se pudo completar la verificación BCE.' },
+  'A new confirmation email was sent. Please check your inbox and Spam/Junk folder.': { fr: "Un nouvel e-mail de confirmation a été envoyé. Vérifiez votre boîte de réception et le dossier Spam/Indésirables.", nl: 'Er is een nieuwe bevestigingsmail verzonden. Controleer je inbox en de map Spam/Ongewenst.', en: 'A new confirmation email was sent. Please check your inbox and Spam/Junk folder.', ar: 'تم إرسال بريد تأكيد جديد. تحقق من صندوق الوارد ومجلد الرسائل غير المرغوب فيها.', es: 'Se ha enviado un nuevo correo de confirmación. Revisa tu bandeja de entrada y la carpeta de spam.' },
+};
+
+function detectTestLanguage(): TestLanguage {
+  if (typeof window === 'undefined') return 'fr';
+
+  const browserLanguage = window.navigator.language.toLowerCase();
+
+  if (browserLanguage.startsWith('nl')) return 'nl';
+  if (browserLanguage.startsWith('en')) return 'en';
+  if (browserLanguage.startsWith('ar')) return 'ar';
+  if (browserLanguage.startsWith('es')) return 'es';
+
+  return 'fr';
+}
+
+function translateUiText(text: string | undefined, language: TestLanguage) {
+  if (!text) return '';
+
+  const direct = UI_TEXT[text];
+  if (direct) return direct[language];
+
+  const existingAccountMatch = text.match(
+    /^This email already belongs to a (Client|Worker|Company) account\. Please sign in to your existing account or use a different email address\.$/,
+  );
+
+  if (existingAccountMatch) {
+    const typeKey = existingAccountMatch[1];
+    const translatedType = UI_TEXT[typeKey]?.[language] ?? typeKey;
+
+    const templates: Record<TestLanguage, string> = {
+      fr: `Cette adresse e-mail appartient déjà à un compte ${translatedType}. Connectez-vous à votre compte existant ou utilisez une autre adresse e-mail.`,
+      nl: `Dit e-mailadres hoort al bij een ${translatedType}-account. Log in op je bestaande account of gebruik een ander e-mailadres.`,
+      en: text,
+      ar: `هذا البريد الإلكتروني مرتبط بالفعل بحساب ${translatedType}. سجّل الدخول إلى حسابك الحالي أو استخدم بريدًا إلكترونيًا آخر.`,
+      es: `Este correo electrónico ya pertenece a una cuenta ${translatedType}. Inicia sesión en tu cuenta existente o usa otra dirección de correo.`,
+    };
+
+    return templates[language];
+  }
+
+  if (text.startsWith('Too many email requests were made.')) {
+    return {
+      fr: 'Trop de demandes d’e-mail ont été effectuées. Attendez quelques minutes puis réessayez.',
+      nl: 'Er zijn te veel e-mailverzoeken gedaan. Wacht enkele minuten en probeer opnieuw.',
+      en: text,
+      ar: 'تم إرسال عدد كبير من طلبات البريد الإلكتروني. انتظر بضع دقائق ثم حاول مجددًا.',
+      es: 'Se han realizado demasiadas solicitudes de correo. Espera unos minutos e inténtalo de nuevo.',
+    }[language];
+  }
+
+  if (text.startsWith('The email address is not valid.')) {
+    return {
+      fr: 'L’adresse e-mail n’est pas valide. Revenez en arrière et vérifiez-la.',
+      nl: 'Het e-mailadres is niet geldig. Ga terug en controleer het adres.',
+      en: text,
+      ar: 'عنوان البريد الإلكتروني غير صالح. ارجع وتحقق من العنوان.',
+      es: 'La dirección de correo no es válida. Vuelve atrás y compruébala.',
+    }[language];
+  }
+
+  if (text.startsWith('We could not resend the confirmation email.')) {
+    const detail = text.replace('We could not resend the confirmation email.', '').trim();
+    const prefix = {
+      fr: "Nous n’avons pas pu renvoyer l’e-mail de confirmation.",
+      nl: 'We konden de bevestigingsmail niet opnieuw verzenden.',
+      en: 'We could not resend the confirmation email.',
+      ar: 'تعذر إعادة إرسال بريد التأكيد.',
+      es: 'No se pudo reenviar el correo de confirmación.',
+    }[language];
+
+    return `${prefix}${detail ? ` ${detail}` : ''}`;
+  }
+
+  return text;
+}
+
       function AccountTypeIcon({ type }: { type: UserType }) {
   if (type === 'client') {
     return (
@@ -341,6 +505,43 @@ function isObfuscatedExistingUser(
 
 export default function RegisterPage() {
   const router = useRouter();
+  const [language, setLanguage] = useState<TestLanguage>('fr');
+const [showPassword, setShowPassword] = useState(false);
+const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  useEffect(() => {
+  const applySavedLanguage = () => {
+    const savedLanguage = window.localStorage.getItem('sendio-home-language');
+
+    if (
+      savedLanguage === 'fr' ||
+      savedLanguage === 'nl' ||
+      savedLanguage === 'en' ||
+      savedLanguage === 'ar' ||
+      savedLanguage === 'es'
+    ) {
+      setLanguage(savedLanguage);
+      return;
+    }
+
+    setLanguage(detectTestLanguage());
+  };
+
+  applySavedLanguage();
+
+  const handleStorageChange = (event: StorageEvent) => {
+    if (event.key === 'sendio-home-language') {
+      applySavedLanguage();
+    }
+  };
+
+  window.addEventListener('storage', handleStorageChange);
+
+  return () => {
+    window.removeEventListener('storage', handleStorageChange);
+  };
+}, []);
+
+  const tr = (text: string | undefined) => translateUiText(text, language);
 
   const [userType, setUserType] = useState<UserType | null>(null);
   const [loading, setLoading] = useState(false);
@@ -905,13 +1106,16 @@ async function handleResendConfirmation() {
   }
 
   return (
-    <div className="min-h-screen overflow-hidden bg-[radial-gradient(circle_at_top_left,#eef6ff_0,#ffffff_48%,#f7f3ff_100%)] px-3 py-2 text-slate-950">
+    <div dir={language === 'ar' ? 'rtl' : 'ltr'} className="min-h-screen overflow-hidden bg-[radial-gradient(circle_at_top_left,#eef6ff_0,#ffffff_48%,#f7f3ff_100%)] px-3 py-2 text-slate-950">
+
+
+
       <button
         type="button"
         onClick={() => router.push('/')}
         className="fixed left-3 top-3 z-10 rounded-full border border-blue-100 bg-white/85 px-3 py-1.5 text-xs font-black text-slate-700 shadow-sm backdrop-blur transition hover:bg-white"
       >
-        &larr; Back
+        &larr; {tr('Back')}
       </button>
 
       {notice ? (
@@ -947,7 +1151,7 @@ async function handleResendConfirmation() {
               </div>
             )}
 
-            <h2 className="text-sm font-black">{notice.title}</h2>
+            <h2 className="text-sm font-black">{tr(notice.title)}</h2>
 
             {notice.body ? (
               <p
@@ -955,21 +1159,21 @@ async function handleResendConfirmation() {
                   notice.type === 'pending' ? 'text-sky-700' : 'text-red-600'
                 }`}
               >
-                {notice.body}
+                {tr(notice.body)}
               </p>
             ) : null}
 
             {notice.type === 'pending' ? (
               <>
                 <p className="mt-4 rounded-2xl bg-sky-50 px-3 py-2 text-[10px] font-bold leading-4 text-sky-800">
-                  Keep this page open, then confirm your email from the link.
+                  {tr('Keep this page open, then confirm your email from the link.')}
                 </p>
 
                 {confirmationPhase === 'ready' ||
                 confirmationPhase === 'resending' ? (
                   <div className="mt-3">
                     <p className="text-[10px] font-bold leading-4 text-sky-800">
-                      Didn&apos;t receive the confirmation email?
+                      {tr("Didn't receive the confirmation email?")}
                     </p>
                     <button
                       type="button"
@@ -978,8 +1182,8 @@ async function handleResendConfirmation() {
                       className="mt-2 rounded-full bg-sky-600 px-4 py-2 text-xs font-black text-white transition hover:bg-sky-700 disabled:cursor-not-allowed disabled:opacity-60"
                     >
                       {confirmationPhase === 'resending'
-                        ? 'Sending again...'
-                        : 'Resend confirmation email'}
+                        ? tr('Sending again...')
+                        : tr('Resend confirmation email')}
                     </button>
                   </div>
                 ) : null}
@@ -992,7 +1196,7 @@ async function handleResendConfirmation() {
                         : 'text-red-600'
                     }`}
                   >
-                    {resendFeedback.message}
+                    {tr(resendFeedback.message)}
                   </p>
                 ) : null}
               </>
@@ -1002,7 +1206,7 @@ async function handleResendConfirmation() {
                 onClick={() => setNotice(null)}
                 className="mt-4 rounded-full bg-red-500 px-4 py-2 text-xs font-black text-white transition hover:bg-red-600"
               >
-                Try again
+                {tr('Try again')}
               </button>
             )}
           </div>
@@ -1055,7 +1259,7 @@ async function handleResendConfirmation() {
                     <AccountTypeIcon type={option.value} />
                     </span>
 
-                    {option.label}
+                    {tr(option.label)}
                   </button>
                 );
               })}
@@ -1068,13 +1272,13 @@ async function handleResendConfirmation() {
                   : 'border-slate-200 bg-slate-50 text-slate-400'
               }`}
             >
-              {selectedAccount ? selectedAccount.label : 'What?'}
+              {selectedAccount ? tr(selectedAccount.label) : tr('What?')}
             </div>
 
             {userType === 'company' ? (
               <div className="mb-2 space-y-2 rounded-2xl border border-violet-100 bg-violet-50/70 p-3">
                 <label className="block text-xs font-black text-violet-800">
-                  Belgian enterprise number
+                  {tr('Belgian enterprise number')}
                 </label>
 
                 <input
@@ -1090,20 +1294,20 @@ async function handleResendConfirmation() {
 
                 {companyLookupState === 'checking' ? (
                   <p className="text-xs font-bold text-blue-700">
-                    Checking the official BCE register...
+                    {tr('Checking the official BCE register...')}
                   </p>
                 ) : null}
 
                 {companyLookupState === 'error' && companyLookupMessage ? (
                   <p className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs font-bold text-red-700">
-                    {companyLookupMessage}
+                    {tr(companyLookupMessage)}
                   </p>
                 ) : null}
 
                 {companyLookupState === 'verified' && verifiedCompany ? (
                   <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2">
                     <p className="text-xs font-black text-emerald-800">
-                      Company verified
+                      {tr('Company verified')}
                     </p>
                     <p className="mt-1 text-sm font-black text-slate-900">
                       {verifiedCompany.name}
@@ -1119,7 +1323,7 @@ async function handleResendConfirmation() {
                         verifiedCompany.street_fr,
                         verifiedCompany.house_number,
                         verifiedCompany.box
-                          ? `box ${verifiedCompany.box}`
+                          ? `${tr('box')} ${verifiedCompany.box}`
                           : '',
                         verifiedCompany.postal_code,
                         verifiedCompany.city_fr,
@@ -1137,7 +1341,7 @@ async function handleResendConfirmation() {
                 <form onSubmit={handleRegister} className="space-y-2">
               <input
                 name="fullName"
-                placeholder="Full name"
+                placeholder={tr('Full name')}
                 className="h-8 w-full rounded-xl border border-slate-200 bg-white/90 px-3 text-sm font-bold text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-blue-300 focus:ring-4 focus:ring-blue-50"
                 required
               />
@@ -1145,38 +1349,65 @@ async function handleResendConfirmation() {
               <input
                 name="email"
                 type="email"
-                placeholder="Email address"
+                placeholder={tr('Email address')}
                 className="h-8 w-full rounded-xl border border-slate-200 bg-white/90 px-3 text-sm font-bold text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-blue-300 focus:ring-4 focus:ring-blue-50"
                 required
               />
 
-              <input
-                name="password"
-                type="password"
-                placeholder="Password"
-                className="h-8 w-full rounded-xl border border-slate-200 bg-white/90 px-3 text-sm font-bold text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-blue-300 focus:ring-4 focus:ring-blue-50"
-                required
-              />
+              <div className="relative">
+  <input
+    name="password"
+    type={showPassword ? 'text' : 'password'}
+    placeholder={tr('Password')}
+    className="h-8 w-full rounded-xl border border-slate-200 bg-white/90 px-3 text-sm font-bold text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-blue-300 focus:ring-4 focus:ring-blue-50"
+    style={{ paddingInlineEnd: '2.5rem' }}
+    required
+  />
 
-              <input
-                name="confirmPassword"
-                type="password"
-                placeholder="Confirm password"
-                className="h-8 w-full rounded-xl border border-slate-200 bg-white/90 px-3 text-sm font-bold text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-blue-300 focus:ring-4 focus:ring-blue-50"
-                required
-              />
+  <button
+    type="button"
+    onClick={() => setShowPassword((current) => !current)}
+    className="absolute top-1/2 -translate-y-1/2 text-sm"
+    style={{ insetInlineEnd: '8px' }}
+    aria-label="Show or hide password"
+  >
+    👁️
+  </button>
+</div>
+
+              <div className="relative">
+  <input
+    name="confirmPassword"
+    type={showConfirmPassword ? 'text' : 'password'}
+    placeholder={tr('Confirm password')}
+    className="h-8 w-full rounded-xl border border-slate-200 bg-white/90 px-3 text-sm font-bold text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-blue-300 focus:ring-4 focus:ring-blue-50"
+    style={{ paddingInlineEnd: '2.5rem' }}
+    required
+  />
+
+  <button
+    type="button"
+    onClick={() =>
+      setShowConfirmPassword((current) => !current)
+    }
+    className="absolute top-1/2 -translate-y-1/2 text-sm"
+    style={{ insetInlineEnd: '8px' }}
+  >
+    👁️
+  </button>
+</div>
 
               <button
                 disabled={loading || googleLoading}
                 className="h-8 w-full rounded-xl bg-blue-600 text-sm font-black text-white shadow-[0_14px_28px_-20px_rgba(37,99,235,0.9)] transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
               >
-                {loading ? 'Sending email...' : 'Create account \u2192'}
+                {loading ? tr('Sending email...') : tr('Create account →')}
               </button>
             </form>
 
             <div className="my-2 flex items-center gap-2">
               <span className="h-px flex-1 bg-slate-200" />
-              <span className="text-[10px] font-bold text-slate-400">or</span>
+              <span className="text-[10px] font-bold text-slate-400">{tr('or')}</span>
               <span className="h-px flex-1 bg-slate-200" />
             </div>
 
@@ -1188,7 +1419,7 @@ async function handleResendConfirmation() {
                 className="flex h-8 w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white/90 text-sm font-black text-slate-700 shadow-sm transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-60"
               >
                 <GoogleIcon />
-                {googleLoading ? 'Opening Google...' : 'Sign up with Google'}
+                {googleLoading ? tr('Opening Google...') : tr('Sign up with Google')}
               </button>
 
                           <button
@@ -1198,7 +1429,7 @@ async function handleResendConfirmation() {
   className="flex h-8 w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white/90 text-sm font-black text-slate-700 shadow-sm transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-60"
 >
   <FacebookIcon />
-  {facebookLoading ? 'Opening Facebook...' : 'Sign up with Facebook'}
+  {facebookLoading ? tr('Opening Facebook...') : tr('Sign up with Facebook')}
 </button>
             <button
   type="button"
@@ -1211,22 +1442,22 @@ async function handleResendConfirmation() {
   </span>
 
   {linkedinLoading
-    ? 'Opening LinkedIn...'
-    : 'Sign up with LinkedIn'}
+    ? tr('Opening LinkedIn...')
+    : tr('Sign up with LinkedIn')}
 </button>
             </div>
 
               </>
             ) : (
               <p className="mb-2 rounded-xl border border-violet-100 bg-violet-50 px-3 py-2 text-center text-xs font-bold text-violet-700">
-                Enter a valid active Belgian enterprise number to unlock registration.
+                {tr('Enter a valid active Belgian enterprise number to unlock registration.')}
               </p>
             )}
 
             <p className="mt-2 text-center text-xs font-semibold text-slate-500">
-              Already have an account?{' '}
+              {tr('Already have an account?')}{' '}
               <a href="/login" className="font-black text-blue-600">
-                Sign in
+                {tr('Sign in')}
               </a>
             </p>
           </div>

@@ -16,7 +16,7 @@ type UserProfile = {
   user_type: 'client' | 'worker' | 'company' | string | null;
   role: string | null;
 };
- type HomeLanguage = 'fr' | 'nl' | 'en';
+ type HomeLanguage = 'fr' | 'nl' | 'en' | 'ar' | 'es';
 type HomeServiceCategory = {
   id: string;
   name: string;
@@ -1830,10 +1830,12 @@ export default function HomePage() {
     );
 
     if (
-      savedLanguage === 'fr' ||
-      savedLanguage === 'nl' ||
-      savedLanguage === 'en'
-    ) {
+  savedLanguage === 'fr' ||
+  savedLanguage === 'nl' ||
+  savedLanguage === 'en' ||
+  savedLanguage === 'ar' ||
+  savedLanguage === 'es'
+) {
       setHomeLanguage(savedLanguage);
       return;
     }
@@ -5696,40 +5698,66 @@ useEffect(() => {
           aria-live="polite"
         >
           <button
-            type="button"
-            className="public-update-notice-close"
-            aria-label="Fermer l’annonce"
-            onClick={() => setPublicNoticeVisible(false)}
-          >
-            ×
-          </button>
+  type="button"
+  className="public-update-notice-close"
+  aria-label={
+    homeLanguage === 'nl'
+      ? 'Melding sluiten'
+      : homeLanguage === 'en'
+        ? 'Close notification'
+        : homeLanguage === 'ar'
+          ? 'إغلاق الإشعار'
+          : homeLanguage === 'es'
+            ? 'Cerrar aviso'
+            : 'Fermer l’annonce'
+  }
+  onClick={() => setPublicNoticeVisible(false)}
+>
+  ×
+</button>
 
-          <p className="public-update-notice-title">
-            💬 Vos idées deviennent des fonctionnalités.
-          </p>
+<p className="public-update-notice-title">
+  {homeLanguage === 'nl'
+    ? '💬 Direct chatten is beschikbaar op Sendio'
+    : homeLanguage === 'en'
+      ? '💬 Direct chat is available on Sendio'
+      : homeLanguage === 'ar'
+        ? '💬 الدردشة المباشرة متاحة على Sendio'
+        : homeLanguage === 'es'
+          ? '💬 El chat directo está disponible en Sendio'
+          : '💬 Le chat direct est disponible sur Sendio'}
+</p>
 
-          <p className="public-update-notice-text">
-            Suite à vos nombreuses suggestions,{' '}
-            <strong>le chat direct est désormais disponible</strong> afin de
-            faciliter les échanges sur Sendio.
-          </p>
+<p className="public-update-notice-text">
+  {homeLanguage === 'nl'
+    ? 'Communiceer rechtstreeks met klanten, vakmensen en bedrijven, eenvoudig en veilig.'
+    : homeLanguage === 'en'
+      ? 'Communicate directly with clients, professionals and companies, simply and securely.'
+      : homeLanguage === 'ar'
+        ? 'تواصل مباشرة مع العملاء والمهنيين والشركات بسهولة وأمان.'
+        : homeLanguage === 'es'
+          ? 'Comunícate directamente con clientes, profesionales y empresas de forma sencilla y segura.'
+          : 'Échangez directement avec les clients, les professionnels et les entreprises, simplement et en toute sécurité.'}
+</p>
 
-          <p className="public-update-notice-text">
-            Nous continuons à renforcer la sécurité de la plateforme et à
-            développer de nouvelles fonctionnalités grâce à vos précieux
-            retours.
-          </p>
+<p className="public-update-notice-cta">
+  {homeLanguage === 'nl'
+    ? 'Een idee of suggestie? Schrijf ons:'
+    : homeLanguage === 'en'
+      ? 'Have an idea or suggestion? Write to us:'
+      : homeLanguage === 'ar'
+        ? 'لديك فكرة أو اقتراح؟ راسلنا:'
+        : homeLanguage === 'es'
+          ? '¿Tienes una idea o sugerencia? Escríbenos:'
+          : 'Une idée ou une suggestion ? Écrivez-nous :'}
+</p>
 
-          <p className="public-update-notice-cta">
-            Une idée ? Une suggestion ? Écrivez-nous :
-          </p>
-
-          <a
-            className="public-update-notice-email"
-            href="mailto:info@sendio.be?subject=Suggestion%20pour%20Sendio"
-          >
-            info@sendio.be
-          </a>
+<a
+  className="public-update-notice-email"
+  href="mailto:info@sendio.be?subject=Suggestion%20pour%20Sendio"
+>
+  info@sendio.be
+</a>
         </aside>
       ) : null}
 
@@ -5813,7 +5841,7 @@ useEffect(() => {
         boxShadow: '0 8px 20px rgba(15, 23, 42, 0.14)',
       }}
     >
-      {(['fr', 'nl', 'en'] as HomeLanguage[]).map(
+      {(['fr', 'nl', 'en', 'ar', 'es'] as HomeLanguage[]).map(
         (language) => (
           <button
             key={language}
@@ -6811,7 +6839,15 @@ useEffect(() => {
     <div className="auth-avatar-button-wrap">
       <LoginButtonAvatar />
       <Link href="/login" className="btn-custom btn-login-avatar">
-        Login
+      {homeLanguage === 'nl'
+  ? 'Inloggen'
+  : homeLanguage === 'en'
+    ? 'Login'
+    : homeLanguage === 'ar'
+      ? 'تسجيل الدخول'
+      : homeLanguage === 'es'
+        ? 'Iniciar sesión'
+        : 'Connexion'}
       </Link>
     </div>
 
@@ -6821,7 +6857,15 @@ useEffect(() => {
         href="/register"
         className="btn-custom btn-register-avatar"
       >
-        Sign Up
+       {homeLanguage === 'nl'
+  ? 'Registreren'
+  : homeLanguage === 'en'
+    ? 'Sign Up'
+    : homeLanguage === 'ar'
+      ? 'إنشاء حساب'
+      : homeLanguage === 'es'
+        ? 'Registrarse'
+        : "S'inscrire"}
       </Link>
     </div>
   </div>
