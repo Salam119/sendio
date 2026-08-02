@@ -6,10 +6,16 @@ import { FormEvent, useEffect, useRef, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import CompanyAdMediaPreview from '@/components/CompanyAdMediaPreview';
 import TrackedCompanyAdLink from '@/components/TrackedCompanyAdLink';
-
+type HomeLanguage = 'fr' | 'nl' | 'en' | 'ar' | 'es';
 type ServiceCategoryRow = {
   id: string;
   name: string;
+  name_fr: string | null;
+name_nl: string | null;
+translations: {
+  ar?: string;
+  es?: string;
+} | null;
   slug: string;
   description: string | null;
   icon: string | null;
@@ -206,7 +212,28 @@ function getServiceIcon(service: ServiceCategoryRow) {
 
   return SERVICE_ICON_MAP[icon] ?? getFallbackIcon(service.name);
 }
+function getServiceDisplayName(
+  service: ServiceCategoryRow,
+  language: HomeLanguage
+) {
+  if (language === 'fr') {
+    return service.name_fr?.trim() || service.name;
+  }
 
+  if (language === 'nl') {
+    return service.name_nl?.trim() || service.name;
+  }
+
+  if (language === 'ar') {
+    return service.translations?.ar?.trim() || service.name;
+  }
+
+  if (language === 'es') {
+    return service.translations?.es?.trim() || service.name;
+  }
+
+  return service.name;
+}
 function normalizeText(value: string | null | undefined) {
   return value?.trim().toLowerCase() ?? '';
 }
@@ -307,7 +334,8 @@ function isEmptyServicesAd(
 function buildServicesAdLayers(
   ads: ServicesPageAd[],
   layerSettings: ServicesAdLayerSettingRow[],
-  slots: ServicesAdSlotRow[]
+  slots: ServicesAdSlotRow[],
+  homeLanguage: HomeLanguage
 ): ServicesAdLayer[] {
   const adById = new Map(ads.map((ad) => [ad.id, ad]));
   const enabledLevels = new Set(
@@ -321,32 +349,69 @@ function buildServicesAdLayers(
     key: string;
     title: string;
     direction: 'left' | 'right';
-  }> = [
-    {
-      level: 1,
-      key: 'services-ad-level-1',
-      title: 'Services advertisements — Level 1',
-      direction: 'left',
-    },
-    {
-      level: 2,
-      key: 'services-ad-level-2',
-      title: 'Services advertisements — Level 2',
-      direction: 'right',
-    },
-    {
-      level: 3,
-      key: 'services-ad-level-3',
-      title: 'Services advertisements — Level 3',
-      direction: 'left',
-    },
-    {
-      level: 4,
-      key: 'services-ad-level-4',
-      title: 'Services advertisements — Level 4',
-      direction: 'right',
-    },
-  ];
+  }> = 
+    [
+  {
+    level: 1,
+    key: 'services-ad-level-1',
+    title:
+      homeLanguage === 'nl'
+        ? 'Dienstenadvertenties — Niveau 1'
+        : homeLanguage === 'en'
+          ? 'Services advertisements — Level 1'
+          : homeLanguage === 'ar'
+            ? 'إعلانات الخدمات — المستوى 1'
+            : homeLanguage === 'es'
+              ? 'Anuncios de servicios — Nivel 1'
+              : 'Publicités de services — Niveau 1',
+    direction: 'left',
+  },
+  {
+    level: 2,
+    key: 'services-ad-level-2',
+    title:
+      homeLanguage === 'nl'
+        ? 'Dienstenadvertenties — Niveau 2'
+        : homeLanguage === 'en'
+          ? 'Services advertisements — Level 2'
+          : homeLanguage === 'ar'
+            ? 'إعلانات الخدمات — المستوى 2'
+            : homeLanguage === 'es'
+              ? 'Anuncios de servicios — Nivel 2'
+              : 'Publicités de services — Niveau 2',
+    direction: 'right',
+  },
+  {
+    level: 3,
+    key: 'services-ad-level-3',
+    title:
+      homeLanguage === 'nl'
+        ? 'Dienstenadvertenties — Niveau 3'
+        : homeLanguage === 'en'
+          ? 'Services advertisements — Level 3'
+          : homeLanguage === 'ar'
+            ? 'إعلانات الخدمات — المستوى 3'
+            : homeLanguage === 'es'
+              ? 'Anuncios de servicios — Nivel 3'
+              : 'Publicités de services — Niveau 3',
+    direction: 'left',
+  },
+  {
+    level: 4,
+    key: 'services-ad-level-4',
+    title:
+      homeLanguage === 'nl'
+        ? 'Dienstenadvertenties — Niveau 4'
+        : homeLanguage === 'en'
+          ? 'Services advertisements — Level 4'
+          : homeLanguage === 'ar'
+            ? 'إعلانات الخدمات — المستوى 4'
+            : homeLanguage === 'es'
+              ? 'Anuncios de servicios — Nivel 4'
+              : 'Publicités de services — Niveau 4',
+    direction: 'right',
+  },
+]; 
 
   return layerDefinitions
     .filter((layer) => enabledLevels.has(layer.level))
@@ -380,6 +445,7 @@ function buildServicesAdLayers(
 
 export default function ServicesPage() {
   const router = useRouter();
+  const [homeLanguage, setHomeLanguage] = useState<HomeLanguage>('fr');
   const heroSearchRef = useRef<HTMLFormElement | null>(null);
 
   const [services, setServices] = useState<ServiceCategoryRow[]>([]);
@@ -398,6 +464,32 @@ export default function ServicesPage() {
   const [subscriberLocation, setSubscriberLocation] = useState('');
   const [subscribeStatus, setSubscribeStatus] = useState('');
   const [isUserLoggedIn, setIsUserLoggedIn] = useState(false);
+  useEffect(() => {
+  const languageTimer = window.setTimeout(() => {
+    const savedLanguage = window.localStorage.getItem(
+      'sendio-home-language'
+    );
+
+    if (
+      savedLanguage === 'fr' ||
+      savedLanguage === 'nl' ||
+      savedLanguage === 'en' ||
+      savedLanguage === 'ar' ||
+      savedLanguage === 'es'
+    ) {
+      setHomeLanguage(savedLanguage);
+      return;
+    }
+
+    const browserLanguage = window.navigator.language.toLowerCase();
+
+    setHomeLanguage(
+      browserLanguage.startsWith('nl') ? 'nl' : 'fr'
+    );
+  }, 0);
+
+  return () => window.clearTimeout(languageTimer);
+}, []);
   useEffect(() => {
     let active = true;
 
@@ -489,7 +581,7 @@ export default function ServicesPage() {
       const { data, error } = await supabase
         .from('service_categories')
         .select(
-          'id, name, slug, description, icon, image_url, parent_id, is_popular, is_active, sort_order'
+          'id, name, name_fr, name_nl, translations, slug, description, icon, image_url, parent_id, is_popular, is_active, sort_order'
         )
         .eq('is_active', true)
         .order('sort_order', { ascending: true })
@@ -727,10 +819,11 @@ export default function ServicesPage() {
 
 
   const serviceAdLayers = buildServicesAdLayers(
-    serviceAds,
-    serviceAdLayerSettings,
-    serviceAdSlots
-  );
+  serviceAds,
+  serviceAdLayerSettings,
+  serviceAdSlots,
+  homeLanguage
+);
   const cvImages = providers.filter((provider) => provider.image).slice(0, 3);
   const serviceMarqueeItems = services.length > 0 ? services : visibleServices;
 
@@ -828,13 +921,31 @@ export default function ServicesPage() {
 
         <div className="topActions">
           <Link href="/register" className="joinLink">
-            Join as Provider
+           {homeLanguage === 'nl'
+  ? 'Word dienstverlener'
+  : homeLanguage === 'en'
+    ? 'Join as Provider'
+    : homeLanguage === 'ar'
+      ? 'انضم كمقدم خدمة'
+      : homeLanguage === 'es'
+        ? 'Únete como proveedor'
+        : 'Rejoindre comme prestataire'}
           </Link>
 
           <button
             type="button"
             className="topIconButton"
-            aria-label="Search"
+          aria-label={
+  homeLanguage === 'nl'
+    ? 'Zoeken'
+    : homeLanguage === 'en'
+      ? 'Search'
+      : homeLanguage === 'ar'
+        ? 'بحث'
+        : homeLanguage === 'es'
+          ? 'Buscar'
+          : 'Rechercher'
+}
             onClick={() =>
               heroSearchRef.current?.scrollIntoView({
                 behavior: 'smooth',
@@ -848,7 +959,17 @@ export default function ServicesPage() {
           <button
             type="button"
             className="topIconButton"
-            aria-label="Open menu"
+           aria-label={
+  homeLanguage === 'nl'
+    ? 'Menu openen'
+    : homeLanguage === 'en'
+      ? 'Open menu'
+      : homeLanguage === 'ar'
+        ? 'فتح القائمة'
+        : homeLanguage === 'es'
+          ? 'Abrir menú'
+          : 'Ouvrir le menu'
+}
             onClick={() => setMenuOpen(true)}
           >
             ☰
@@ -861,7 +982,17 @@ export default function ServicesPage() {
           <button
             type="button"
             className="menuShade"
-            aria-label="Close menu"
+            aria-label={
+  homeLanguage === 'nl'
+    ? 'Menu sluiten'
+    : homeLanguage === 'en'
+      ? 'Close menu'
+      : homeLanguage === 'ar'
+        ? 'إغلاق القائمة'
+        : homeLanguage === 'es'
+          ? 'Cerrar menú'
+          : 'Fermer le menu'
+}
             onClick={() => setMenuOpen(false)}
           />
 
@@ -877,66 +1008,193 @@ export default function ServicesPage() {
             </div>
 
             <nav className="menuLinks">
-              <Link href="/services" onClick={() => setMenuOpen(false)}>
-                Find Services
-              </Link>
-              <Link href="/register" onClick={() => setMenuOpen(false)}>
-                Join as Provider
-              </Link>
-              <Link href="/contact" onClick={() => setMenuOpen(false)}>
-                Contact
-              </Link>
-              <Link href="/legal" onClick={() => setMenuOpen(false)}>
-                Legal
-              </Link>
-            </nav>
+  <Link href="/services" onClick={() => setMenuOpen(false)}>
+    {homeLanguage === 'nl'
+      ? 'Diensten zoeken'
+      : homeLanguage === 'en'
+        ? 'Find Services'
+        : homeLanguage === 'ar'
+          ? 'ابحث عن خدمات'
+          : homeLanguage === 'es'
+            ? 'Buscar servicios'
+            : 'Trouver des services'}
+  </Link>
 
-            {isUserLoggedIn ? (
-              <button type="button" className="logoutButton" onClick={handleLogout}>
-                Logout →
-              </button>
-            ) : (
-              <Link
-                href="/login"
-                className="logoutButton"
-                onClick={() => setMenuOpen(false)}
-              >
-                Sign in →
-              </Link>
-            )}
-          </aside>
-        </div>
-      ) : null}
+  <Link href="/register" onClick={() => setMenuOpen(false)}>
+    {homeLanguage === 'nl'
+      ? 'Word dienstverlener'
+      : homeLanguage === 'en'
+        ? 'Join as Provider'
+        : homeLanguage === 'ar'
+          ? 'انضم كمقدم خدمة'
+          : homeLanguage === 'es'
+            ? 'Únete como proveedor'
+            : 'Rejoindre comme prestataire'}
+  </Link>
 
-      <section className="heroSection">
-        <div className="smallPageNav">
-          <button type="button" onClick={() => router.back()}>
-            Back
-          </button>
-          <Link href="/">Home</Link>
-          <Link href="/contact">Next</Link>
-        </div>
+  <Link href="/contact" onClick={() => setMenuOpen(false)}>
+    {homeLanguage === 'nl'
+      ? 'Contact'
+      : homeLanguage === 'en'
+        ? 'Contact'
+        : homeLanguage === 'ar'
+          ? 'اتصل بنا'
+          : homeLanguage === 'es'
+            ? 'Contacto'
+            : 'Contact'}
+  </Link>
 
-        <div className="heroBox">
-          <p className="heroTitle">Find trusted providers near you.</p>
+  <Link href="/legal" onClick={() => setMenuOpen(false)}>
+    {homeLanguage === 'nl'
+      ? 'Juridisch'
+      : homeLanguage === 'en'
+        ? 'Legal'
+        : homeLanguage === 'ar'
+          ? 'قانوني'
+          : homeLanguage === 'es'
+            ? 'Legal'
+            : 'Mentions légales'}
+  </Link>
+</nav>
+
+{isUserLoggedIn ? (
+  <button type="button" className="logoutButton" onClick={handleLogout}>
+    {homeLanguage === 'nl'
+      ? 'Uitloggen'
+      : homeLanguage === 'en'
+        ? 'Logout'
+        : homeLanguage === 'ar'
+          ? 'تسجيل الخروج'
+          : homeLanguage === 'es'
+            ? 'Cerrar sesión'
+            : 'Déconnexion'}{' '}
+    →
+  </button>
+) : (
+  <Link
+    href="/login"
+    className="logoutButton"
+    onClick={() => setMenuOpen(false)}
+  >
+    {homeLanguage === 'nl'
+      ? 'Inloggen'
+      : homeLanguage === 'en'
+        ? 'Sign in'
+        : homeLanguage === 'ar'
+          ? 'تسجيل الدخول'
+          : homeLanguage === 'es'
+            ? 'Iniciar sesión'
+            : 'Se connecter'}{' '}
+    →
+  </Link>
+)}
+</aside>
+</div>
+) : null}
+
+<section className="heroSection">
+  <div className="smallPageNav">
+    <button type="button" onClick={() => router.back()}>
+      {homeLanguage === 'nl'
+        ? 'Terug'
+        : homeLanguage === 'en'
+          ? 'Back'
+          : homeLanguage === 'ar'
+            ? 'رجوع'
+            : homeLanguage === 'es'
+              ? 'Atrás'
+              : 'Retour'}
+    </button>
+
+    <Link href="/">
+      {homeLanguage === 'nl'
+        ? 'Home'
+        : homeLanguage === 'en'
+          ? 'Home'
+          : homeLanguage === 'ar'
+            ? 'الرئيسية'
+            : homeLanguage === 'es'
+              ? 'Inicio'
+              : 'Accueil'}
+    </Link>
+
+    <Link href="/contact">
+      {homeLanguage === 'nl'
+        ? 'Volgende'
+        : homeLanguage === 'en'
+          ? 'Next'
+          : homeLanguage === 'ar'
+            ? 'التالي'
+            : homeLanguage === 'es'
+              ? 'Siguiente'
+              : 'Suivant'}
+    </Link>
+  </div>
+
+  <div className="heroBox">
+    <p className="heroTitle">
+      {homeLanguage === 'nl'
+        ? 'Vind betrouwbare dienstverleners bij u in de buurt.'
+        : homeLanguage === 'en'
+          ? 'Find trusted providers near you.'
+          : homeLanguage === 'ar'
+            ? 'اعثر على مقدمي خدمات موثوقين بالقرب منك.'
+            : homeLanguage === 'es'
+              ? 'Encuentra proveedores de confianza cerca de ti.'
+              : 'Trouvez des prestataires de confiance près de chez vous.'}
+    </p>
 
           <form ref={heroSearchRef} className="heroSearch" onSubmit={handleSearch}>
             <input
               value={searchText}
               onChange={(event) => setSearchText(event.target.value)}
-              placeholder="What service do you need?"
+             placeholder={
+  homeLanguage === 'nl'
+    ? 'Welke dienst heeft u nodig?'
+    : homeLanguage === 'en'
+      ? 'What service do you need?'
+      : homeLanguage === 'ar'
+        ? 'ما الخدمة التي تحتاجها؟'
+        : homeLanguage === 'es'
+          ? '¿Qué servicio necesitas?'
+          : 'De quel service avez-vous besoin ?'
+}
               type="search"
             />
 
             <input
               value={locationText}
               onChange={(event) => setLocationText(event.target.value)}
-              placeholder="City or postal code"
+             placeholder={
+  homeLanguage === 'nl'
+    ? 'Stad of postcode'
+    : homeLanguage === 'en'
+      ? 'City or postal code'
+      : homeLanguage === 'ar'
+        ? 'المدينة أو الرمز البريدي'
+        : homeLanguage === 'es'
+          ? 'Ciudad o código postal'
+          : 'Ville ou code postal'
+}
               type="search"
             />
 
-            <button type="submit" aria-label="Search">
-              ⌕
+            <button
+  type="submit"
+  aria-label={
+    homeLanguage === 'nl'
+      ? 'Zoeken'
+      : homeLanguage === 'en'
+        ? 'Search'
+        : homeLanguage === 'ar'
+          ? 'بحث'
+          : homeLanguage === 'es'
+            ? 'Buscar'
+            : 'Rechercher'
+  }
+>
+  ⌕
+
             </button>
           </form>
         </div>
@@ -951,7 +1209,7 @@ export default function ServicesPage() {
               key={`${service.id}-${index}`}
             >
               <span>{getServiceIcon(service)}</span>
-              <strong>{service.name}</strong>
+              <strong>{getServiceDisplayName(service, homeLanguage)}</strong>
             </Link>
           ))}
         </div>
@@ -959,12 +1217,41 @@ export default function ServicesPage() {
 
       <section className="cvBox">
         <div className="cvText">
-          <span>FOR SKILLED WORKERS</span>
-          <p>Upload your CV and optional recommendation letters to join Sendio as a worker.</p>
+          <span>{homeLanguage === 'nl'
+  ? 'VOOR VAKMENSEN'
+  : homeLanguage === 'en'
+    ? 'FOR SKILLED WORKERS'
+    : homeLanguage === 'ar'
+      ? 'للمهنيين'
+      : homeLanguage === 'es'
+        ? 'PARA PROFESIONALES'
+        : 'POUR LES PROFESSIONNELS'}</span>
+          <p>{homeLanguage === 'nl'
+  ? 'Upload uw cv en optionele aanbevelingsbrieven om u als vakmens bij Sendio aan te sluiten.'
+  : homeLanguage === 'en'
+    ? 'Upload your CV and optional recommendation letters to join Sendio as a worker.'
+    : homeLanguage === 'ar'
+      ? (
+          <>
+            ارفع سيرتك الذاتية ورسائل التوصية الاختيارية للانضمام إلى{' '}
+            <span dir="ltr">Sendio</span> كمهني.
+          </>
+        )
+      : homeLanguage === 'es'
+        ? 'Sube tu CV y cartas de recomendación opcionales para unirte a Sendio como profesional.'
+        : 'Téléchargez votre CV et, si vous le souhaitez, des lettres de recommandation pour rejoindre Sendio comme professionnel.'}</p>
        
         </div>
 <Link href="/upload-cv" className="cvUploadButton">
-          Upload CV
+        {homeLanguage === 'nl'
+  ? 'CV uploaden'
+  : homeLanguage === 'en'
+    ? 'Upload CV'
+    : homeLanguage === 'ar'
+      ? 'رفع السيرة الذاتية'
+      : homeLanguage === 'es'
+        ? 'Subir CV'
+        : 'Télécharger le CV'}
         </Link>
         {cvImages.length > 0 ? (
           <div className="cvFaces" aria-label="Provider photos">
@@ -990,7 +1277,27 @@ export default function ServicesPage() {
           className="collapseButton"
           onClick={() => setAllServicesOpen((current) => !current)}
         >
-          <span>{loadingServices ? 'Loading services' : 'All services'}</span>
+          <span>
+  {loadingServices
+    ? homeLanguage === 'nl'
+      ? 'Diensten laden'
+      : homeLanguage === 'en'
+        ? 'Loading services'
+        : homeLanguage === 'ar'
+          ? 'جاري تحميل الخدمات'
+          : homeLanguage === 'es'
+            ? 'Cargando servicios'
+            : 'Chargement des services'
+    : homeLanguage === 'nl'
+      ? 'Alle diensten'
+      : homeLanguage === 'en'
+        ? 'All services'
+        : homeLanguage === 'ar'
+          ? 'جميع الخدمات'
+          : homeLanguage === 'es'
+            ? 'Todos los servicios'
+            : 'Tous les services'}
+</span>
           <strong>{allServicesOpen ? '⌃' : '⌄'}</strong>
         </button>
 
@@ -999,7 +1306,7 @@ export default function ServicesPage() {
             {visibleServices.map((service) => (
               <Link href={getServiceHref(service)} className="serviceLine" key={service.id}>
                 <span>{getServiceIcon(service)}</span>
-                <strong>{service.name}</strong>
+                <strong>{getServiceDisplayName(service, homeLanguage)}</strong>
               </Link>
             ))}
           </div>
@@ -1014,7 +1321,7 @@ export default function ServicesPage() {
             {trendingServices.map((service) => (
               <Link href={getServiceHref(service)} className="trendingLine" key={service.id}>
                 <span>{getServiceIcon(service)}</span>
-                <strong>{service.name}</strong>
+               <strong>{getServiceDisplayName(service, homeLanguage)}</strong>
               </Link>
             ))}
           </div>
@@ -1022,24 +1329,62 @@ export default function ServicesPage() {
       ) : null}
 
       <section className="subscribeBox">
-        <p>Subscribe to receive free project cost information by email.</p>
+        <p>
+  {homeLanguage === 'nl'
+    ? 'Schrijf u in om gratis informatie over projectkosten per e-mail te ontvangen.'
+    : homeLanguage === 'en'
+      ? 'Subscribe to receive free project cost information by email.'
+      : homeLanguage === 'ar'
+        ? 'اشترك لتلقي معلومات مجانية عن تكلفة المشاريع عبر البريد الإلكتروني.'
+        : homeLanguage === 'es'
+          ? 'Suscríbete para recibir información gratuita sobre costes de proyectos por correo electrónico.'
+          : 'Inscrivez-vous pour recevoir gratuitement par e-mail des informations sur le coût des projets.'}
+</p>
 
         <form className="subscribeForm" onSubmit={handleSubscribe}>
           <input
             type="email"
-            placeholder="Email address"
+           placeholder={
+  homeLanguage === 'nl'
+    ? 'E-mailadres'
+    : homeLanguage === 'en'
+      ? 'Email address'
+      : homeLanguage === 'ar'
+        ? 'البريد الإلكتروني'
+        : homeLanguage === 'es'
+          ? 'Correo electrónico'
+          : 'Adresse e-mail'
+}
             value={subscriberEmail}
             onChange={(event) => setSubscriberEmail(event.target.value)}
           />
 
           <input
             type="text"
-            placeholder="City or postal code"
+           placeholder={
+  homeLanguage === 'nl'
+    ? 'Stad of postcode'
+    : homeLanguage === 'en'
+      ? 'City or postal code'
+      : homeLanguage === 'ar'
+        ? 'المدينة أو الرمز البريدي'
+        : homeLanguage === 'es'
+          ? 'Ciudad o código postal'
+          : 'Ville ou code postal'
+}
             value={subscriberLocation}
             onChange={(event) => setSubscriberLocation(event.target.value)}
           />
 
-          <button type="submit">Subscribe</button>
+          <button type="submit">{homeLanguage === 'nl'
+  ? 'Inschrijven'
+  : homeLanguage === 'en'
+    ? 'Subscribe'
+    : homeLanguage === 'ar'
+      ? 'اشتراك'
+      : homeLanguage === 'es'
+        ? 'Suscribirse'
+        : 'S’inscrire'}</button>
         </form>
 
         {subscribeStatus ? <span className="subscribeStatus">{subscribeStatus}</span> : null}
@@ -1135,18 +1480,70 @@ export default function ServicesPage() {
       ) : null}
 
       <footer className="servicesFooter">
-        <strong>Sendio</strong>
+  <strong>Sendio</strong>
 
-        <nav>
-          <Link href="/legal">Terms</Link>
-          <Link href="/legal">Privacy</Link>
-          <Link href="/legal">Legal</Link>
-          <Link href="/contact">Contact</Link>
-        </nav>
+  <nav>
+    <Link href="/legal">
+      {homeLanguage === 'nl'
+        ? 'Voorwaarden'
+        : homeLanguage === 'en'
+          ? 'Terms'
+          : homeLanguage === 'ar'
+            ? 'الشروط'
+            : homeLanguage === 'es'
+              ? 'Términos'
+              : 'Conditions'}
+    </Link>
 
-        <p>© 2026 Sendio. All rights reserved.</p>
-      </footer>
+    <Link href="/legal">
+      {homeLanguage === 'nl'
+        ? 'Privacy'
+        : homeLanguage === 'en'
+          ? 'Privacy'
+          : homeLanguage === 'ar'
+            ? 'الخصوصية'
+            : homeLanguage === 'es'
+              ? 'Privacidad'
+              : 'Confidentialité'}
+    </Link>
 
+    <Link href="/legal">
+      {homeLanguage === 'nl'
+        ? 'Juridisch'
+        : homeLanguage === 'en'
+          ? 'Legal'
+          : homeLanguage === 'ar'
+            ? 'قانوني'
+            : homeLanguage === 'es'
+              ? 'Legal'
+              : 'Mentions légales'}
+    </Link>
+
+    <Link href="/contact">
+      {homeLanguage === 'nl'
+        ? 'Contact'
+        : homeLanguage === 'en'
+          ? 'Contact'
+          : homeLanguage === 'ar'
+            ? 'اتصل بنا'
+            : homeLanguage === 'es'
+              ? 'Contacto'
+              : 'Contact'}
+    </Link>
+  </nav>
+
+  <p>
+    {homeLanguage === 'nl'
+      ? '© 2026 Sendio. Alle rechten voorbehouden.'
+      : homeLanguage === 'en'
+        ? '© 2026 Sendio. All rights reserved.'
+        : homeLanguage === 'ar'
+          ? '© 2026 Sendio. جميع الحقوق محفوظة.'
+          : homeLanguage === 'es'
+            ? '© 2026 Sendio. Todos los derechos reservados.'
+            : '© 2026 Sendio. Tous droits réservés.'}
+  </p>
+</footer>
       <style>{`
         .servicesPage {
           min-height: 100vh;
